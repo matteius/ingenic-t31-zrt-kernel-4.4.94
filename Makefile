@@ -385,6 +385,7 @@ LINUXINCLUDE    := \
 		-I$(srctree)/arch/$(hdr-arch)/include \
 		-Iarch/$(hdr-arch)/include/generated/uapi \
 		-Iarch/$(hdr-arch)/include/generated \
+		-I/home/matteius/output/cinnado_d1_t31l_sc2336/build/linux-custom/drivers/video/ingenic_isp/t31/include \
 		$(if $(KBUILD_SRC), -I$(srctree)/include) \
 		-Iinclude \
 		$(USERINCLUDE)
