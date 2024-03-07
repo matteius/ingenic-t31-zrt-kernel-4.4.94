@@ -446,7 +446,6 @@ config REGULATOR_MC13892
 config REGULATOR_MT6311
 	tristate "MediaTek MT6311 PMIC"
 	depends on I2C
-	select REGMAP_I2C
 	help
 	  Say y here to select this option to enable the power regulator of
 	  MediaTek MT6311 PMIC.
@@ -553,16 +552,6 @@ config REGULATOR_RC5T583
 	help
 	  Select this option to enable the power regulator of RICOH
 	  PMIC RC5T583.
-	  This driver supports the control of different power rails of device
-	  through regulator interface. The device supports multiple DCDC/LDO
-	  outputs which can be controlled by i2c communication.
-
-config REGULATOR_RN5T567
-	tristate "RICOH RN5T567 Power regulators"
-	depends on MFD_RN5T567
-	help
-	  Select this option to enable the power regulator of RICOH
-	  PMIC RN5T567.
 	  This driver supports the control of different power rails of device
 	  through regulator interface. The device supports multiple DCDC/LDO
 	  outputs which can be controlled by i2c communication.

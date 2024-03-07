@@ -45,7 +45,7 @@ extern unsigned int vced_count, vcei_count;
  * User space process size: 2GB. This is hardcoded into a few places,
  * so don't change it unless you know what you are doing.
  */
-#define TASK_SIZE	0x80000000UL
+#define TASK_SIZE	0x7fff8000UL
 #endif
 
 #define STACK_TOP_MAX	TASK_SIZE
@@ -82,12 +82,6 @@ extern unsigned int vced_count, vcei_count;
  */
 #define TASK_UNMAPPED_BASE PAGE_ALIGN(TASK_SIZE / 3)
 
-#ifdef CONFIG_MACH_XBURST
-#define NUM_MXU_REGS    16
-struct xburst_mxu_struct {
-        unsigned int regs[NUM_MXU_REGS];
-};
-#endif
 
 #define NUM_FPU_REGS	32
 
@@ -160,20 +154,8 @@ struct mips3264_watch_reg_state {
 union mips_watch_reg_state {
 	struct mips3264_watch_reg_state mips3264;
 };
-#if defined(CONFIG_XBURST_MXUV2)
-typedef union {
-	u64 val64[2];
-} vpr_t;
 
-struct xburst_cop2_state {
-	u32 mxu_csr;
-	vpr_t vr[32];
-};
-
-#define COP2_INIT						\
-	.cp2			= {0,},
-
-#elif defined(CONFIG_CPU_CAVIUM_OCTEON)
+#if defined(CONFIG_CPU_CAVIUM_OCTEON)
 
 struct octeon_cop2_state {
 	/* DMFC2 rt, 0x0201 */
@@ -280,11 +262,6 @@ struct thread_struct {
 	/* Saved state of the DSP ASE, if available. */
 	struct mips_dsp_state dsp;
 
-#ifdef CONFIG_MACH_XBURST
-	/* Saved registers of the MXU, if available. */
-	struct xburst_mxu_struct mxu;
-#endif
-
 	/* Saved watch register state, if available. */
 	union mips_watch_reg_state watch;
 
@@ -293,9 +270,7 @@ struct thread_struct {
 	unsigned long cp0_baduaddr;	/* Last kernel fault accessing USEG */
 	unsigned long error_code;
 	unsigned long trap_nr;
-#if defined(CONFIG_XBURST_MXUV2)
-	struct xburst_cop2_state cp2;
-#elif defined(CONFIG_CPU_CAVIUM_OCTEON)
+#ifdef CONFIG_CPU_CAVIUM_OCTEON
 	struct octeon_cop2_state cp2 __attribute__ ((__aligned__(128)));
 	struct octeon_cvmseg_state cvmseg __attribute__ ((__aligned__(128)));
 #endif

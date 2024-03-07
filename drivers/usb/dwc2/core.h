@@ -44,17 +44,6 @@
 #include <linux/usb/phy.h>
 #include "hw.h"
 
-#ifdef CONFIG_MIPS
-/*
- * There are some MIPS machines that can run in either big-endian
- * or little-endian mode and that use the dwc2 register without
- * a byteswap in both ways.
- * Unlike other architectures, MIPS apparently does not require a
- * barrier before the __raw_writel() to synchronize with DMA but does
- * require the barrier after the __raw_writel() to serialize a set of
- * writes. This set of operations was added specifically for MIPS and
- * should only be used there.
- */
 static inline u32 dwc2_readl(const void __iomem *addr)
 {
 	u32 value = __raw_readl(addr);
@@ -81,22 +70,6 @@ static inline void dwc2_writel(u32 value, void __iomem *addr)
 	pr_info("INFO:: wrote %08x to %p\n", value, addr);
 #endif
 }
-#else
-/* Normal architectures just use readl/write */
-static inline u32 dwc2_readl(const void __iomem *addr)
-{
-	return readl(addr);
-}
-
-static inline void dwc2_writel(u32 value, void __iomem *addr)
-{
-	writel(value, addr);
-
-#ifdef DWC2_LOG_WRITES
-	pr_info("info:: wrote %08x to %p\n", value, addr);
-#endif
-}
-#endif
 
 /* Maximum number of Endpoints/HostChannels */
 #define MAX_EPS_CHANNELS	16
@@ -239,14 +212,9 @@ enum dwc2_lx_state {
  * Gadget periodic tx fifo sizes as used by legacy driver
  * EP0 is not included
  */
+#define DWC2_G_P_LEGACY_TX_FIFO_SIZE {256, 256, 256, 256, 768, 768, 768, \
+					   768, 0, 0, 0, 0, 0, 0, 0}
 
-#ifdef CONFIG_USB_DWC2_HIGHWIDTH_FIFO
-#define DWC2_G_P_LEGACY_TX_FIFO_SIZE {128 ,128, 128, 128, 128, 128, 256, \
-					   768, 0, 0 , 0, 0, 0, 0, 0}
-#else
-#define DWC2_G_P_LEGACY_TX_FIFO_SIZE {256, 256, 256, 256, 256, 256, 256, \
-	                                          512, 0, 0, 0, 0, 0, 0, 0}
-#endif
 /* Gadget ep0 states */
 enum dwc2_ep0_state {
 	DWC2_EP0_SETUP,
@@ -853,7 +821,6 @@ struct dwc2_hsotg {
 	int fifo_mem;
 	unsigned int dedicated_fifos:1;
 	unsigned char num_of_eps;
-	unsigned char num_of_ineps;
 	u32 fifo_map;
 
 	struct usb_request *ep0_reply;
@@ -934,7 +901,7 @@ extern void dwc2_read_packet(struct dwc2_hsotg *hsotg, u8 *dest, u16 bytes);
 extern void dwc2_flush_tx_fifo(struct dwc2_hsotg *hsotg, const int num);
 extern void dwc2_flush_rx_fifo(struct dwc2_hsotg *hsotg);
 
-extern int dwc2_core_init(struct dwc2_hsotg *hsotg, bool select_phy, int irq, bool initial_setup);
+extern int dwc2_core_init(struct dwc2_hsotg *hsotg, bool select_phy, int irq);
 extern void dwc2_enable_global_interrupts(struct dwc2_hsotg *hcd);
 extern void dwc2_disable_global_interrupts(struct dwc2_hsotg *hcd);
 

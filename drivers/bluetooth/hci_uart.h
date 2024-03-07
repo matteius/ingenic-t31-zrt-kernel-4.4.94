@@ -23,12 +23,6 @@
  *
  */
 
-#ifdef CONFIG_BT_HCIUART_RTKH5
-#define BTCOEX
-#define HCI_VERSION_CODE LINUX_VERSION_CODE
-#endif
-
-
 #ifndef N_HCI
 #define N_HCI	15
 #endif
@@ -98,11 +92,7 @@ struct hci_uart {
 };
 
 /* HCI_UART proto flag bits */
-#ifdef CONFIG_BT_HCIUART_RTKH5
-#define HCI_UART_PROTO_SET      2
-#else
-#define HCI_UART_PROTO_SET      0
-#endif
+#define HCI_UART_PROTO_SET	0
 #define HCI_UART_REGISTERED	1
 
 /* TX states  */
@@ -167,12 +157,6 @@ int bcsp_deinit(void);
 int ll_init(void);
 int ll_deinit(void);
 #endif
-
-#ifdef CONFIG_BT_HCIUART_RTKH5
-int h5_init(void);
-int h5_deinit(void);
-#endif
-
 
 #ifdef CONFIG_BT_HCIUART_ATH3K
 int ath_init(void);

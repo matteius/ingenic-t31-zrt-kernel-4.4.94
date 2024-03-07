@@ -328,6 +328,7 @@ static void watchdog_overflow_callback(struct perf_event *event,
 	 */
 	if (is_hardlockup()) {
 		int this_cpu = smp_processor_id();
+		struct pt_regs *regs = get_irq_regs();
 
 		/* only print hardlockups once */
 		if (__this_cpu_read(hard_watchdog_warn) == true)
@@ -906,9 +907,6 @@ static int proc_watchdog_common(int which, struct ctl_table *table, int write,
 		 * both lockup detectors are disabled if proc_watchdog_update()
 		 * returns an error.
 		 */
-		if (old == new)
-			goto out;
-
 		err = proc_watchdog_update();
 	}
 out:
@@ -953,7 +951,7 @@ int proc_soft_watchdog(struct ctl_table *table, int write,
 int proc_watchdog_thresh(struct ctl_table *table, int write,
 			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	int err, old, new;
+	int err, old;
 
 	get_online_cpus();
 	mutex_lock(&watchdog_proc_mutex);
@@ -973,10 +971,6 @@ int proc_watchdog_thresh(struct ctl_table *table, int write,
 	/*
 	 * Update the sample period. Restore on failure.
 	 */
-	new = ACCESS_ONCE(watchdog_thresh);
-	if (old == new)
-		goto out;
-
 	set_sample_period();
 	err = proc_watchdog_update();
 	if (err) {

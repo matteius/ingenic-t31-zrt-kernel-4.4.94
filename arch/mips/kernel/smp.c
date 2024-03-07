@@ -121,7 +121,6 @@ static inline void calculate_cpu_foreign_map(void)
 	cpumask_t temp_foreign_map;
 
 	/* Re-calculate the mask */
-	cpumask_clear(&temp_foreign_map);
 	for_each_online_cpu(i) {
 		core_present = 0;
 		for_each_cpu(k, &temp_foreign_map)
@@ -174,15 +173,16 @@ asmlinkage void start_secondary(void)
 	cpumask_set_cpu(cpu, &cpu_coherent_mask);
 	notify_cpu_starting(cpu);
 
-	cpumask_set_cpu(cpu, &cpu_callin_map);
-	synchronise_count_slave(cpu);
-
 	set_cpu_online(cpu, true);
 
 	set_cpu_sibling_map(cpu);
 	set_cpu_core_map(cpu);
 
 	calculate_cpu_foreign_map();
+
+	cpumask_set_cpu(cpu, &cpu_callin_map);
+
+	synchronise_count_slave(cpu);
 
 	/*
 	 * irq will be enabled in ->smp_finish(), enabling it too early
@@ -247,18 +247,12 @@ void smp_prepare_boot_cpu(void)
 
 int __cpu_up(unsigned int cpu, struct task_struct *tidle)
 {
-	unsigned int timeout = 0xff;
-
 	mp_ops->boot_secondary(cpu, tidle);
 
 	/*
 	 * Trust is futile.  We should really have timeouts ...
 	 */
 	while (!cpumask_test_cpu(cpu, &cpu_callin_map)) {
-		udelay(100);
-		schedule();
-	}
-	while (!(cpumask_test_cpu(cpu, cpu_online_mask) || !timeout--)) {
 		udelay(100);
 		schedule();
 	}

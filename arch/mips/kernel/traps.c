@@ -85,11 +85,7 @@ extern asmlinkage void handle_ov(void);
 extern asmlinkage void handle_tr(void);
 extern asmlinkage void handle_msa_fpe(void);
 extern asmlinkage void handle_fpe(void);
-#ifdef CONFIG_XBURST_MXUV2
-extern asmlinkage void handle_mfpe(void);
-#else
 extern asmlinkage void handle_ftlb(void);
-#endif
 extern asmlinkage void handle_msa(void);
 extern asmlinkage void handle_mdmx(void);
 extern asmlinkage void handle_watch(void);
@@ -148,7 +144,7 @@ static void show_backtrace(struct task_struct *task, const struct pt_regs *regs)
 	if (!task)
 		task = current;
 
-	if (raw_show_trace || user_mode(regs) || !__kernel_text_address(pc)) {
+	if (raw_show_trace || !__kernel_text_address(pc)) {
 		show_raw_backtrace(sp);
 		return;
 	}
@@ -198,8 +194,6 @@ void show_stack(struct task_struct *task, unsigned long *sp)
 {
 	struct pt_regs regs;
 	mm_segment_t old_fs = get_fs();
-
-	regs.cp0_status = KSU_KERNEL;
 	if (sp) {
 		regs.regs[29] = (unsigned long)sp;
 		regs.regs[31] = 0;
@@ -696,15 +690,15 @@ static int simulate_sync(struct pt_regs *regs, unsigned int opcode)
 asmlinkage void do_ov(struct pt_regs *regs)
 {
 	enum ctx_state prev_state;
-	siginfo_t info = {
-		.si_signo = SIGFPE,
-		.si_code = FPE_INTOVF,
-		.si_addr = (void __user *)regs->cp0_epc,
-	};
+	siginfo_t info;
 
 	prev_state = exception_enter();
 	die_if_kernel("Integer overflow", regs);
 
+	info.si_code = FPE_INTOVF;
+	info.si_signo = SIGFPE;
+	info.si_errno = 0;
+	info.si_addr = (void __user *) regs->cp0_epc;
 	force_sig_info(SIGFPE, &info, current);
 	exception_exit(prev_state);
 }
@@ -877,18 +871,10 @@ out:
 	exception_exit(prev_state);
 }
 
-#ifdef CONFIG_MACH_XBURST
-asmlinkage void do_mfpe(struct pt_regs * regs)
-{
-	die_if_kernel("Kernel bug detected", regs);
-	force_sig(SIGILL, current);
-}
-#endif
-
 void do_trap_or_bp(struct pt_regs *regs, unsigned int code,
 	const char *str)
 {
-	siginfo_t info = { 0 };
+	siginfo_t info;
 	char b[40];
 
 #ifdef CONFIG_KGDB_LOW_LEVEL_TRAP
@@ -917,6 +903,7 @@ void do_trap_or_bp(struct pt_regs *regs, unsigned int code,
 		else
 			info.si_code = FPE_INTOVF;
 		info.si_signo = SIGFPE;
+		info.si_errno = 0;
 		info.si_addr = (void __user *) regs->cp0_epc;
 		force_sig_info(SIGFPE, &info, current);
 		break;
@@ -1255,7 +1242,7 @@ static int enable_restore_fp_context(int msa)
 		err = init_fpu();
 		if (msa && !err) {
 			enable_msa();
-			init_msa_upper();
+			_init_msa_upper();
 			set_thread_flag(TIF_USEDMSA);
 			set_thread_flag(TIF_MSA_CTX_LIVE);
 		}
@@ -1318,7 +1305,7 @@ static int enable_restore_fp_context(int msa)
 	 */
 	prior_msa = test_and_set_thread_flag(TIF_MSA_CTX_LIVE);
 	if (!prior_msa && was_fpu_owner) {
-		init_msa_upper();
+		_init_msa_upper();
 
 		goto out;
 	}
@@ -1335,7 +1322,7 @@ static int enable_restore_fp_context(int msa)
 		 * of each vector register such that it cannot see data left
 		 * behind by another task.
 		 */
-		init_msa_upper();
+		_init_msa_upper();
 	} else {
 		/* We need to restore the vector context. */
 		restore_msa(current);
@@ -1457,14 +1444,7 @@ asmlinkage void do_cpu(struct pt_regs *regs)
 		break;
 
 	case 2:
-#ifdef CONFIG_MACH_XBURST2
-	        /* Processing of MXA instructions needs setting MSA enable. */
-		err = enable_restore_fp_context(1);
-		if (err)
-			force_sig(SIGILL, current);
-#else
 		raw_notifier_call_chain(&cu2_chain, CU2_EXCEPTION, regs);
-#endif
 		break;
 	}
 
@@ -1521,7 +1501,6 @@ asmlinkage void do_mdmx(struct pt_regs *regs)
 	exception_exit(prev_state);
 }
 
-int do_watch_show_stack = 0;
 /*
  * Called with interrupts disabled.
  */
@@ -1538,13 +1517,6 @@ asmlinkage void do_watch(struct pt_regs *regs)
 	cause = read_c0_cause();
 	cause &= ~(1 << 22);
 	write_c0_cause(cause);
-
-	if(do_watch_show_stack) {
-		/*Quick Debug for ingenic debugfs.*/
-		show_registers(regs);
-		show_code((unsigned int __user *) regs->cp0_epc);
-		dump_stack();
-	}
 
 	/*
 	 * If the current thread has the watch registers loaded, save
@@ -2348,12 +2320,8 @@ void __init trap_init(void)
 	if (cpu_has_fpu && !cpu_has_nofpuex)
 		set_except_vector(15, handle_fpe);
 
-#ifdef CONFIG_XBURST_MXUV2
-	if(cpu_has_mxu_v2)
-		set_except_vector(16, handle_mfpe);
-#else
 	set_except_vector(16, handle_ftlb);
-#endif
+
 	if (cpu_has_rixiex) {
 		set_except_vector(19, tlb_do_page_fault_0);
 		set_except_vector(20, tlb_do_page_fault_0);

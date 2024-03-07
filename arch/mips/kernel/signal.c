@@ -39,7 +39,6 @@
 #include <asm/dsp.h>
 #include <asm/inst.h>
 #include <asm/msa.h>
-#include <mxu.h>
 
 #include "signal-common.h"
 
@@ -195,9 +194,6 @@ static int restore_msa_extcontext(void __user *buf, unsigned int size)
 	unsigned long long val;
 	unsigned int csr;
 	int i, err;
-
-	if (!config_enabled(CONFIG_CPU_HAS_MSA))
-		return SIGSYS;
 
 	if (size != sizeof(*msa))
 		return -EINVAL;
@@ -402,8 +398,8 @@ int protected_restore_fp_context(void __user *sc)
 	}
 
 fp_done:
-	if (!err && (used & USED_EXTCONTEXT))
-		err = restore_extcontext(sc_to_extcontext(sc));
+	if (used & USED_EXTCONTEXT)
+		err |= restore_extcontext(sc_to_extcontext(sc));
 
 	return err ?: sig;
 }
@@ -441,15 +437,6 @@ int setup_sigcontext(struct pt_regs *regs, struct sigcontext __user *sc)
 	 */
 	err |= protected_save_fp_context(sc);
 
-#ifdef CONFIG_MACH_XBURST
-	if (cpu_has_mxu) {
-		unsigned int *regs;
-		regs = __get_mxu_regs(current);
-		for (i = 0; i < NUM_MXU_REGS; i++){
-			err |= __put_user(regs[i], &sc->sc_mxu[i]);
-		}
-	}
-#endif
 	return err;
 }
 
@@ -523,15 +510,6 @@ int restore_sigcontext(struct pt_regs *regs, struct sigcontext __user *sc)
 	for (i = 1; i < 32; i++)
 		err |= __get_user(regs->regs[i], &sc->sc_regs[i]);
 
-#ifdef CONFIG_MACH_XBURST
-	if (cpu_has_mxu) {
-		unsigned int regs[NUM_MXU_REGS];
-		for (i = 0; i < NUM_MXU_REGS; i++){
-			err |= __get_user(regs[i], &sc->sc_mxu[i]);
-		}
-		__let_mxu_regs(current,regs);
-	}
-#endif
 	return err ?: protected_restore_fp_context(sc);
 }
 
@@ -789,7 +767,15 @@ static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 	sigset_t *oldset = sigmask_to_save();
 	int ret;
 	struct mips_abi *abi = current->thread.abi;
+#ifdef CONFIG_CPU_MICROMIPS
+	void *vdso;
+	unsigned long tmp = (unsigned long)current->mm->context.vdso;
+
+	set_isa16_mode(tmp);
+	vdso = (void *)tmp;
+#else
 	void *vdso = current->mm->context.vdso;
+#endif
 
 	if (regs->regs[0]) {
 		switch(regs->regs[2]) {

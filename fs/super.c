@@ -415,7 +415,6 @@ void generic_shutdown_super(struct super_block *sb)
 		sb->s_flags &= ~MS_ACTIVE;
 
 		fsnotify_unmount_inodes(sb);
-		cgroup_writeback_umount();
 
 		evict_inodes(sb);
 
@@ -1326,8 +1325,8 @@ int freeze_super(struct super_block *sb)
 		}
 	}
 	/*
-	 * For debugging purposes so that fs can warn if it sees write activity
-	 * when frozen is set to SB_FREEZE_COMPLETE, and for thaw_super().
+	 * This is just for debugging purposes so that fs can warn if it
+	 * sees write activity when frozen is set to SB_FREEZE_COMPLETE.
 	 */
 	sb->s_writers.frozen = SB_FREEZE_COMPLETE;
 	up_write(&sb->s_umount);
@@ -1346,7 +1345,7 @@ int thaw_super(struct super_block *sb)
 	int error;
 
 	down_write(&sb->s_umount);
-	if (sb->s_writers.frozen != SB_FREEZE_COMPLETE) {
+	if (sb->s_writers.frozen == SB_UNFROZEN) {
 		up_write(&sb->s_umount);
 		return -EINVAL;
 	}

@@ -625,89 +625,6 @@ static void __init request_crashkernel(struct resource *res)
 #define USE_DTB_CMDLINE		IS_ENABLED(CONFIG_MIPS_CMDLINE_FROM_DTB)
 #define EXTEND_WITH_PROM	IS_ENABLED(CONFIG_MIPS_CMDLINE_EXTEND)
 
-#ifdef CONFIG_LINUX_PMEM
-static unsigned long  g_pmem_total_size=0;
-static unsigned long  g_pmem_start=0;
-static int  g_pmem_set_by_cmdline=0;
-
-#if 0
-/* called in arch/mips/xburst2/soc-x2000-v12/setup.c */
-unsigned long set_reserved_pmem_total_size(unsigned long size)
-{
-	g_pmem_total_size = size;
-	return 0;
-}
-#endif
-
-unsigned long get_reserved_pmem_size(void)
-{
-	return g_pmem_total_size;
-}
-
-unsigned long get_reserved_pmem_start(void)
-{
-	return g_pmem_start;
-}
-
-static int __init pmem_parse(char *str)
-{
-	char *retptr;
-	unsigned long pmem_size;
-	unsigned long pmem_base = -1;
-
-	pmem_size = memparse(str, &retptr);
-	if(pmem_size < 0) {
-		printk("pmem_size is error!\n");
-		/* pmem_size = 0x4000000; */
-		goto abort;
-	}
-
-	if (*retptr == '@')
-		pmem_base = memparse(retptr + 1, NULL);
-
-	if(pmem_base < 0) {
-		printk("pmem_base is error!\n");
-		/* pmem_base = 0xc000000; */
-		goto abort;
-	}
-
-	g_pmem_start = pmem_base;
-	g_pmem_total_size = pmem_size;
-	g_pmem_set_by_cmdline = 1;
-
-	return 1;
-abort:
-	return 0;
-}
-__setup("pmem=", pmem_parse);
-
-static unsigned int str2(unsigned int *i, const char *str, int v)
-{
-	unsigned int temp = 0;
-
-	while(*str != 0) {
-		if((*str>='0') && (*str<='9') && (v == 10))
-			temp = temp*v + (*str - '0');
-		else if ((*str>='A') && (*str<='F') && (v == 16))
-			temp = temp*v + (*str - 'A') + 10;
-		else
-			break;
-		str++;
-	}
-
-	*i = temp;
-
-	if (v == 10) {
-		if (*str == 'M')
-			return 1024 * 1024;
-		else if (*str == 'K')
-			return 1024;
-	}
-
-	return 1;
-}
-#endif	/* CONFIG_LINUX_PMEM  */
-
 static void __init arch_mem_init(char **cmdline_p)
 {
 	struct memblock_region *reg;
@@ -761,59 +678,6 @@ static void __init arch_mem_init(char **cmdline_p)
 		pr_info("User-defined physical RAM map:\n");
 		print_memory_map();
 	}
-#ifdef CONFIG_LINUX_PMEM
-	/* reserve memory for pmem. */
-	if (g_pmem_set_by_cmdline == 0) {
-		char *str = CONFIG_PMEM_RESERVE_SIZE;
-		unsigned int size;
-
-		do {
-			if (strlen(str) == 1) {
-				g_pmem_total_size = 0;
-				break;
-			} else if ((*(str+1) == 'x') || (*(str+1) == 'X')) {
-				str2(&size, str+2, 16);
-				g_pmem_total_size = size;
-				break;
-			} else {
-				unsigned int f = str2(&size, str, 10);
-				g_pmem_total_size = size * f;
-				break;
-			}
-		} while(0);
-	}
-
-	printk(KERN_INFO "reserve memory for pmem, g_pmem_total_size: %#x\n",  (unsigned int)g_pmem_total_size);
-	if ( g_pmem_total_size > 0x10000 ) {
-		int i;
-		const int field = 2 * sizeof(unsigned long);
-
-		for (i = boot_mem_map.nr_map-1; i>-1; i--) {
-
-			if (BOOT_MEM_RAM == boot_mem_map.map[i].type
-			    && (unsigned long)boot_mem_map.map[i].size > g_pmem_total_size) {
-
-				printk(KERN_INFO "          original, memory %d: %0*Lx @ %0*Lx \n", i,
-				       field, (unsigned long long) boot_mem_map.map[i].size,
-				       field, (unsigned long long) boot_mem_map.map[i].addr);
-
-				boot_mem_map.map[i].size -= g_pmem_total_size;
-				g_pmem_start = (unsigned long)boot_mem_map.map[i].addr + (unsigned long)boot_mem_map.map[i].size;
-
-				printk(KERN_INFO "after reserve pmem, memory %d: %0*Lx @ %0*Lx \n", i,
-				       field, (unsigned long long) boot_mem_map.map[i].size,
-				       field, (unsigned long long) boot_mem_map.map[i].addr);
-
-				printk(KERN_INFO "     reserve memory for pmem: %0*Lx @ %0*Lx ",
-				       field, (unsigned long long) g_pmem_total_size,
-				       field, (unsigned long long) g_pmem_start);
-				printk(KERN_INFO "\n");
-
-				break;
-			}
-		}
-	}
-#endif	/* CONFIG_LINUX_PMEM  */
 
 	bootmem_init();
 #ifdef CONFIG_PROC_VMCORE
@@ -842,9 +706,6 @@ static void __init arch_mem_init(char **cmdline_p)
 	for_each_memblock(reserved, reg)
 		if (reg->size != 0)
 			reserve_bootmem(reg->base, reg->size, BOOTMEM_DEFAULT);
-
-	reserve_bootmem_region(__pa_symbol(&__nosave_begin),
-			__pa_symbol(&__nosave_end)); /* Reserve for hibernation */
 }
 
 static void __init resource_init(void)
