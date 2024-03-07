@@ -114,6 +114,7 @@
 	status = "disable";
 };
 
+
 &sfc {
 	status = "okay";
     pinctrl-names = "default";
@@ -165,7 +166,7 @@
 		regulator-boot-on;
 		regulator-always-on;
 
-		gpio = <&gpb 7 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		gpio = <&gpb 18 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
 
 		startup-delay-us = <100000>;
 	};
@@ -181,7 +182,7 @@
 		regulator-always-on;
 		enable-active-high;
 
-		gpio = <&gpb 25 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		gpio = <&gpb 15 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 
 		startup-delay-us = <100000>;
 	};
