@@ -1458,7 +1458,7 @@ yyreduce:
   yyval = yyvsp[1-yylen];
 
   /* Default location.  */
-  extern YYLLOC_DEFAULT (yyloc, (yylsp - yylen), yylen);
+  YYLLOC_DEFAULT (yyloc, (yylsp - yylen), yylen);
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
