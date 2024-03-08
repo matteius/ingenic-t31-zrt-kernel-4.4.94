@@ -12,7 +12,7 @@
  *  675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
-
+#include <linux/string.h> // For strlen
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/types.h>
@@ -525,12 +525,19 @@ MODULE_ALIAS("platform:ingenic-wdt");
 /* cmd */
 #define WATCHDOG_CMD_BUF_SIZE 100
 static uint8_t watchdog_cmd_buf[100];
+
 static int watchdog_cmd_show(struct seq_file *m, void *v)
 {
-	int len = 0;
-	len += seq_printf(m ,"%s\n", watchdog_cmd_buf);
-	return len;
+    // Calculate the length of the string plus the newline character
+    int len = strlen(watchdog_cmd_buf) + 1;
+
+    // Now, print the string with seq_printf
+    seq_printf(m, "%s\n", watchdog_cmd_buf);
+
+    // Return the calculated length
+    return len;
 }
+
 
 static ssize_t watchdog_cmd_set(struct file *file, const char __user *buffer, size_t count, loff_t *f_pos)
 {
