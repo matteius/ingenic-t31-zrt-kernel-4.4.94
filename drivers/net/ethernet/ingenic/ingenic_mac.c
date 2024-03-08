@@ -2373,11 +2373,13 @@ module_platform_driver(ingenic_mac_driver)
 /* cmd */
 #define MDIO_CMD_BUF_SIZE 100
 static uint8_t mdio_cmd_buf[100];
-static int mdio_cmd_show(struct seq_file *m, void *v)
+        static int mdio_cmd_show(struct seq_file *m, void *v)
 {
-	int len = 0;
-	len += seq_printf(m ,"%s\n", mdio_cmd_buf);
-	return len;
+    int len = strlen(mdio_cmd_buf) + 1;
+
+    seq_printf(m, "%s\n", mdio_cmd_buf);
+
+    return len;
 }
 
 static ssize_t mdio_cmd_set(struct file *file, const char __user *buffer, size_t count, loff_t *f_pos)
