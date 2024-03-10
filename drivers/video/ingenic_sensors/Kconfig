@@ -10,3 +10,10 @@ config INGENIC_SENSOR_GC2053
 	default m
 	help
 	  Module for gc2053.
+
+config INGENIC_SENSOR_SC2336
+	tristate "Ingenic Sensor module for SC2336"
+	depends on INGENIC_SENSORS
+	default m
+	help
+	  Module for sc2336.
