@@ -23,6 +23,11 @@
 #include <sensor-common.h>
 #include <txx-funcs.h>
 
+// ugly hack, but oh well
+#undef ISP_PRINT
+#define ISP_PRINT(level, format, ...)			\
+	pr_err(format, ##__VA_ARGS__)
+
 #define SC2336_CHIP_ID_H	(0xcb)
 #define SC2336_CHIP_ID_L	(0x3a)
 #define SC2336_REG_END		0xffff
@@ -471,7 +476,7 @@ static struct tx_isp_sensor_win_setting sc2336_win_sizes[] = {
 		.width		= 1920,
 		.height		= 1080,
 		.fps		= 25 << 16 | 1,
-		.mbus_code	= V4L2_MBUS_FMT_SBGGR10_1X10,
+		.mbus_code	= V4L2_MBUS_FMT_SIGGR10_1X10,
 		.colorspace	= V4L2_COLORSPACE_SRGB,
 		.regs 		= sc2336_init_regs_1920_1080_30fps_mipi,
 	},
@@ -1068,18 +1073,12 @@ static struct i2c_driver sc2336_driver = {
 
 static __init int init_sc2336(void)
 {
-	int ret = 0;
-	ret = private_driver_get_interface();
-	if(ret){
-		ISP_ERROR("Failed to init sc2336 dirver.\n");
-		return -1;
-	}
-	return private_i2c_add_driver(&sc2336_driver);
+    return i2c_add_driver(&sc2336_driver);
 }
 
 static __exit void exit_sc2336(void)
 {
-	private_i2c_del_driver(&sc2336_driver);
+    i2c_del_driver(&sc2336_driver);
 }
 
 module_init(init_sc2336);
