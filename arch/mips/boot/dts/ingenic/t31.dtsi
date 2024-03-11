@@ -199,6 +199,27 @@
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
+
+			i2c0_pins: i2c0-pins {
+				mux {
+					groups = "i2c0_sda_group", "i2c0_scl_group";
+					function = "i2c0";
+				};
+				config {
+					i2c0_sda_pins: pinmux_i2c0_sda_pins {
+						pins = "PB25"; /* Actual pin number for I2C SDA */
+						function = "i2c0";
+						drive-strength = <4>; /* Configure as necessary */
+						bias-pull-up; /* If the hardware requires it */
+					};
+					i2c0_scl_pins: pinmux_i2c0_scl_pins {
+						pins = "PB26"; /* Actual pin number for I2C SCL */
+						function = "i2c0";
+						drive-strength = <4>; /* Configure as necessary */
+						bias-pull-up; /* If the hardware requires it */
+					};
+				};
+			};
 		};
 
 		aic: audio-controller@10020000 {
@@ -284,7 +305,26 @@
 			interrupts = <IRQ_I2C0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			emptyfifo_hold_master = <1>; /* embeddedsw.dts.params.emptyfifo_hold_master type NUMBER */
 			status = "okay";
+			speed-mode = <0>; /* appended from boardinfo */
+			i2c-sda-falling-time-ns = <5000>; /* appended from boardinfo */
+			i2c-scl-falling-time-ns = <5000>; /* appended from boardinfo */
+
+			eeprom: atmel,24c32@0x51 {
+				compatible = "atmel,24c32";
+				reg = <0x00000051>;
+				pagesize = <32>; /* appended from boardinfo */
+			};
+
+			isp: sc2336@0x30 {
+				compatible = "ingenic,t31-isp";
+				reg = <0x00000030>;
+				pinctrl-names = "default";
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_ISP>;
+				status = "okay";
+			};
 		};
 
 		i2c1: i2c@0x10051000 {
@@ -294,7 +334,11 @@
 			interrupts = <IRQ_I2C1>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			emptyfifo_hold_master = <1>; /* embeddedsw.dts.params.emptyfifo_hold_master type NUMBER */
 			status = "okay";
+			speed-mode = <0>; /* appended from boardinfo */
+			i2c-sda-falling-time-ns = <5000>; /* appended from boardinfo */
+			i2c-scl-falling-time-ns = <5000>; /* appended from boardinfo */
 		};
 
         spi0: spi0@0x10043000 {
@@ -474,14 +518,6 @@
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_IPU>;
 			status = "okay";
-		};
-
-		isp: isp@0x13300000 {
-			compatible = "ingenic,t31-isp";
-			reg = <0x13300000 0x100000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_ISP>;
-			status = "disabled";
 		};
 	};
 

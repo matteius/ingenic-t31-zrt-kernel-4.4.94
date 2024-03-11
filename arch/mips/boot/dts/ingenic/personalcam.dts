@@ -31,9 +31,14 @@
 };
 
 &i2c1 {
-	pinctrl-0 = <&i2c1_pa>;
 	pinctrl-names = "default";
 	status = "okay";
+
+	eeprom@50 {
+		compatible = "atmel,24c32";
+		reg = <0x50>; /* Device address on the I2C bus */
+		/* Additional EEPROM device properties as required */
+	};
 };
 
 &aic {
