@@ -11,7 +11,7 @@
 
 	aliases: aliases {
 		i2c0 = &i2c0;
-		i2c1 = &i2c1;
+		// i2c1 = &i2c1;
 		uart0 = &uart0;
 		uart1 = &uart1;
 		uart2 = &uart2;
@@ -51,11 +51,10 @@
 		reg = <0x10001000 0x50>;
 		interrupt-controller;
 		#interrupt-cells = <1>;
-		/*cpu-intc-map = <0 0x000>,
+		cpu-intc-map = <0 0x000>,
 			           <1 0x100>,
 			           <2 0x200>,
 			           <3 0x300>;
-*/
 		interrupt-parent = <&cpuintc>;
 		interrupts = <CORE_INTC_IRQ>;
 		interrupt-names ="intc";
@@ -207,13 +206,13 @@
 				};
 				config {
 					i2c0_sda_pins: pinmux_i2c0_sda_pins {
-						pins = "PB25"; /* Actual pin number for I2C SDA */
+						pins = "PA16"; /* Actual pin number for I2C SDA */
 						function = "i2c0";
 						drive-strength = <4>; /* Configure as necessary */
 						bias-pull-up; /* If the hardware requires it */
 					};
 					i2c0_scl_pins: pinmux_i2c0_scl_pins {
-						pins = "PB26"; /* Actual pin number for I2C SCL */
+						pins = "PA17"; /* Actual pin number for I2C SCL */
 						function = "i2c0";
 						drive-strength = <4>; /* Configure as necessary */
 						bias-pull-up; /* If the hardware requires it */
@@ -301,6 +300,7 @@
 		i2c0: i2c@0x10050000 {
 			compatible = "ingenic,t31-i2c";
 			reg = <0x10050000 0x1000>;
+			clock-frequency = <100000>; /* I2C bus speed set to 100 kHz */
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_I2C0>;
 			#address-cells = <1>;
@@ -316,30 +316,30 @@
 				reg = <0x00000051>;
 				pagesize = <32>; /* appended from boardinfo */
 			};
-
-			isp: sc2336@0x30 {
-				compatible = "ingenic,t31-isp";
-				reg = <0x00000030>;
-				pinctrl-names = "default";
-				interrupt-parent = <&core_intc>;
-				interrupts = <IRQ_ISP>;
-				status = "okay";
-			};
 		};
 
-		i2c1: i2c@0x10051000 {
-			compatible = "ingenic,t31-i2c";
-			reg = <0x10051000 0x1000>;
+		isp: sc2336@0x30 {
+			compatible = "ingenic,t31-isp";
+			reg = <0x00000030 0x02>;
+			pinctrl-names = "default";
 			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_I2C1>;
-			#address-cells = <1>;
-			#size-cells = <0>;
-			emptyfifo_hold_master = <1>; /* embeddedsw.dts.params.emptyfifo_hold_master type NUMBER */
+			interrupts = <29>;
 			status = "okay";
-			speed-mode = <0>; /* appended from boardinfo */
-			i2c-sda-falling-time-ns = <5000>; /* appended from boardinfo */
-			i2c-scl-falling-time-ns = <5000>; /* appended from boardinfo */
 		};
+
+//		i2c1: i2c@0x10051000 {
+//			compatible = "ingenic,t31-i2c";
+//			reg = <0x10051000 0x1000>;
+//			interrupt-parent = <&core_intc>;
+//			interrupts = <IRQ_I2C1>;
+//			#address-cells = <1>;
+//			#size-cells = <0>;
+//			emptyfifo_hold_master = <1>; /* embeddedsw.dts.params.emptyfifo_hold_master type NUMBER */
+//			status = "okay";
+//			speed-mode = <0>; /* appended from boardinfo */
+//			i2c-sda-falling-time-ns = <5000>; /* appended from boardinfo */
+//			i2c-scl-falling-time-ns = <5000>; /* appended from boardinfo */
+//		};
 
         spi0: spi0@0x10043000 {
 			compatible = "ingenic,spi";
@@ -353,7 +353,6 @@
 			#size-cells = <0>;
 			status = "disabled";
 		};
-/*
 		spi1: spi1@0x10044000 {
 			compatible = "ingenic,spi";
 			reg = <0x10044000 0x1000>;
@@ -366,8 +365,7 @@
 			#size-cells = <0>;
 			status = "disabled";
 		};
-*/
-/*
+
 		dtrng: dtrng@0x10072000 {
 			compatible = "ingenic,dtrng";
 			reg = <0x10072000 0x100>;
@@ -375,7 +373,6 @@
 			interrupts = <IRQ_DTRNG>;
 			status = "disabled";
 		};
-*/
 		des: des@0x10061000 {
 			compatible = "ingenic,des";
 			reg = <0x10043000 0x1000>;

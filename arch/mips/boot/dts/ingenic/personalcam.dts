@@ -26,20 +26,21 @@
 
 &i2c0 {
 	pinctrl-0 = <&i2c0_pa>;
+	clock-frequency = <100000>; /* I2C bus speed set to 100 kHz */
 	pinctrl-names = "default";
 	status = "okay";
 };
 
-&i2c1 {
-	pinctrl-names = "default";
-	status = "okay";
-
-	eeprom@50 {
-		compatible = "atmel,24c32";
-		reg = <0x50>; /* Device address on the I2C bus */
-		/* Additional EEPROM device properties as required */
-	};
-};
+//&i2c1 {
+//	pinctrl-names = "default";
+//	status = "okay";
+//
+//	eeprom@50 {
+//		compatible = "atmel,24c32";
+//		reg = <0x50>; /* Device address on the I2C bus */
+//		/* Additional EEPROM device properties as required */
+//	};
+//};
 
 &aic {
 	status = "okay";
@@ -142,10 +143,10 @@
 	ingenic,bus_num = <0>;
 	ingenic,has_dma_support = <1>;
 };
-
-&isp {
-	status = "okay";
-};
+//
+//&isp {
+//	status = "okay";
+//};
 
 &otg {
 	g-use-dma;
@@ -188,6 +189,22 @@
 		enable-active-high;
 
 		gpio = <&gpb 15 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+
+		startup-delay-us = <100000>;
+	};
+
+	isp_gpio_enable: isp-dummy-fixed-reg {
+		status = "okay";
+		compatible = "regulator-fixed";
+
+		regulator-name = "isp-gpio-enable";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-boot-on;
+		regulator-always-on;
+		enable-active-high;
+
+		gpio = <&gpa 18 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
 
 		startup-delay-us = <100000>;
 	};

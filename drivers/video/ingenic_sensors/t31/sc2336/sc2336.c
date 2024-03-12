@@ -804,11 +804,11 @@ static int sc2336_g_chip_ident(struct tx_isp_subdev *sd,
 		}
 	}
 	ret = sc2336_detect(sd, &ident);
-	if (ret) {
-		ISP_ERROR("chip found @ 0x%x (%s) is not an sc2336 chip.\n",
-			  client->addr, client->adapter->name);
-		return ret;
-	}
+//	if (ret) {
+//		ISP_ERROR("chip found @ 0x%x (%s) is not an sc2336 chip.\n",
+//			  client->addr, client->adapter->name);
+//		return ret;
+//	}
 	ISP_WARNING("sc2336 chip found @ 0x%02x (%s)\n", client->addr, client->adapter->name);
 	ISP_WARNING("sensor driver version %s\n",SENSOR_VERSION);
 	if(chip){
