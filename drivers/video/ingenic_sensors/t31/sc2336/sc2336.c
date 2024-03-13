@@ -40,9 +40,17 @@ static int pwdn_gpio = -1;
 module_param(pwdn_gpio, int, S_IRUGO);
 MODULE_PARM_DESC(pwdn_gpio, "Power down GPIO NUM");
 
+static int sensor_gpio_func = DVP_PA_LOW_10BIT;
+module_param(sensor_gpio_func, int, S_IRUGO);
+MODULE_PARM_DESC(sensor_gpio_func, "Sensor GPIO function");
+
 static int data_interface = TX_SENSOR_DATA_INTERFACE_MIPI;
 module_param(data_interface, int, S_IRUGO);
 MODULE_PARM_DESC(data_interface, "Sensor Date interface");
+
+static int sensor_max_fps = TX_SENSOR_MAX_FPS_30;
+module_param(sensor_max_fps, int, S_IRUGO);
+MODULE_PARM_DESC(sensor_max_fps, "Sensor Max Fps set interface");
 
 static int shvflip = 0;
 module_param(shvflip, int, S_IRUGO);
@@ -471,7 +479,7 @@ static struct tx_isp_sensor_win_setting sc2336_win_sizes[] = {
 		.width		= 1920,
 		.height		= 1080,
 		.fps		= 25 << 16 | 1,
-		.mbus_code	= MEDIA_BUS_FMT_SBGGR10_1X10,
+		.mbus_code	= MEDIA_BUS_FMT_SRGGB10_1X10,
 		.colorspace	= V4L2_COLORSPACE_SRGB,
 		.regs 		= sc2336_init_regs_1920_1080_30fps_mipi,
 	},

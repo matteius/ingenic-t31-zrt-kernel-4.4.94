@@ -138,7 +138,7 @@
 #define TX_LEVEL		(I2C_FIFO_LEN / 2)
 #define RX_LEVEL		(I2C_FIFO_LEN / 2 - 1)
 #define TIMEOUT			0xff
-#define DEBUG_INFO		2
+#define DEBUG_INFO	0
 #define DEBUG_WARN		1
 
 //#define I2C_DEBUG
