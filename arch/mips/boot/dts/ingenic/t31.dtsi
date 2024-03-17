@@ -300,7 +300,6 @@
 		i2c0: i2c@0x10050000 {
 			compatible = "ingenic,t31-i2c";
 			reg = <0x10050000 0x1000>;
-			clock-frequency = <100000>; /* I2C bus speed set to 100 kHz */
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_I2C0>;
 			#address-cells = <1>;
@@ -318,12 +317,9 @@
 //			};
 
 			isp: sc2336@0x30 {
-				compatible = "ingenic,sc2336";
+				compatible = "ingenic,sc2336", "sc2336";
 				reg = <0x00000030 0x02>;
-				pinctrl-names = "default";
-				interrupt-parent = <&core_intc>;
-				interrupts = <29>;
-				status = "okay";
+				status = "disabled";
 			};
 		};
 
