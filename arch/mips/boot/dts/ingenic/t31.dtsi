@@ -304,23 +304,7 @@
 			interrupts = <IRQ_I2C0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			// emptyfifo_hold_master = <1>; /* embeddedsw.dts.params.emptyfifo_hold_master type NUMBER */
 			status = "okay";
-//			speed-mode = <0>; /* appended from boardinfo */
-//			i2c-sda-falling-time-ns = <5000>; /* appended from boardinfo */
-//			i2c-scl-falling-time-ns = <5000>; /* appended from boardinfo */
-
-//			eeprom: atmel,24c32@0x51 {
-//				compatible = "atmel,24c32";
-//				reg = <0x00000051>;
-//				pagesize = <32>; /* appended from boardinfo */
-//			};
-
-			isp: sc2336@0x30 {
-				compatible = "ingenic,sc2336", "sc2336";
-				reg = <0x00000030 0x02>;
-				status = "disabled";
-			};
 		};
 
 
@@ -513,6 +497,12 @@
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_IPU>;
 			status = "okay";
+		};
+
+		isp: sc2336@0x30 {
+			compatible = "ingenic,sc2336", "sc2336";
+			reg = <0x00000030 0x02>;
+			status = "disabled";
 		};
 	};
 

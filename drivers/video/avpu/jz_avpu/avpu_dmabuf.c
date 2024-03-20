@@ -484,7 +484,7 @@ static const struct dma_buf_ops avpu_dmabuf_ops = {
 	.release	= avpu_dmabuf_release,
 };
 
-#ifdef CONFIG_SOC_T40
+
 static void define_export_info(struct dma_buf_export_info *exp_info, int size, void *priv)
 {
 	exp_info->owner = THIS_MODULE;
@@ -524,9 +524,9 @@ static struct dma_buf *avpu_get_dmabuf(void *dma_info_priv)
 	struct dma_buf *dbuf;
 	struct avpu_dmabuf_priv *dinfo = dma_info_priv;
 	struct avpu_dma_buffer *buf = dinfo->buffer;
-#ifdef CONFIG_SOC_T40
+
 	struct dma_buf_export_info exp_info;
-#endif
+
 
 	if (!dinfo->sgt_base)
 		dinfo->sgt_base = avpu_get_base_sgt(dinfo);
@@ -534,20 +534,13 @@ static struct dma_buf *avpu_get_dmabuf(void *dma_info_priv)
 	if (WARN_ON(!dinfo->sgt_base))
 		return NULL;
 
-#ifdef CONFIG_SOC_T40
+
 	define_export_info(&exp_info, buf->size, (void *)dinfo);
 	dbuf = dma_buf_export(&exp_info);
 	if (IS_ERR(dbuf)) {
 		pr_err("couldn't export dma buf\n");
 		return NULL;
 	}
-#else
-	dbuf = dma_buf_export((void *)dinfo, &avpu_dmabuf_ops, buf->size, O_RDWR);
-	if (IS_ERR(buf)) {
-		pr_err("couldn't export dma buf\n");
-		return NULL;
-	}
-#endif
 	return dbuf;
 }
 
