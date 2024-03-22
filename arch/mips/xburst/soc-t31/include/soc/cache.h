@@ -30,13 +30,11 @@ while(0)
 #define CFG_ICACHE_SIZE		32768
 #define CFG_CACHELINE_SIZE	32
 
-#define CFG_SDCACHE_SIZE	(512*1024)
-#define CFG_SDCACHELINE_SIZE	64
-
 static inline void __jz_flush_cache_all(void)
 {
 	register unsigned long addr;
 	/* Clear CP0 TagLo */
+	asm volatile ("mtc0 $0, $28\n\t");
 	for (addr = K0BASE; addr < (K0BASE + CFG_DCACHE_SIZE); addr += CFG_CACHELINE_SIZE) {
 		asm volatile (".set mips32\n\t"
 					  " cache %0, 0(%1)\n\t"
@@ -53,21 +51,51 @@ static inline void __jz_flush_cache_all(void)
 					  : "I" (Index_Invalidate_I), "r"(addr));
 	}
 
-	asm volatile ("sync\n\t"
-				  "lw $0,0(%0)"
-				  ::"r" (0xa0000000));
-	/* 2nd cache */
-	for (addr = K0BASE; addr < (K0BASE + CFG_SDCACHE_SIZE); addr += CFG_SDCACHELINE_SIZE) {
-		asm volatile (".set mips32\n\t"
-					  " cache %0, 0(%1)\n\t"
-					  ".set mips32\n\t"
-					  :
-					  : "I" (Index_Writeback_Inv_SD), "r"(addr));
-	}
-
+	/* invalidate BTB */
+	asm volatile (
+			".set mips32\n\t"
+			" mfc0 $26, $16, 7\n\t"
+			" nop\n\t"
+			" ori $26, 2\n\t"
+			" mtc0 $26, $16, 7\n\t"
+			" nop\n\t"
+			".set mips32\n\t"
+		     );
 	asm volatile ("sync\n\t"
 				  "lw $0,0(%0)"
 				  ::"r" (0xa0000000));
 }
+
+static inline void __jz_cache_init(void)
+{
+	register unsigned long addr;
+	asm volatile ("mtc0 $0, $28\n\t"::);
+
+	for (addr = K0BASE; addr < (K0BASE + CFG_DCACHE_SIZE); addr += CFG_CACHELINE_SIZE) {
+		asm volatile (".set mips32\n\t"
+				" cache %0, 0(%1)\n\t"
+				".set mips32\n\t"
+				:
+				: "I" (Index_Store_Tag_D), "r"(addr));
+	}
+	for (addr = K0BASE; addr < (K0BASE + CFG_ICACHE_SIZE); addr += CFG_CACHELINE_SIZE) {
+		asm volatile (".set mips32\n\t"
+				" cache %0, 0(%1)\n\t"
+				".set mips32\n\t"
+				:
+				: "I" (Index_Store_Tag_I), "r"(addr));
+	}
+	/* invalidate BTB */
+	asm volatile (  ".set mips32\n\t"
+			" mfc0 $26, $16, 7\n\t"
+			" nop\n\t"
+			" ori $26, 2\n\t"
+			" mtc0 $26, $16, 7\n\t"
+			" nop\n\t"
+			"nop\n\t"
+			".set mips32\n\t"
+		    );
+}
+
 
 #endif /* __CHIP_CACHE_H__ */

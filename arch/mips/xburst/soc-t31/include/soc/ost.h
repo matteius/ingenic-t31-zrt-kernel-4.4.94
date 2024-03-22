@@ -33,8 +33,9 @@
 #define TCR_OSTCLR2  (1 << 1)
 
 #define TMR_OSTM    (1 << 0)   /* ost comparison match interrupt mask */
-
+#define TMR_OSTN    (0 << 0 )   /* ost comparison match interrupt no mask */
 #define TFR_OSTM    (1 << 0)   /* Comparison match */
+#define TFR_OSTN    (0 << 0)   /* Comparison not match */
 
 #define ost_readl(reg)		readl_relaxed(reg)
 #define ost_writel(reg, val)	writel_relaxed(val, reg)

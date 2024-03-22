@@ -56,7 +56,7 @@ enum {
 #define INGENIC_ADC_IRQ_NUM	8
 #define SADC_NR_IRQS		(8)
 /* This value is unique to avoid overlap.*/
-#define SADC_IRQ_BASE		200
+#define SADC_IRQ_BASE		187
 
 /* #if ( INGENIC_ADC_IRQ_NUM > SADC_NR_IRQS ) */
 /* #error "SADC module get error irq number!" */
@@ -372,6 +372,7 @@ static struct mfd_cell ingenic_adc_cells[] = {
 		.enable	= ingenic_adc_cell_enable,
 		.disable = ingenic_adc_cell_disable,
 	},
+#if 0
 	{
 		.id = 3,
 		.name = "ingenic-aux",
@@ -399,7 +400,6 @@ static struct mfd_cell ingenic_adc_cells[] = {
 		.enable	= ingenic_adc_cell_enable,
 		.disable = ingenic_adc_cell_disable,
 	},
-#if 0
 	{
 		.id = 6,
 		.name = "ingenic-aux",

@@ -33,7 +33,7 @@
 
 static unsigned long int VREF_ADC = 1800;
 
-#define AUXCONST   4096
+#define AUXCONST   1024
 
 #define ADC_MAGIC_NUMBER	'A'
 #define ADC_ENABLE			_IO(ADC_MAGIC_NUMBER, 11)
@@ -142,7 +142,7 @@ restart:
 	disable_irq(ingenic_adc_aux->irq);
 	ingenic_adc_aux->cell->disable(ingenic_adc_aux->pdev);
 
-	sadc_volt = sadc_volt * VREF_ADC*10 / AUXCONST;
+	sadc_volt = sadc_volt * VREF_ADC / AUXCONST;
 
 	return sadc_volt;
 }

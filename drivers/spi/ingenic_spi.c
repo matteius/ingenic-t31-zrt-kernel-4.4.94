@@ -1371,7 +1371,7 @@ static int ingenic_spi_probe(struct platform_device *pdev)
 
 	master->bus_num = ingspi->pdata->bus_num;
 	master->num_chipselect = ingspi->pdata->num_chipselect;
-
+	master->dev.of_node = pdev->dev.of_node;
 	/* setup the state for the bitbang driver */
 	ingspi->bitbang.master         = ingspi->master;
 	ingspi->bitbang.setup_transfer = ingenic_spi_setupxfer;
