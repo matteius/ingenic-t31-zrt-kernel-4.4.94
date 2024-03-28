@@ -1,8 +1,7 @@
 #ifndef __JZ_TCU_H__
 #define __JZ_TCU_H__
 
-#include <soc/tcu.h>
-#include <mach/jztcu.h>
+#include <linux/mfd/core.h>
 
 #define timeout	500
 
