@@ -308,20 +308,15 @@
 		};
 
 
-
-//		i2c1: i2c@0x10051000 {
-//			compatible = "ingenic,t31-i2c";
-//			reg = <0x10051000 0x1000>;
-//			interrupt-parent = <&core_intc>;
-//			interrupts = <IRQ_I2C1>;
-//			#address-cells = <1>;
-//			#size-cells = <0>;
-//			emptyfifo_hold_master = <1>; /* embeddedsw.dts.params.emptyfifo_hold_master type NUMBER */
-//			status = "okay";
-//			speed-mode = <0>; /* appended from boardinfo */
-//			i2c-sda-falling-time-ns = <5000>; /* appended from boardinfo */
-//			i2c-scl-falling-time-ns = <5000>; /* appended from boardinfo */
-//		};
+		i2c1: i2c@0x10051000 {
+			compatible = "ingenic,t31-i2c";
+			reg = <0x10051000 0x1000>;
+			interrupt-parent = <&core_intc>;
+			interrupts = <IRQ_I2C1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+		};
 
         spi0: spi0@0x10043000 {
 			compatible = "ingenic,spi";
