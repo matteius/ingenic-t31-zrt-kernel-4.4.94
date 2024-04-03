@@ -11,8 +11,7 @@ obj-$(CONFIG_INGENIC_SENSOR_SC2336)        += $(SOC)/sc2336/sc2336.o
 
 ccflags-y := -DRELEASE -DUSER_BIT_32 -DKERNEL_BIT_32 -Wno-date-time -D_GNU_SOURCE
 
-# TODO: this is ugly, I know
-ccflags-y += -I$(PWD)/drivers/video/ingenic_isp/$(SOC)/include
+ccflags-y += -I$(srctree)/drivers/video/ingenic_isp/$(SOC)/include
 
 all:
 	$(MAKE) -C $(KERNEL_SRC) M=$(SRC) O=$(O) modules
