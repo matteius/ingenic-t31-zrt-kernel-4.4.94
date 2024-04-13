@@ -153,7 +153,7 @@
 		regulator-boot-on;
 		regulator-always-on;
 
-		gpio = <&gpb 16 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		gpio = <&gpb 18 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 
 		startup-delay-us = <100000>;
 	};
@@ -169,7 +169,7 @@
 		regulator-always-on;
 		enable-active-high;
 
-		gpio = <&gpb 18 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		gpio = <&gpb 16 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 
 		startup-delay-us = <100000>;
 	};
