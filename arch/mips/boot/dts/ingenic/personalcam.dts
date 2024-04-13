@@ -143,36 +143,6 @@
 };
 
 / {
-	mmc0_gpio_enable: mmc0-dummy-fixed-reg {
-		status = "okay";
-		compatible = "regulator-fixed";
-
-		regulator-name = "mmc0-gpio-enable";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		regulator-boot-on;
-		regulator-always-on;
-
-		gpio = <&gpb 16 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
-
-		startup-delay-us = <100000>;
-	};
-
-	mmc1_gpio_enable: mmc1-dummy-fixed-reg {
-		status = "okay";
-		compatible = "regulator-fixed";
-
-		regulator-name = "mmc1-gpio-enable";
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <1800000>;
-		regulator-boot-on;
-		regulator-always-on;
-
-		gpio = <&gpb 27 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
-
-		startup-delay-us = <100000>;
-	};
-
 	leds-gpios {
 		compatible = "gpio-leds";
 		status = "okay";
