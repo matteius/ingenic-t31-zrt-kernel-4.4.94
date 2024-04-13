@@ -103,7 +103,7 @@
 				interrupt-names = "tcu_int0", "tcu_int1", "tcu_int2";
 				interrupts = <IRQ_TCU0 IRQ_TCU1 IRQ_TCU2>;
 				interrupt-controller;
-				status = "ok";
+				status = "okay";
 
 				channel0: channel0 {
 					compatible = "ingenic,tcu_chn0";
@@ -502,6 +502,12 @@
 		isp: sc2336@0x30 {
 			compatible = "ingenic,sc2336", "sc2336";
 			reg = <0x00000030 0x02>;
+			status = "disabled";
+		};
+
+		isp: gc2053@0x37 {
+			compatible = "ingenic,gc2053", "gc2053";
+			reg = <0x00000037 0x02>;
 			status = "disabled";
 		};
 	};

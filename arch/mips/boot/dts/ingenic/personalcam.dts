@@ -105,10 +105,6 @@
 	pinctrl-0 = <&msc1_pb>;
 };
 
-&mac0 {
-	status = "disable";
-};
-
 
 &sfc {
 	status = "okay";
@@ -224,15 +220,15 @@
 
 	dump_dmic_codec:dump_dmic_codec{
 		compatible = "ingenic,dmic-dump-codec";
-		status = "ok";
+		status = "okay";
 	};
 	dump_spdif_codec:dump_spdif_codec{
 		compatible = "ingenic,spdif-dump-codec";
-		status = "ok";
+		status = "okay";
 	};
 	dump_pcm_codec:dump_pcm_codec{
 		compatible = "ingenic,pcm-dump-codec";
-		status = "ok";
+		status = "okay";
 	};
 
 	/*sound {
@@ -267,7 +263,7 @@
 
 	};*/
 	sound_t31_internal_codec {
-		status = "ok";
+		status = "okay";
 		compatible = "ingenic,t31-sound";
 		ingenic,model = "t31";
 
