@@ -152,6 +152,7 @@
 		regulator-max-microvolt = <3300000>;
 		regulator-boot-on;
 		regulator-always-on;
+		enable-active-high;
 
 		gpio = <&gpb 16 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 
