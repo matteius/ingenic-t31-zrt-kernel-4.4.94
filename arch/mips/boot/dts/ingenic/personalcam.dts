@@ -81,7 +81,7 @@
 	ingenic,removal-removable = <1>;
 	/* special property */
 	ingenic,wp-gpios = <0>;
-	ingenic,cd-gpios = <&gpb 30 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	ingenic,cd-gpios = <&gpb 27 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 	ingenic,rst-gpios = <0>;
 	pinctrl-0 = <&msc0_pb>;
 };
