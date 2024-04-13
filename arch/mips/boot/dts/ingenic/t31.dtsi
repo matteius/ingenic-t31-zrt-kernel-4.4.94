@@ -484,7 +484,7 @@
 		msc1: msc@0x13460000 {
 			compatible = "ingenic,mmc";
 			reg = <0x13460000 0x10000>;
-			status = "disabled";
+			status = "okay";
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_MSC1>;
 			pinctrl-names ="default";
