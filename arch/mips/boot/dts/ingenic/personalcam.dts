@@ -75,7 +75,7 @@
 	cap-sd-highspeed;
 	max-frequency = <24000000>;
 	bus-width = <4>;
-	voltage-ranges = <3200 3400>;
+	voltage-ranges = <2900 3100>;
 	cd-inverted;
 
 	ingenic,removal-removable = <1>;
@@ -99,9 +99,9 @@
 
 	ingenic,removal-dontcare = <1>;
 	/* special property */
-	ingenic,sdio-reset = <&gpb 25 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	// ingenic,sdio-reset = <&gpb 25 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 	ingenic,wp-gpios = <0>;
-	ingenic,rst-gpios = <&gpb 16 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	ingenic,rst-gpios = <0>;
 	pinctrl-0 = <&msc1_pb>;
 };
 
@@ -143,6 +143,22 @@
 };
 
 / {
+	mmc0_gpio_enable: mmc0-dummy-fixed-reg {
+		status = "okay";
+		compatible = "regulator-fixed";
+
+		regulator-name = "mmc0-gpio-enable";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-boot-on;
+		regulator-always-on;
+		enable-active-high;
+
+		gpio = <&gpb 25 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+
+		startup-delay-us = <100000>;
+	};
+
 	mmc1_gpio_enable: mmc1-dummy-fixed-reg {
 		status = "okay";
 		compatible = "regulator-fixed";
