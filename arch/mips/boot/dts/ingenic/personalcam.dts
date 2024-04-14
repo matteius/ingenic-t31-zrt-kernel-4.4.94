@@ -80,7 +80,7 @@
 	ingenic,removal-removable = <1>;
 	/* special property */
 	ingenic,wp-gpios = <0>;
-	ingenic,cd-gpios = <&gpb 27 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	ingenic,cd-gpios = <&gpb 30 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 	ingenic,rst-gpios = <0>;
 	pinctrl-0 = <&msc0_pb>;
 };
@@ -92,13 +92,13 @@
 	cap-mmc-highspeed;
 	max-frequency = <24000000>;
 	bus-width = <4>;
-	voltage-ranges = <2900 3100>;
+	voltage-ranges = <3200 3400>;
 
 	//ingenic,sdio_clk = <24000000>;
 
 	ingenic,removal-dontcare = <1>;
 	/* special property */
-	ingenic,sdio-reset = <&gpb 25 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	// ingenic,sdio-reset = <&gpb 25 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 	ingenic,wp-gpios = <0>;
 	ingenic,rst-gpios = <0>;
 	pinctrl-0 = <&msc1_pb>;
@@ -168,34 +168,34 @@
 		regulator-boot-on;
 		regulator-always-on;
 
-		gpio = <&gpb 16 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		gpio = <&gpb 25 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 
 		startup-delay-us = <100000>;
 	};
-/*
+
 	leds-gpios {
 		compatible = "gpio-leds";
 		status = "okay";
 
 		yellow {
 			label = "led:yellow";
-			gpios = <&gpb 15 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+			gpios = <&gpb 6 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
 			linux,default-trigger = "heartbeat";
 		};
 
 		blue {
 			label = "led:blue";
-			gpios = <&gpb 16 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+			gpios = <&gpb 7 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
 			default-state = "on";
 		};
 
 		ir {
 			label = "led:ir";
-			gpios = <&gpa 14 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+			gpios = <&gpa 15 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
 			default-state = "off";
 		};
 	};
-*/
+
 	extclk: extclk {
 		clock-frequency = <24000000>;
 	};
