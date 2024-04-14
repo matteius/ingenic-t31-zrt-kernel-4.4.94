@@ -142,22 +142,6 @@
 };
 
 / {
-	mmc0_gpio_enable: mmc0-dummy-fixed-reg {
-		status = "okay";
-		compatible = "regulator-fixed";
-
-		regulator-name = "mmc0-gpio-enable";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		regulator-boot-on;
-		regulator-always-on;
-		enable-active-high;
-
-		gpio = <&gpb 18 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
-
-		startup-delay-us = <100000>;
-	};
-
 	mmc1_gpio_enable: mmc1-dummy-fixed-reg {
 		status = "okay";
 		compatible = "regulator-fixed";
@@ -167,6 +151,7 @@
 		regulator-max-microvolt = <1800000>;
 		regulator-boot-on;
 		regulator-always-on;
+		enable-active-high;
 
 		gpio = <&gpb 25 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 
