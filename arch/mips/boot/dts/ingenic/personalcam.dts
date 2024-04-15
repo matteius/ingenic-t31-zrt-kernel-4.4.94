@@ -158,7 +158,7 @@
 
 		startup-delay-us = <100000>;
 	};
-
+/*
 	mmc1_gpio_enable: mmc1-dummy-fixed-reg {
 		status = "okay";
 		compatible = "regulator-fixed";
@@ -174,7 +174,7 @@
 
 		startup-delay-us = <100000>;
 	};
-
+*/
 	leds-gpios {
 		compatible = "gpio-leds";
 		status = "okay";
