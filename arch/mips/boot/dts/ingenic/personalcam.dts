@@ -77,12 +77,11 @@
 	bus-width = <4>;
 	voltage-ranges = <2900 3100>;
 	cd-inverted;
-	enable-active-high;
 
 	ingenic,removal-removable = <1>;
 	/* special property */
 	ingenic,wp-gpios = <0>;
-	ingenic,cd-gpios = <&gpb 27 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	ingenic,cd-gpios = <&gpb 27 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
 	ingenic,rst-gpios = <0>;
 	pinctrl-0 = <&msc0_pb>;
 };
@@ -100,7 +99,7 @@
 
 	ingenic,removal-dontcare = <1>;
 	/* special property */
-	ingenic,sdio-reset = <&gpb 25 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	// ingenic,sdio-reset = <&gpb 25 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 	ingenic,wp-gpios = <0>;
 	ingenic,rst-gpios = <0>;
 	pinctrl-0 = <&msc1_pb>;
