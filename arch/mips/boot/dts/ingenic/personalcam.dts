@@ -175,7 +175,7 @@
 		startup-delay-us = <100000>;
 	};
 */
-	/*
+	
 	leds-gpios {
 		compatible = "gpio-leds";
 		status = "okay";
@@ -204,7 +204,6 @@
 			default-state = "off";
 		};
 	};
-	*/
 
 	extclk: extclk {
 		clock-frequency = <24000000>;
