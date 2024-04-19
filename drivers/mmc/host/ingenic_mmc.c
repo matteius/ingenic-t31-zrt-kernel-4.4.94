@@ -32,7 +32,7 @@
 #include <linux/of_gpio.h>
 #include <linux/of_device.h>
 #include <linux/clk-provider.h>
-
+#include <linux/delay.h>
 #include "ingenic_mmc.h"
 
 /**
@@ -1459,6 +1459,21 @@ static int __init ingenic_mmc_gpio_init(struct ingenic_mmc_host *host)
 	ingenic_mmc_init_gpio(&card_gpio->rst, "mmc_rst", GPIOF_DIR_OUT);
 	dir = card_gpio->pwr.enable_level ? GPIOF_OUT_INIT_LOW : GPIOF_OUT_INIT_HIGH;
 	ingenic_mmc_init_gpio(&card_gpio->pwr, "mmc_pwr", dir);
+    ingenic_mmc_init_gpio(&card_gpio->wifi_power, "mmc_wifi_power", GPIOF_OUT_INIT_LOW);
+
+    // Toggle the WiFi power GPIO
+    if (gpio_is_valid(card_gpio->wifi_power.num)) {
+        /* msc wifi not pull up/down */
+        jzgpio_set_func(GPIO_PORT_B, GPIO_PULL_HIZ, 1 << (card_gpio->wifi_power.num - GPIO_PORT_B * 32));
+
+        set_bit(INGENIC_MMC_CARD_PRESENT, &host->flags);
+        /*
+         * spin_lock() here may case recursion,
+         * so discard the clk operation.
+         */
+        ingenic_mmc_clk_onoff(host, 1);
+        mmc_detect_change(host->mmc, msecs_to_jiffies(1000));
+    }
 
 	switch (host->pdata->removal) {
 	case NONREMOVABLE:
@@ -1546,6 +1561,7 @@ static struct ingenic_mmc_pdata *of_get_mmc_ingenic_pdata(struct device *dev)
 	ingenic_mmc_get_gpio(np, &card_gpio->wp, "ingenic,wp-gpios");
 	ingenic_mmc_get_gpio(np, &card_gpio->pwr, "ingenic,pwr-gpios");
 	ingenic_mmc_get_gpio(np, &card_gpio->cd, "ingenic,cd-gpios");
+    ingenic_mmc_get_gpio(np, &card_gpio->wifi_power, "ingenic,wifi-power-gpios");
 	pdata->gpio = card_gpio;
 
 	if(of_property_read_bool(np, "pio-mode")) {
