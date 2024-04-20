@@ -7,7 +7,7 @@
 #include <dt-bindings/gpio/gpio.h>
 
 / {
-	compatible = "generic,personalcam", "ingenic,t31";
+	compatible = "generic,cinnado D1", "ingenic,t31";
 };
 
 &uart0 {

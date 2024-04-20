@@ -76,12 +76,12 @@
 	max-frequency = <24000000>;
 	bus-width = <4>;
 	voltage-ranges = <3300 3300>;
-	cd-inverted;
+	cd-inverted;  /* Inverts the sdio-init-gpios signal */
 
 	ingenic,removal-nonremovable = <1>;
 	/* special property */
 	ingenic,wp-gpios = <0>;
-	ingenic,wifi-power-gpios = <&gpb 27 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	ingenic,sdio-init-gpios = <&gpb 27 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
 	ingenic,rst-gpios = <0>;
 	pinctrl-0 = <&msc1_pb>;
 };

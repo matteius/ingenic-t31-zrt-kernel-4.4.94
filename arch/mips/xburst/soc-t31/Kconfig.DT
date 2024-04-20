@@ -4,8 +4,8 @@ config DT_T31_SWAN
 config DT_T31_PERSONALCAM
 	bool "Experimental t31 based personal camera"
 
-config DT_WYZE_V3
+config DT_T31X_WYZE_V3
 	bool "t31x based Wyze V3 clone"
 
-CONFIG DT_T31_CINNADO_D1
+CONFIG DT_T31L_CINNADO_D1
     bool "t31l based Cinnado D1 clone"
