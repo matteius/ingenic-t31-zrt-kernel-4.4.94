@@ -7,7 +7,7 @@ menuconfig SND_SOC
 	tristate "ALSA for SoC audio support"
 	select SND_PCM
 	select AC97_BUS if SND_SOC_AC97_BUS
-	select SND_JACK
+	select SND_JACK if INPUT=y || INPUT=SND
 	select REGMAP_I2C if I2C
 	select REGMAP_SPI if SPI_MASTER
 	---help---
@@ -77,6 +77,7 @@ source "sound/soc/ux500/Kconfig"
 source "sound/soc/xilinx/Kconfig"
 source "sound/soc/xtensa/Kconfig"
 source "sound/soc/zte/Kconfig"
+source "sound/soc/ingenic/Kconfig"
 
 # Supported codecs
 source "sound/soc/codecs/Kconfig"

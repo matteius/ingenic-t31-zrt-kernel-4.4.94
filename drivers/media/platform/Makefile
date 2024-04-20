@@ -35,6 +35,8 @@ obj-$(CONFIG_CEC_GPIO)			+= cec-gpio/
 obj-$(CONFIG_VIDEO_MEM2MEM_DEINTERLACE)	+= m2m-deinterlace.o
 
 obj-$(CONFIG_VIDEO_MUX)			+= video-mux.o
+obj-$(CONFIG_VIDEO_INGENIC_JPEG) 		+= ingenic-jpeg/
+obj-$(CONFIG_VIDEO_INGENIC_ROTATE) 		+= ingenic-rotate/
 
 obj-$(CONFIG_VIDEO_S3C_CAMIF)		+= s3c-camif/
 obj-$(CONFIG_VIDEO_SAMSUNG_EXYNOS4_IS)	+= exynos4-is/
@@ -44,6 +46,8 @@ obj-$(CONFIG_VIDEO_SAMSUNG_S5P_MFC)	+= s5p-mfc/
 obj-$(CONFIG_VIDEO_SAMSUNG_S5P_G2D)	+= s5p-g2d/
 obj-$(CONFIG_VIDEO_SAMSUNG_S5P_CEC)	+= s5p-cec/
 obj-$(CONFIG_VIDEO_SAMSUNG_EXYNOS_GSC)	+= exynos-gsc/
+
+obj-$(CONFIG_VIDEO_INGENIC_VCODEC)	+= ingenic-vcodec/
 
 obj-$(CONFIG_VIDEO_STI_BDISP)		+= sti/bdisp/
 obj-$(CONFIG_VIDEO_STI_HVA)		+= sti/hva/

@@ -1,4 +1,15 @@
 # SPDX-License-Identifier: GPL-2.0-only
 source "drivers/power/avs/Kconfig"
+
+config BATTERY_JZ4740
+	tristate "Ingenic JZ4740 battery"
+	depends on MACH_JZ4740
+	depends on MFD_JZ4740_ADC
+	help
+	  Say Y to enable support for the battery on Ingenic JZ4740 based
+	  boards.
+
+	  This driver can be build as a module. If so, the module will be
+	  called jz4740-battery.
 source "drivers/power/reset/Kconfig"
 source "drivers/power/supply/Kconfig"

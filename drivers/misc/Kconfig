@@ -441,6 +441,12 @@ config PCI_ENDPOINT_TEST
            Enable this configuration option to enable the host side test driver
            for PCI Endpoint.
 
+config INGENIC_RSA
+	bool "JZ RSA Driver"
+	depends on MACH_XBURST2
+	help
+		this driver is used to Encrypt/Decrypt by RSA.
+
 config XILINX_SDFEC
 	tristate "Xilinx SDFEC 16"
 	depends on HAS_IOMEM

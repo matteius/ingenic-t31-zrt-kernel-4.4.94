@@ -10,6 +10,13 @@ if HAS_IOMEM
 config HAVE_FB_ATMEL
 	bool
 
+config SH_MIPI_DSI
+	tristate
+	depends on (SUPERH || ARCH_SHMOBILE) && HAVE_CLK
+
+config SH_LCD_MIPI_DSI
+	bool
+
 source "drivers/char/agp/Kconfig"
 
 source "drivers/gpu/vga/Kconfig"
@@ -24,6 +31,7 @@ source "drivers/video/fbdev/Kconfig"
 endmenu
 
 source "drivers/video/backlight/Kconfig"
+source "drivers/video/ingenic_ipu/Kconfig"
 
 config VGASTATE
        tristate
@@ -46,5 +54,11 @@ if FB || SGI_NEWPORT_CONSOLE
 
 endif
 
+if SOC_T40 || SOC_T31
+#source "drivers/video/avpu/Kconfig"
+#source "drivers/video/ingenic_sinfo/Kconfig"
+#source "drivers/video/ingenic_sensors/Kconfig"
+source "drivers/video/ingenic_isp/Kconfig"
+endif
 
 endmenu

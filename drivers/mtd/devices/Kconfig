@@ -89,6 +89,24 @@ config MTD_MCHP23K256
 	  platform data, or a device tree description if you want to
 	  specify device partitioning
 
+config MTD_M25P80
+	tristate "Support most SPI Flash chips (AT26DF, M25P, W25X, ...)"
+	depends on SPI_MASTER && MTD_SPI_NOR
+	help
+	  This enables access to most modern SPI flash chips, used for
+	  program and data storage.   Series supported include Atmel AT26DF,
+	  Spansion S25SL, SST 25VF, ST M25P, and Winbond W25X.  Other chips
+	  are supported as well.  See the driver source for the current list,
+	  or to add other chips.
+
+	  Note that the original DataFlash chips (AT45 series, not AT26DF),
+	  need an entirely different driver.
+
+	  Set up your spi devices with the right board-specific platform data,
+	  if you want to specify device partitioning or to use a device which
+	  doesn't support the JEDEC ID instruction.
+
+
 config MTD_SPEAR_SMI
 	tristate "SPEAR MTD NOR Support through SMI controller"
 	depends on PLAT_SPEAR
@@ -213,6 +231,49 @@ config BCH_CONST_M
 	default 14
 config BCH_CONST_T
 	default 4
+endif
+
+config INGENIC_SFC
+	tristate "Ingenic series SFC driver"
+	depends on MACH_XBURST || MACH_XBURST2
+	help
+		SFC driver for Ingenic series SoCs
+
+if INGENIC_SFC
+
+choice
+	prompt "the SFC external memory (nor or nand)"
+	help
+	  Select the SFC external memory
+
+config MTD_INGENIC_SFC_NORFLASH
+	bool "Support ingenic sfc-nor"
+	depends on INGENIC_SFC
+
+config MTD_INGENIC_SFC_NANDFLASH
+	bool "Support ingenic sfc-nand"
+	depends on INGENIC_SFC
+
+endchoice
+
+choice
+	prompt "sfc Mode"
+	help
+	  Select sfc Mode
+
+config SPI_STANDARD_MODE
+	bool "standard spi mode"
+	depends on INGENIC_SFC
+	help
+	  Say Y here to enable spi standard mode
+
+config SPI_QUAD_MODE
+	bool "quad spi mode"
+	depends on INGENIC_SFC
+	help
+	  Say Y Here to enable spi QUAD MODE
+endchoice
+
 endif
 
 endmenu

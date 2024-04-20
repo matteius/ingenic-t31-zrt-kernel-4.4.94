@@ -696,4 +696,17 @@ config INGENIC_TIMER
 	help
 	  Support for the timer/counter unit of the Ingenic JZ SoCs.
 
+
+config CLKSRC_INGENIC_SYS_OST
+	bool
+	select CLKSRC_OF
+
+config CLKSRC_INGENIC_CORE_OST
+	bool
+	select CLKSRC_OF
+	help
+	  core sys ost for ingenic xburst2 based SOCs. each cpu has
+	  an ost and all cpu shares a global clocksource.
+
+
 endmenu
