@@ -102,8 +102,6 @@ static inline void enable_msa(void)
 {
 	if (cpu_has_msa) {
 		set_c0_config5(MIPS_CONF5_MSAEN);
-		set_c0_status(ST0_CU2);
-		KSTK_STATUS(current) |= ST0_CU2;
 		enable_fpu_hazard();
 	}
 }
@@ -112,8 +110,6 @@ static inline void disable_msa(void)
 {
 	if (cpu_has_msa) {
 		clear_c0_config5(MIPS_CONF5_MSAEN);
-		clear_c0_status(ST0_CU2);
-		KSTK_STATUS(current) &= ~ST0_CU2;
 		disable_fpu_hazard();
 	}
 }
@@ -149,19 +145,6 @@ static inline void restore_msa(struct task_struct *t)
 {
 	if (cpu_has_msa)
 		_restore_msa(t);
-}
-
-static inline void init_msa_upper(void)
-{
-	/*
-	 * Check cpu_has_msa only if it's a constant. This will allow the
-	 * compiler to optimise out code for CPUs without MSA without adding
-	 * an extra redundant check for CPUs with MSA.
-	 */
-	if (__builtin_constant_p(cpu_has_msa) && !cpu_has_msa)
-		return;
-
-	_init_msa_upper();
 }
 
 #ifdef TOOLCHAIN_SUPPORTS_MSA

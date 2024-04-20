@@ -31,7 +31,6 @@ void __init clocksource_probe(void)
 	of_init_fn_1 init_func;
 	unsigned clocksources = 0;
 
-	printk("=====> %s  \n", __clksrc_of_table[0].name);
 	for_each_matching_node_and_match(np, __clksrc_of_table, &match) {
 		if (!of_device_is_available(np))
 			continue;

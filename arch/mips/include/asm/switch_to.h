@@ -15,18 +15,8 @@
 #include <asm/cpu-features.h>
 #include <asm/watch.h>
 #include <asm/dsp.h>
-//#include <mxuv3.h>
 #include <asm/cop2.h>
 #include <asm/fpu.h>
-#include <mxu.h>
-
-#ifdef CONFIG_PMON_DEBUG
-extern void save_perf_event_jz(void *tskvoid);
-extern void restore_perf_event_jz(void *tskvoid);
-#else
-#define save_perf_event_jz(tskvoid)
-#define restore_perf_event_jz(tskvoid)
-#endif
 
 struct task_struct;
 
@@ -99,15 +89,7 @@ do {									\
 		__save_dsp(prev);					\
 		__restore_dsp(next);					\
 	}								\
-	if(cpu_has_mxu) {						\
-	        if (KSTK_STATUS(prev) & ST0_CU2) {                      \
-                       __save_mxu(prev);                               \
-               }                                                       \
-               if (KSTK_STATUS(next) & ST0_CU2) {                      \
-                       __restore_mxu(next);                            \
-               }                                                       \
-       }                                                               \
-     if (cop2_present) {						\
+	if (cop2_present) {						\
 		set_c0_status(ST0_CU2);					\
 		if ((KSTK_STATUS(prev) & ST0_CU2)) {			\
 			if (cop2_lazy_restore)				\
@@ -120,12 +102,10 @@ do {									\
 		}							\
 		clear_c0_status(ST0_CU2);				\
 	}								\
-        save_perf_event_jz(prev);                                       \
 	__clear_software_ll_bit();					\
 	if (cpu_has_userlocal)						\
 		write_c0_userlocal(task_thread_info(next)->tp_value);	\
-        restore_perf_event_jz(next);                                    \
-	__restore_watch(next);						\
+	__restore_watch();						\
 	(last) = resume(prev, next, task_thread_info(next));		\
 } while (0)
 

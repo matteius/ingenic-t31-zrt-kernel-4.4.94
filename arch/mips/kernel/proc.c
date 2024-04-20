@@ -83,7 +83,7 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 	}
 
 	seq_printf(m, "isa\t\t\t:"); 
-	if (cpu_has_mips_1)
+	if (cpu_has_mips_r1)
 		seq_printf(m, " mips1");
 	if (cpu_has_mips_2)
 		seq_printf(m, "%s", " mips2");
@@ -121,8 +121,6 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 	if (cpu_has_eva)	seq_printf(m, "%s", " eva");
 	if (cpu_has_htw)	seq_printf(m, "%s", " htw");
 	if (cpu_has_xpa)	seq_printf(m, "%s", " xpa");
-	if (cpu_has_mxu)	seq_printf(m, "%s", " mxu");
-	if (cpu_has_mxu_v2)	seq_printf(m, "%s", " mxu_v2");
 	seq_printf(m, "\n");
 
 	if (cpu_has_mmips) {

@@ -321,8 +321,6 @@ int pwmchip_remove(struct pwm_chip *chip)
 	unsigned int i;
 	int ret = 0;
 
-	pwmchip_sysfs_unexport_children(chip);
-
 	mutex_lock(&pwm_lock);
 
 	for (i = 0; i < chip->npwm; i++) {
@@ -645,7 +643,6 @@ void pwm_add_table(struct pwm_lookup *table, size_t num)
 
 	mutex_unlock(&pwm_lookup_lock);
 }
-EXPORT_SYMBOL_GPL(pwm_add_table);
 
 /**
  * pwm_remove_table() - unregister PWM device consumers
@@ -892,7 +889,7 @@ EXPORT_SYMBOL_GPL(devm_pwm_put);
   */
 bool pwm_can_sleep(struct pwm_device *pwm)
 {
-	return true;
+	return pwm->chip->can_sleep;
 }
 EXPORT_SYMBOL_GPL(pwm_can_sleep);
 

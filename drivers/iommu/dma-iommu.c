@@ -68,8 +68,7 @@ void iommu_put_dma_cookie(struct iommu_domain *domain)
 	if (!iovad)
 		return;
 
-	if (iovad->granule)
-		put_iova_domain(iovad);
+	put_iova_domain(iovad);
 	kfree(iovad);
 	domain->iova_cookie = NULL;
 }
@@ -404,7 +403,7 @@ static int __finalise_sg(struct device *dev, struct scatterlist *sg, int nents,
 		unsigned int s_length = sg_dma_len(s);
 		unsigned int s_dma_len = s->length;
 
-		s->offset += s_offset;
+		s->offset = s_offset;
 		s->length = s_length;
 		sg_dma_address(s) = dma_addr + s_offset;
 		dma_addr += s_dma_len;
@@ -423,7 +422,7 @@ static void __invalidate_sg(struct scatterlist *sg, int nents)
 
 	for_each_sg(sg, s, nents, i) {
 		if (sg_dma_address(s) != DMA_ERROR_CODE)
-			s->offset += sg_dma_address(s);
+			s->offset = sg_dma_address(s);
 		if (sg_dma_len(s))
 			s->length = sg_dma_len(s);
 		sg_dma_address(s) = DMA_ERROR_CODE;

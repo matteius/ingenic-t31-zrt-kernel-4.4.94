@@ -61,7 +61,6 @@ MODULE_LICENSE("GPL");
 #define MT_QUIRK_ALWAYS_VALID		(1 << 4)
 #define MT_QUIRK_VALID_IS_INRANGE	(1 << 5)
 #define MT_QUIRK_VALID_IS_CONFIDENCE	(1 << 6)
-#define MT_QUIRK_CONFIDENCE		(1 << 7)
 #define MT_QUIRK_SLOT_IS_CONTACTID_MINUS_ONE	(1 << 8)
 #define MT_QUIRK_NO_AREA		(1 << 9)
 #define MT_QUIRK_IGNORE_DUPLICATES	(1 << 10)
@@ -79,7 +78,6 @@ struct mt_slot {
 	__s32 contactid;	/* the device ContactID assigned to this slot */
 	bool touch_state;	/* is the touch valid? */
 	bool inrange_state;	/* is the finger in proximity of the sensor? */
-	bool confidence_state;  /* is the touch made by a finger? */
 };
 
 struct mt_class {
@@ -359,19 +357,8 @@ static void mt_feature_mapping(struct hid_device *hdev,
 			break;
 		}
 
-		if (td->inputmode < 0) {
-			td->inputmode = field->report->id;
-			td->inputmode_index = usage->usage_index;
-		} else {
-			/*
-			 * Some elan panels wrongly declare 2 input mode
-			 * features, and silently ignore when we set the
-			 * value in the second field. Skip the second feature
-			 * and hope for the best.
-			 */
-			dev_info(&hdev->dev,
-				 "Ignoring the extra HID_DG_INPUTMODE\n");
-		}
+		td->inputmode = field->report->id;
+		td->inputmode_index = usage->usage_index;
 
 		break;
 	case HID_DG_CONTACTMAX:
@@ -397,11 +384,6 @@ static void mt_feature_mapping(struct hid_device *hdev,
 		if (field->value[usage->usage_index] == MT_BUTTONTYPE_CLICKPAD)
 			td->is_buttonpad = true;
 
-		break;
-	case 0xff0000c5:
-		/* Retrieve the Win8 blob once to enable some devices */
-		if (usage->usage_index == 0)
-			mt_get_feature(hdev, field->report);
 		break;
 	}
 }
@@ -504,9 +486,6 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 			mt_store_field(usage, td, hi);
 			return 1;
 		case HID_DG_CONFIDENCE:
-			if (cls->name == MT_CLS_WIN_8 &&
-				field->application == HID_DG_TOUCHPAD)
-				cls->quirks |= MT_QUIRK_CONFIDENCE;
 			mt_store_field(usage, td, hi);
 			return 1;
 		case HID_DG_TIPSWITCH:
@@ -619,7 +598,6 @@ static void mt_complete_slot(struct mt_device *td, struct input_dev *input)
 		return;
 
 	if (td->curvalid || (td->mtclass.quirks & MT_QUIRK_ALWAYS_VALID)) {
-		int active;
 		int slotnum = mt_compute_slot(td, input);
 		struct mt_slot *s = &td->curdata;
 		struct input_mt *mt = input->mt;
@@ -634,14 +612,10 @@ static void mt_complete_slot(struct mt_device *td, struct input_dev *input)
 				return;
 		}
 
-		if (!(td->mtclass.quirks & MT_QUIRK_CONFIDENCE))
-			s->confidence_state = 1;
-		active = (s->touch_state || s->inrange_state) &&
-							s->confidence_state;
-
 		input_mt_slot(input, slotnum);
-		input_mt_report_slot_state(input, MT_TOOL_FINGER, active);
-		if (active) {
+		input_mt_report_slot_state(input, MT_TOOL_FINGER,
+			s->touch_state || s->inrange_state);
+		if (s->touch_state || s->inrange_state) {
 			/* this finger is in proximity of the sensor */
 			int wide = (s->w > s->h);
 			/* divided by two to match visual scale of touch */
@@ -706,8 +680,6 @@ static void mt_process_mt_event(struct hid_device *hid, struct hid_field *field,
 			td->curdata.touch_state = value;
 			break;
 		case HID_DG_CONFIDENCE:
-			if (quirks & MT_QUIRK_CONFIDENCE)
-				td->curdata.confidence_state = value;
 			if (quirks & MT_QUIRK_VALID_IS_CONFIDENCE)
 				td->curvalid = value;
 			break;

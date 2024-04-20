@@ -143,7 +143,7 @@ int32_t sfc_nor_reset(struct sfc_flash *flash)
 		dev_err(flash->dev,"sfc_sync error ! %s %s %d\n",__FILE__,__func__,__LINE__);
 		return -EIO;
 	}
-	udelay(100);
+	udelay(10000);
 	return 0;
 }
 

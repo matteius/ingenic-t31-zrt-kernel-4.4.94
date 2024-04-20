@@ -52,7 +52,7 @@ void local_flush_tlb_all(void)
 {
 	unsigned long flags;
 	unsigned long old_ctx;
-	int entry;
+	int entry, ftlbhighset;
 
 	local_irq_save(flags);
 	/* Save old context and create impossible VPN2 value */

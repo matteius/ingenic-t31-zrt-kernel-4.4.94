@@ -711,8 +711,6 @@ void calibrate_delay(void)
 {
 	loops_per_jiffy = __delay_loops_MHz * (1000000 / HZ);
 
-	printk("~~~~~~~~~~[loops_per_jiffy = %lu ] [HZ = %lu] \n", loops_per_jiffy, HZ);
-
 	printk("Calibrating delay loop... %lu.%02lu BogoMIPS\n",
 	       loops_per_jiffy / (500000 / HZ),
 	       (loops_per_jiffy / (5000 / HZ)) % 100);

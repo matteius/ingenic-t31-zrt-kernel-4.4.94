@@ -74,18 +74,6 @@ static int snd_pcm_open(struct file *file, struct snd_pcm *pcm, int stream);
 static DEFINE_RWLOCK(snd_pcm_link_rwlock);
 static DECLARE_RWSEM(snd_pcm_link_rwsem);
 
-/* Writer in rwsem may block readers even during its waiting in queue,
- * and this may lead to a deadlock when the code path takes read sem
- * twice (e.g. one in snd_pcm_action_nonatomic() and another in
- * snd_pcm_stream_lock()).  As a (suboptimal) workaround, let writer to
- * spin until it gets the lock.
- */
-static inline void down_write_nonblock(struct rw_semaphore *lock)
-{
-	while (!down_write_trylock(lock))
-		cond_resched();
-}
-
 /**
  * snd_pcm_stream_lock - Lock the PCM stream
  * @substream: PCM substream
@@ -1757,34 +1745,6 @@ static int snd_pcm_drain(struct snd_pcm_substream *substream,
 	return result;
 }
 
-#ifdef CONFIG_SND_ALSA_COMMON_CODEC
-#include <sound/soc.h>
-
-extern void common_codec_must_be_mute(struct snd_pcm_substream *substream);
-
-extern void common_codec_can_be_unmute(struct snd_pcm_substream *substream);
-
-
-static void (*codec_must_be_mute)(struct snd_pcm_substream *substream);
-static void (*codec_can_be_unmute)(struct snd_pcm_substream *substream);
-
-void snd_pcm_set_codec_mute_callback(
-    void (*_codec_must_be_mute)(struct snd_pcm_substream *),
-    void (*_codec_can_be_unmute)(struct snd_pcm_substream *))
-{
-    if (_codec_must_be_mute && codec_must_be_mute)
-        panic("mute callback has been set %p %p", _codec_must_be_mute, codec_must_be_mute);
-
-    if (_codec_can_be_unmute && codec_can_be_unmute)
-        panic("unmute callback has been set %p %p", _codec_can_be_unmute, codec_can_be_unmute);
-
-    codec_must_be_mute = _codec_must_be_mute;
-    codec_can_be_unmute = _codec_can_be_unmute;
-}
-EXPORT_SYMBOL(snd_pcm_set_codec_mute_callback);
-
-#endif
-
 /*
  * drop ioctl
  *
@@ -1803,13 +1763,6 @@ static int snd_pcm_drop(struct snd_pcm_substream *substream)
 	    runtime->status->state == SNDRV_PCM_STATE_DISCONNECTED ||
 	    runtime->status->state == SNDRV_PCM_STATE_SUSPENDED)
 		return -EBADFD;
-
-#ifdef CONFIG_SND_ALSA_COMMON_CODEC
-	common_codec_must_be_mute(substream);
-
-    if (codec_must_be_mute)
-        codec_must_be_mute(substream);
-#endif
 
 	snd_pcm_stream_lock_irq(substream);
 	/* resume pause */
@@ -1860,7 +1813,7 @@ static int snd_pcm_link(struct snd_pcm_substream *substream, int fd)
 		res = -ENOMEM;
 		goto _nolock;
 	}
-	down_write_nonblock(&snd_pcm_link_rwsem);
+	down_write(&snd_pcm_link_rwsem);
 	write_lock_irq(&snd_pcm_link_rwlock);
 	if (substream->runtime->status->state == SNDRV_PCM_STATE_OPEN ||
 	    substream->runtime->status->state != substream1->runtime->status->state ||
@@ -1907,7 +1860,7 @@ static int snd_pcm_unlink(struct snd_pcm_substream *substream)
 	struct snd_pcm_substream *s;
 	int res = 0;
 
-	down_write_nonblock(&snd_pcm_link_rwsem);
+	down_write(&snd_pcm_link_rwsem);
 	write_lock_irq(&snd_pcm_link_rwlock);
 	if (!snd_pcm_stream_linked(substream)) {
 		res = -EALREADY;
@@ -2812,16 +2765,8 @@ static int snd_pcm_common_ioctl1(struct file *file,
 		return snd_pcm_prepare(substream, file);
 	case SNDRV_PCM_IOCTL_RESET:
 		return snd_pcm_reset(substream);
-	case SNDRV_PCM_IOCTL_START: {
-		int ret;
-		ret = snd_pcm_action_lock_irq(&snd_pcm_action_start, substream, SNDRV_PCM_STATE_RUNNING);
-#ifdef CONFIG_SND_ALSA_COMMON_CODEC
-		common_codec_can_be_unmute(substream);
-        if (codec_can_be_unmute)
-            codec_can_be_unmute(substream);
-#endif
-		return ret;
-    }
+	case SNDRV_PCM_IOCTL_START:
+		return snd_pcm_action_lock_irq(&snd_pcm_action_start, substream, SNDRV_PCM_STATE_RUNNING);
 	case SNDRV_PCM_IOCTL_LINK:
 		return snd_pcm_link(substream, (int)(unsigned long) arg);
 	case SNDRV_PCM_IOCTL_UNLINK:

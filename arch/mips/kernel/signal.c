@@ -402,8 +402,8 @@ int protected_restore_fp_context(void __user *sc)
 	}
 
 fp_done:
-	if (!err && (used & USED_EXTCONTEXT))
-		err = restore_extcontext(sc_to_extcontext(sc));
+	if (used & USED_EXTCONTEXT)
+		err |= restore_extcontext(sc_to_extcontext(sc));
 
 	return err ?: sig;
 }
@@ -789,7 +789,15 @@ static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 	sigset_t *oldset = sigmask_to_save();
 	int ret;
 	struct mips_abi *abi = current->thread.abi;
+#ifdef CONFIG_CPU_MICROMIPS
+	void *vdso;
+	unsigned long tmp = (unsigned long)current->mm->context.vdso;
+
+	set_isa16_mode(tmp);
+	vdso = (void *)tmp;
+#else
 	void *vdso = current->mm->context.vdso;
+#endif
 
 	if (regs->regs[0]) {
 		switch(regs->regs[2]) {

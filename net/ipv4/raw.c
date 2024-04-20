@@ -354,9 +354,6 @@ static int raw_send_hdrinc(struct sock *sk, struct flowi4 *fl4,
 			       rt->dst.dev->mtu);
 		return -EMSGSIZE;
 	}
-	if (length < sizeof(struct iphdr))
-		return -EINVAL;
-
 	if (flags&MSG_PROBE)
 		goto out;
 
@@ -550,10 +547,8 @@ static int raw_sendmsg(struct sock *sk, struct msghdr *msg, size_t len)
 
 	if (msg->msg_controllen) {
 		err = ip_cmsg_send(net, msg, &ipc, false);
-		if (unlikely(err)) {
-			kfree(ipc.opt);
+		if (err)
 			goto out;
-		}
 		if (ipc.opt)
 			free = 1;
 	}

@@ -1495,7 +1495,6 @@ void cpu_probe(void)
 {
 	struct cpuinfo_mips *c = &current_cpu_data;
 	unsigned int cpu = smp_processor_id();
-        //unsigned long fpu_csr31 = 0;
 
 	c->processor_id = PRID_IMP_UNKNOWN;
 	c->fpu_id	= FPIR_IMP_NONE;
@@ -1566,7 +1565,6 @@ void cpu_probe(void)
 
 	if (c->options & MIPS_CPU_FPU)
         {
-                //fpu_fcr31 = cpu_test_fpu_csr31(FPU_CSR_DEFAULT);
 		cpu_set_fpu_opts(c);
                 #if 0
                 if (c->isa_level & (MIPS_CPU_ISA_M32R1 | MIPS_CPU_ISA_M32R2 |
