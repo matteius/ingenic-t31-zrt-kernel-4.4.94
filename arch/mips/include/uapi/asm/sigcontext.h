@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * This file is subject to the terms and conditions of the GNU General Public
  * License.  See the file "COPYING" in the main directory of this archive
@@ -11,9 +12,7 @@
 
 #include <linux/types.h>
 #include <asm/sgidefs.h>
-#ifdef CONFIG_MACH_XBURST
-#include <asm/processor.h>
-#endif
+
 /* scalar FP context was used */
 #define USED_FP			(1 << 0)
 
@@ -51,9 +50,6 @@ struct sigcontext {
 	unsigned long		sc_lo2;
 	unsigned long		sc_hi3;
 	unsigned long		sc_lo3;
-#ifdef CONFIG_MACH_XBURST
-	unsigned long		sc_mxu[NUM_MXU_REGS];             /* NUM_MXU_REGS = 16*/
-#endif
 };
 
 #endif /* _MIPS_SIM == _MIPS_SIM_ABI32 */

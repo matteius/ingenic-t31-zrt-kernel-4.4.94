@@ -1,34 +1,56 @@
-config COMMON_CLK_INGENIC
+# SPDX-License-Identifier: GPL-2.0-only
+menu "Ingenic SoCs drivers"
+	depends on MIPS
+
+config INGENIC_CGU_COMMON
 	bool
-	depends on MACH_XBURST || MACH_XBURST2
+
+config INGENIC_CGU_JZ4740
+	bool "Ingenic JZ4740 CGU driver"
+	default MACH_JZ4740
+	select INGENIC_CGU_COMMON
+	help
+	  Support the clocks provided by the CGU hardware on Ingenic JZ4740
+	  and compatible SoCs.
+
+	  If building for a JZ4740 SoC, you want to say Y here.
+
+config INGENIC_CGU_JZ4725B
+	bool "Ingenic JZ4725B CGU driver"
+	default MACH_JZ4725B
+	select INGENIC_CGU_COMMON
+	help
+	  Support the clocks provided by the CGU hardware on Ingenic JZ4725B
+	  and compatible SoCs.
+
+	  If building for a JZ4725B SoC, you want to say Y here.
+
+config INGENIC_CGU_JZ4770
+	bool "Ingenic JZ4770 CGU driver"
+	default MACH_JZ4770
+	select INGENIC_CGU_COMMON
+	help
+	  Support the clocks provided by the CGU hardware on Ingenic JZ4770
+	  and compatible SoCs.
+
+	  If building for a JZ4770 SoC, you want to say Y here.
+
+config INGENIC_CGU_JZ4780
+	bool "Ingenic JZ4780 CGU driver"
+	default MACH_JZ4780
+	select INGENIC_CGU_COMMON
+	help
+	  Support the clocks provided by the CGU hardware on Ingenic JZ4780
+	  and compatible SoCs.
+
+	  If building for a JZ4780 SoC, you want to say Y here.
+
+config INGENIC_TCU_CLK
+	bool "Ingenic JZ47xx TCU clocks driver"
+	default MACH_INGENIC
 	select MFD_SYSCON
-	select COMMON_CLK
-	select INGENIC_CLK_DEBUG_FS
-
-config INGENIC_CLK_DEBUG_FS
-	bool
-	depends on DEBUG_FS
 	help
-	  enable ingenic common clock debugfs
+	  Support the clocks of the Timer/Counter Unit (TCU) of the Ingenic
+	  JZ47xx SoCs.
 
-
-config CLK_X2000_V12
-	bool
-	depends on SOC_X2000_V12
-	select COMMON_CLK_INGENIC
-	help
-	  build the ingenic x2000-v12 soc clock driver.
-
-config CLK_T40
-	bool
-	depends on SOC_T40
-	select COMMON_CLK_INGENIC
-	help
-	  build the ingenic t40 soc clock driver.
-
-config CLK_T31
-	bool
-	depends on SOC_T31
-	select COMMON_CLK_INGENIC
-	help
-	  build the ingenic t31 soc clock driver.
+endmenu
