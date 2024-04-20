@@ -7,5 +7,5 @@ config DT_T31_PERSONALCAM
 config DT_T31X_WYZE_V3
 	bool "t31x based Wyze V3 clone"
 
-CONFIG DT_T31L_CINNADO_D1
+config DT_T31L_CINNADO_D1
     bool "t31l based Cinnado D1 clone"
