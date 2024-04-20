@@ -499,15 +499,11 @@
 			status = "okay";
 		};
 
-		isp_sc2336: sc2336@0x30 {
-			compatible = "ingenic,sc2336", "sc2336";
-			reg = <0x00000030 0x02>;
-			status = "disabled";
-		};
-
-		isp_gc2053: gc2053@0x37 {
-			compatible = "ingenic,gc2053", "gc2053";
-			reg = <0x00000037 0x02>;
+		isp: isp@0x13300000 {
+			compatible = "ingenic,t31-isp";
+			reg = <0x13300000 0x100000>;
+			interrupt-parent = <&core_intc>;
+			interrupts = <IRQ_ISP>;
 			status = "disabled";
 		};
 	};
