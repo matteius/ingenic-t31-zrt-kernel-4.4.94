@@ -1461,9 +1461,9 @@ static int __init ingenic_mmc_gpio_init(struct ingenic_mmc_host *host)
 	ingenic_mmc_init_gpio(&card_gpio->pwr, "mmc_pwr", dir);
     ingenic_mmc_init_gpio(&card_gpio->sdio_init_pwr, "mmc_sdio_init", GPIOF_OUT_INIT_LOW);
 
-    // Toggle the WiFi power GPIO
+    // Toggle the sdio power GPIO
     if (gpio_is_valid(card_gpio->sdio_init_pwr.num)) {
-        /* msc wifi not pull up/down */
+        /* msc sdio not pull up/down */
         jzgpio_set_func(GPIO_PORT_B, GPIO_PULL_HIZ, 1 << (card_gpio->sdio_init_pwr.num - GPIO_PORT_B * 32));
 
         set_bit(INGENIC_MMC_CARD_PRESENT, &host->flags);

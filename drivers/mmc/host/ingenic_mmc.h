@@ -51,7 +51,7 @@ struct card_gpio {
 	struct ingenic_mmc_pin 		cd;
 	struct ingenic_mmc_pin 		pwr;
 	struct ingenic_mmc_pin 		rst;
-    struct ingenic_mmc_pin 		wifi_power;
+    struct ingenic_mmc_pin 		sdio_init_pwr;
 };
 
 /**
