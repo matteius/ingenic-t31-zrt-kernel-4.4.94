@@ -158,7 +158,7 @@ struct clk *power_register_gate(struct device *dev, const char *name,
 
 	init.name = name;
 	init.ops = &power_gate_ops;
-	init.flags = flags | CLK_IS_BASIC;
+	init.flags = flags;
 	init.parent_names = (parent_name ? &parent_name: NULL);
 	init.num_parents = (parent_name ? 1 : 0);
 

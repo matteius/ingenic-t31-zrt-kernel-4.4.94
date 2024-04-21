@@ -150,7 +150,7 @@ struct clk *_register_bus_divider(struct device *dev, const char *name,
 
 	init.name = name;
 	init.ops = &clk_bus_divider_ops;
-	init.flags = flags | CLK_IS_BASIC;
+	init.flags = flags;
 	init.parent_names = (parent_name ? &parent_name: NULL);
 	init.num_parents = (parent_name ? 1 : 0);
 
