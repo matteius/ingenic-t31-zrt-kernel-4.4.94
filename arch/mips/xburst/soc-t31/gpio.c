@@ -139,11 +139,11 @@ int jzgpio_set_func(int port, enum gpio_function func, unsigned long pins)
         return -EINVAL;
     }
 
-    flags = ingenic_pinctrl_lock(port);
+    //flags = ingenic_pinctrl_lock(port);
 
     hal_gpio_port_set_func(port, pins, func);
 
-    ingenic_pinctrl_unlock(port, flags);
+    //ingenic_pinctrl_unlock(port, flags);
 
     return 0;
 }
