@@ -24,10 +24,20 @@
 #include <asm/prefetch.h>
 
 /*
+ * Return current * instruction pointer ("program counter").
+ */
+#define current_text_addr() ({ __label__ _l; _l: &&_l;})
+
+/*
  * System setup and hardware flags..
  */
 
 extern unsigned int vced_count, vcei_count;
+
+/*
+ * MIPS does have an arch_pick_mmap_layout()
+ */
+#define HAVE_ARCH_PICK_MMAP_LAYOUT 1
 
 #ifdef CONFIG_32BIT
 #ifdef CONFIG_KVM_GUEST
@@ -82,6 +92,12 @@ extern unsigned long mips_stack_top(void);
  */
 #define TASK_UNMAPPED_BASE PAGE_ALIGN(TASK_SIZE / 3)
 
+#ifdef CONFIG_MACH_XBURST
+#define NUM_MXU_REGS    16
+struct xburst_mxu_struct {
+        unsigned int regs[NUM_MXU_REGS];
+};
+#endif
 
 #define NUM_FPU_REGS	32
 
@@ -154,8 +170,20 @@ struct mips3264_watch_reg_state {
 union mips_watch_reg_state {
 	struct mips3264_watch_reg_state mips3264;
 };
+#if defined(CONFIG_XBURST_MXUV2)
+typedef union {
+	u64 val64[2];
+} vpr_t;
 
-#if defined(CONFIG_CPU_CAVIUM_OCTEON)
+struct xburst_cop2_state {
+	u32 mxu_csr;
+	vpr_t vr[32];
+};
+
+#define COP2_INIT						\
+	.cp2			= {0,},
+
+#elif defined(CONFIG_CPU_CAVIUM_OCTEON)
 
 struct octeon_cop2_state {
 	/* DMFC2 rt, 0x0201 */
@@ -270,6 +298,11 @@ struct thread_struct {
 	/* Saved state of the DSP ASE, if available. */
 	struct mips_dsp_state dsp;
 
+#ifdef CONFIG_MACH_XBURST
+	/* Saved registers of the MXU, if available. */
+	struct xburst_mxu_struct mxu;
+#endif
+
 	/* Saved watch register state, if available. */
 	union mips_watch_reg_state watch;
 
@@ -278,7 +311,9 @@ struct thread_struct {
 	unsigned long cp0_baduaddr;	/* Last kernel fault accessing USEG */
 	unsigned long error_code;
 	unsigned long trap_nr;
-#ifdef CONFIG_CPU_CAVIUM_OCTEON
+#if defined(CONFIG_XBURST_MXUV2)
+	struct xburst_cop2_state cp2;
+#elif defined(CONFIG_CPU_CAVIUM_OCTEON)
 	struct octeon_cop2_state cp2 __attribute__ ((__aligned__(128)));
 	struct octeon_cvmseg_state cvmseg __attribute__ ((__aligned__(128)));
 #endif
@@ -329,6 +364,11 @@ struct thread_struct {
 	/*							\
 	 * Saved FPU/FPU emulator stuff				\
 	 */							\
+	.fpu			= {				\
+		.fpr		= {{{0,},},},			\
+		.fcr31		= 0,				\
+		.msacsr		= 0,				\
+	},
 	FPU_INIT						\
 	/*							\
 	 * FPU affinity state (null if not FPAFF)		\
@@ -398,6 +438,7 @@ unsigned long get_wchan(struct task_struct *p);
 #define cpu_relax()	smp_mb()
 #else
 #define cpu_relax()	barrier()
+#define cpu_relax_lowlatency() cpu_relax()
 #endif
 
 /*
