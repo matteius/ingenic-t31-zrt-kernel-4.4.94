@@ -552,7 +552,7 @@ static int ingenic_spi_norflash_erase(struct mtd_info *mtd, struct erase_info *i
 	mutex_unlock(&flash->lock);
 	instr->fail_addr = 0;
 
-	mtd_erase_callback(instr);
+	// mtd_erase_callback(instr);
 	return 0;
 }
 
