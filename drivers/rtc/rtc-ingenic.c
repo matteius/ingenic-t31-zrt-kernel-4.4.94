@@ -317,7 +317,7 @@ static int ingenic_rtc_rtc_proc(struct device *dev, struct seq_file *seq)
 
 static const struct rtc_class_ops ingenic_rtc_ops = {
 	.read_time = ingenic_rtc_get_time,
-	.set_mmss = ingenic_rtc_set_mmss,
+	.set_time = ingenic_rtc_set_mmss,
 	.alarm_irq_enable = ingenic_rtc_alarm_irq_enable,
 	.read_alarm = ingenic_rtc_read_alarm,
 	.set_alarm = ingenic_rtc_set_alarm,
