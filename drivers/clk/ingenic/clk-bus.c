@@ -201,8 +201,8 @@ struct clk *clk_register_bus_divider_table(struct device *dev, const char *name,
 		const struct clk_div_table *table,
 		spinlock_t *lock)
 {
-	return clk_register_bus_divider(dev, name, parent_name, flags, reg, shift1,
-			width1, shift2, width2, busy_reg, busy_shift, ce_shift, clk_divider_flags, div_flags, table, lock);
+    return clk_register_bus_divider(dev, name, parent_name, flags, reg, shift1,
+            width1, shift2, width2, busy_reg, busy_shift, ce_shift, clk_divider_flags, div_flags, NULL, lock);
 }
 
 
@@ -221,11 +221,12 @@ struct clk *clk_register_bus_divider_table(struct device *dev, const char *name,
  * @lock: shared register lock for this clock
  */
 struct clk *clk_register_bus_divider(struct device *dev, const char *name,
-		const char *parent_name, unsigned long flags,
-		void __iomem *reg, u8 shift1 , u8 width1, u8 shift2, u8 width2,
-		void __iomem *busy_reg, u8 busy_shift, int ce_shift,
-		u8 clk_divider_flags, u8 div_flags, spinlock_t *lock)
+                                     const char *parent_name, unsigned long flags,
+                                     void __iomem *reg, u8 shift1, u8 width1, u8 shift2, u8 width2,
+                                    void __iomem *busy_reg, u8 busy_shift, int ce_shift,
+                                    u8 clk_divider_flags, u8 div_flags, spinlock_t *lock)
 {
-	return clk_register_bus_divider(dev, name, parent_name, flags, reg, shift1, width1, shift2, width2, busy_reg, busy_shift, ce_shift, clk_divider_flags, div_flags, NULL, lock);
+    return clk_register_bus_divider(dev, name, parent_name, flags, reg, shift1,
+            width1, busy_reg, busy_shift, ce_shift, clk_divider_flags, table, lock);
 }
 
