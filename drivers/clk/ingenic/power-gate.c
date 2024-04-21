@@ -16,7 +16,7 @@
 #include <linux/err.h>
 #include <linux/string.h>
 #include <linux/clk/ti.h>
-#include <linux/regmap.h#include <linux/regmap.h>>
+#include <linux/regmap.h>
 #include "power-gate.h"
 
 
