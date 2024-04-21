@@ -127,9 +127,9 @@ static int clk_bus_divider_set_rate(struct clk_hw *hw, unsigned long rate,
 
 
 static struct clk_ops clk_bus_divider_ops = {
-        .recalc_rate = clk_divider_recalc_rate,
-        .round_rate = clk_divider_round_rate,
-        .set_rate = clk_divider_ops_set_rate,
+        .recalc_rate = clk_bus_divider_recalc_rate,
+        .round_rate = clk_bus_divider_round_rate,
+        .set_rate = clk_bus_divider_ops_set_rate,
 };
 
 struct clk *register_clk_bus_divider(
