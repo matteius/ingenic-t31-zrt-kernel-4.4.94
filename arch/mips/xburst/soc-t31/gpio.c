@@ -132,7 +132,7 @@ void ingenic_pinctrl_unlock(int port, unsigned long flags);
 
 int jzgpio_set_func(int port, enum gpio_function func, unsigned long pins)
 {
-    unsigned long flags;
+    //unsigned long flags;
 
     if (port < 0 || port > 4) {
         printk(KERN_ERR "gpio: invalid gpio port for x2000: %d\n", port);
