@@ -318,7 +318,7 @@ OBJCOPYFLAGS		+= --remove-section=.reginfo
 head-y := arch/mips/kernel/head.o
 
 libs-y			+= arch/mips/lib/
-libs-$(CONFIG_MIPS_FP_SUPPORT) += arch/mips/math-emu/
+libs-y			+= arch/mips/math-emu/
 
 # See arch/mips/Kbuild for content of core part of the kernel
 core-y += arch/mips/
@@ -341,20 +341,12 @@ boot-y			+= uImage.gz
 boot-y			+= uImage.lzma
 boot-y			+= uImage.lzo
 endif
-boot-y			+= vmlinux.itb
-boot-y			+= vmlinux.gz.itb
-boot-y			+= vmlinux.bz2.itb
-boot-y			+= vmlinux.lzma.itb
-boot-y			+= vmlinux.lzo.itb
 
 # compressed boot image targets (arch/mips/boot/compressed/)
 bootz-y			:= vmlinuz
 bootz-y			+= vmlinuz.bin
 bootz-y			+= vmlinuz.ecoff
 bootz-y			+= vmlinuz.srec
-ifeq ($(shell expr $(zload-y) \< 0xffffffff80000000 2> /dev/null), 0)
-bootz-y			+= uzImage.bin
-endif
 
 ifdef CONFIG_LASAT
 rom.bin rom.sw: vmlinux
@@ -388,6 +380,16 @@ $(boot-y): $(vmlinux-32) FORCE
 	$(Q)$(MAKE) $(build)=arch/mips/boot VMLINUX=$(vmlinux-32) \
 		$(bootvars-y) arch/mips/boot/$@
 
+# zImage
+zImage: $(vmlinux-32) FORCE
+	$(Q)$(MAKE) $(build)=arch/mips/boot/zcompressed VMLINUX=$(vmlinux-32) $@
+	@cp arch/mips/boot/zcompressed/$@ arch/mips/boot/compressed/$@
+	@echo '  Kernel: arch/mips/boot/compressed/$@ is ready'
+xImage: $(vmlinux-32) FORCE
+	$(Q)$(MAKE) $(build)=arch/mips/boot/zcompressed VMLINUX=$(vmlinux-32) $@
+	@cp arch/mips/boot/zcompressed/$@ arch/mips/boot/compressed/$@
+	@echo '  Kernel: arch/mips/boot/compressed/$@ is ready'
+
 ifdef CONFIG_SYS_SUPPORTS_ZBOOT
 # boot/compressed
 $(bootz-y): $(vmlinux-32) FORCE
@@ -404,6 +406,7 @@ CLEAN_FILES += vmlinux.32 vmlinux.64
 
 # device-trees
 core-y += arch/mips/boot/dts/
+
 
 archprepare:
 ifdef CONFIG_MIPS32_N32
@@ -448,7 +451,9 @@ define archhelp
 	echo '  uImage.gz            - U-Boot image (gzip)'
 	echo '  uImage.lzma          - U-Boot image (lzma)'
 	echo '  uImage.lzo           - U-Boot image (lzo)'
-	echo '  uzImage.bin          - U-Boot image (self-extracting)'
+	echo '  xImage               - U-Boot-spl xImage (ingenic spl boot)'
+	echo '  dtbs                 - Device-tree blobs for enabled boards'
+	echo '  dtbs_install         - Install dtbs to $(INSTALL_DTBS_PATH)'
 	echo
 	echo '  These will be default as appropriate for a configured platform.'
 	echo

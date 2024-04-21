@@ -98,7 +98,8 @@ $(obj)/uImage.lzo: $(obj)/vmlinux.bin.lzo FORCE
 	$(call if_changed,uimage,lzo)
 
 $(obj)/uImage: $(obj)/uImage.$(suffix-y)
-	@ln -sf $(notdir $<) $@
+#	@ln -sf $(notdir $<) $@
+	@cp -rf  $< $@
 	@echo '  Image $@ is ready'
 
 #
