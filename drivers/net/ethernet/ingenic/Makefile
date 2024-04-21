@@ -28,4 +28,4 @@ EXTRA_CFLAGS += -DENH_DESC -DENH_DESC_8W
 #EXTRA_CFLAGS += -DENH_DESC -DENH_DESC_8W
 
 obj-$(CONFIG_INGENIC_MAC) += synopGMAC_plat.o synopGMAC_Dev.o
-#obj-$(CONFIG_INGENIC_MAC) += ingenic_mac.o
+obj-$(CONFIG_INGENIC_MAC) += ingenic_mac.o
