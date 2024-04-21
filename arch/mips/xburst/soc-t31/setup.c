@@ -75,8 +75,8 @@ void __init plat_time_init(void)
 {
 	of_clk_init(NULL);
 
-	printk("=== enter clocksource_probe  ===\n");
-	clocksource_probe();
+	printk("=== enter timer_probe  ===\n");
+	timer_probe();
 }
 
 void __init arch_init_irq(void)
