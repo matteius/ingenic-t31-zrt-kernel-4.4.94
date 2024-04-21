@@ -367,7 +367,7 @@ __attribute__((__unused__)) static void ingenic_mac_phy_dump(struct ingenic_mac_
 
 	printk("\n-------->PHY dump: %08X\n", lp->phydev->phy_id);
 	for (i = 0; i < sizeof(phy) / sizeof(u16); i++)
-		data[i] = lp->mii_bus->read(lp->mii_bus, lp->phydev->addr, phy[i]);
+		data[i] = lp->mii_bus->read(lp->mii_bus, lp->phydev->mdio.addr, phy[i]);
 
 	for (i = 0; i < sizeof(phy) / sizeof(u16); i++)
 		printk("PHY reg%d, value %04X\n", phy[i], data[i]);
@@ -476,7 +476,7 @@ static int desc_list_init_rx(struct ingenic_mac_local *lp) {
 	}
 	memset(lp->rx_ring.buffer_info, 0, size);
 
-	lp->rx_ring.desc = dma_alloc_noncoherent(&lp->netdev->dev,
+	lp->rx_ring.desc = dma_alloc_coherent(&lp->netdev->dev,
 			lp->rx_ring.count * sizeof(DmaDesc),
 			&lp->rx_ring.dma, GFP_KERNEL);
 
@@ -511,7 +511,7 @@ static void desc_list_free_rx(struct ingenic_mac_local *lp) {
 	int i = 0;
 
 	if (lp->rx_ring.desc)
-		dma_free_noncoherent(&lp->netdev->dev,
+		dma_free_coherent(&lp->netdev->dev,
 				lp->rx_ring.count * sizeof(DmaDesc),
 				(void *)CKSEG0ADDR(lp->rx_ring.desc),
 				lp->rx_ring.dma);
@@ -594,7 +594,7 @@ static int desc_list_init_tx(struct ingenic_mac_local *lp) {
 	}
 	memset(lp->tx_ring.buffer_info, 0, size);
 
-	lp->tx_ring.desc = dma_alloc_noncoherent(&lp->netdev->dev,
+	lp->tx_ring.desc = dma_alloc_coherent(&lp->netdev->dev,
 			lp->tx_ring.count * sizeof(DmaDesc),
 			&lp->tx_ring.dma, GFP_KERNEL);
 
@@ -659,7 +659,7 @@ static void desc_list_free_tx(struct ingenic_mac_local *lp) {
 	int i = 0;
 
 	if (lp->tx_ring.desc)
-		dma_free_noncoherent(&lp->netdev->dev,
+		dma_free_coherent(&lp->netdev->dev,
 				lp->tx_ring.count * sizeof(DmaDesc),
 				(void *)CKSEG0ADDR(lp->tx_ring.desc),
 				lp->tx_ring.dma);
@@ -831,7 +831,7 @@ static int mii_probe(struct net_device *dev)
 
 	/* search for connect PHY device */
 	for (i = 0; i < PHY_MAX_ADDR; i++) {
-		struct phy_device *const tmp_phydev = lp->mii_bus->phy_map[i];
+		struct phy_device *const tmp_phydev = lp->mii_bus->phy_mask[i];
 
 		if (!tmp_phydev)
 			continue; /* no PHY here... */
@@ -856,7 +856,10 @@ static int mii_probe(struct net_device *dev)
 	else
 		phy_interface = PHY_INTERFACE_MODE_MII;
 
-	phydev = phy_connect(dev, dev_name(&phydev->dev), &ingenic_mac_adjust_link,
+    // Replace 'phydev->addr' with 'phydev->mdio.addr'
+    printk("PHY address: %d\n", phydev->mdio.addr);
+
+	phydev = phy_connect(dev, dev_name(&phydev->attached_dev), &ingenic_mac_adjust_link,
 			phy_interface);
 	if (IS_ERR(phydev)) {
 		printk(KERN_ERR "%s: Could not attach to PHY\n", dev->name);
@@ -864,18 +867,21 @@ static int mii_probe(struct net_device *dev)
 	}
 
 	/* mask with MAC supported features */
-	phydev->supported &= (SUPPORTED_10baseT_Half
-			| SUPPORTED_10baseT_Full
-			| SUPPORTED_100baseT_Half
-			| SUPPORTED_100baseT_Full
-			| SUPPORTED_1000baseT_Half
-			| SUPPORTED_1000baseT_Full
-			| SUPPORTED_Autoneg
-			| SUPPORTED_Pause | SUPPORTED_Asym_Pause
-			| SUPPORTED_MII
-			| SUPPORTED_TP);
+    // Use ethtool functions or macros to set or modify 'supported' and 'advertising' fields
+    linkmode_clear_bit(ETHTOOL_LINK_MODE_1000baseT_Half_BIT, phydev->supported);
+    linkmode_clear_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT, phydev->supported);
+    linkmode_clear_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, phydev->supported);
+    linkmode_clear_bit(ETHTOOL_LINK_MODE_Pause_BIT, phydev->supported);
+    linkmode_clear_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, phydev->supported);
+    linkmode_clear_bit(ETHTOOL_LINK_MODE_MII_BIT, phydev->supported);
+    linkmode_clear_bit(ETHTOOL_LINK_MODE_TP_BIT, phydev->supported);
 
-	phydev->advertising = phydev->supported;
+    linkmode_set_bit(ETHTOOL_LINK_MODE_10baseT_Half_BIT, phydev->supported);
+    linkmode_set_bit(ETHTOOL_LINK_MODE_10baseT_Full_BIT, phydev->supported);
+    linkmode_set_bit(ETHTOOL_LINK_MODE_100baseT_Half_BIT, phydev->supported);
+    linkmode_set_bit(ETHTOOL_LINK_MODE_100baseT_Full_BIT, phydev->supported);
+
+    linkmode_copy(phydev->advertising, phydev->supported);
 
 	lp->old_link = 0;
 	lp->old_speed = 0;
@@ -2220,7 +2226,7 @@ static int ingenic_mac_probe(struct platform_device *pdev)
 	ndev->netdev_ops = &ingenic_mac_netdev_ops;
 	ndev->watchdog_timeo = 2 * HZ;
 
-	lp->mii.phy_id	= lp->phydev->addr;
+	lp->mii.phy_id	= lp->phydev->mdio.addr;
 	lp->mii.phy_id_mask  = 0x1f;
 	lp->mii.reg_num_mask = 0x1f;
 	lp->mii.dev	= ndev;
