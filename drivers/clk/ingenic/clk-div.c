@@ -162,53 +162,52 @@ static struct clk_ops clk_cgu_divider_ops = {
 	.disable = clk_cgu_divider_disable,
 };
 
-struct clk *_register_cgu_divider(struct device *dev, const char *name,
-		const char *parent_name, unsigned long flags,
-		void __iomem *reg, u8 shift, u8 width, u8 busy_shift,
-		int en_shift, u8 stop_shift, u8 clk_divider_flags,
-		const struct clk_div_table *table,
-		spinlock_t *lock)
+
+struct clk *registercgu_divider(struct device *dev, const char *name,
+                                const char *parent_name, unsigned long flags,
+                                void __iomem *reg, u8 shift, u8 width, u8 busy_shift,
+                                int en_shift, u8 stop_shift, u8 clk_divider_flags,
+                                const struct clk_div_table *table,
+                                spinlock_t *lock)
 {
-	struct clk_cgu_divider *cgu_div;
-	struct clk *clk;
-	struct clk_init_data init;
+    struct clk_cgu_divider *cgu_div;
+    struct clk *clk;
+    struct clk_init_data init;
 
-	cgu_div = kzalloc(sizeof(*cgu_div), GFP_KERNEL);
-	if (!cgu_div)
-		return ERR_PTR(-ENOMEM);
+    cgu_div = kzalloc(sizeof(*cgu_div), GFP_KERNEL);
+    if (!cgu_div)
+        return ERR_PTR(-ENOMEM);
 
-	init.name = name;
-	init.ops = &clk_cgu_divider_ops;
-	init.flags = flags | CLK_IS_BASIC;
-	init.parent_names = (parent_name ? &parent_name: NULL);
-	init.num_parents = (parent_name ? 1 : 0);
+    init.name = name;
+    init.ops = &clk_cgu_divider_ops;
+    init.flags = flags;
+    init.parent_names = (parent_name ? &parent_name : NULL);
+    init.num_parents = (parent_name ? 1 : 0);
 
-	cgu_div->busy_shift = busy_shift;
-	cgu_div->en_shift = en_shift;
-	cgu_div->stop_shift = stop_shift;
-	cgu_div->lock = lock;
+    cgu_div->busy_shift = busy_shift;
+    cgu_div->en_shift = en_shift;
+    cgu_div->stop_shift = stop_shift;
+    cgu_div->lock = lock;
 
-	cgu_div->div.reg = reg;
-	cgu_div->div.shift = shift;
-	cgu_div->div.width = width;
-	//cgu_div->div.lock = lock;
-	cgu_div->div.lock = NULL;	/* keep common block unlocked. add lock in this file */
-	cgu_div->div.table = table;
-	cgu_div->div.flags = clk_divider_flags;
-	cgu_div->div_ops = &clk_divider_ops;
+    cgu_div->div.reg = reg;
+    cgu_div->div.shift = shift;
+    cgu_div->div.width = width;
+    cgu_div->div.lock = NULL; /* keep common block unlocked. add lock in this file */
+    cgu_div->div.table = table;
+    cgu_div->div.flags = clk_divider_flags;
+    cgu_div->div_ops = &clk_divider_ops;
+    cgu_div->div.hw.init = &init;
 
-
-	cgu_div->div.hw.init = &init;
-
-	clk = clk_register(dev, &cgu_div->div.hw);
-	if (IS_ERR(clk)) {
-		kfree(cgu_div);
+    clk = clk_register(dev, &cgu_div->div.hw);
+    if (IS_ERR(clk)) {
+        kfree(cgu_div);
     } else {
-	clk_set_flags(clk, CLK_SET_RATE_PARENT);
+        clk_set_flags(clk, CLK_SET_RATE_PARENT);
     }
 
-	return clk;
+    return clk;
 }
+
 
 /**
  * clk_register_divider_table - register a table based divider clock with
