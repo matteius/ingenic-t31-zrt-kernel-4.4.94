@@ -188,7 +188,7 @@ __attribute__((__unused__)) static void ingenic_mac_dump_skb_data(struct sk_buff
 	printk("head = 0x%08x, data = 0x%08x, tail = 0x%08x, end = 0x%08x\n",
 			(unsigned int)(skb->head), (unsigned int)(skb->data),
 			(unsigned int)(skb->tail), (unsigned int)(skb->end));
-	printk("len = %d\n", skb->len);
+	printk("len = %d\n", skb_trim(skb, length););
 	ingenic_mac_dump_pkt_data(skb->data, skb->len);
 	printk("\n=====================================\n");
 }
@@ -969,8 +969,8 @@ void ingenic_mac_update_stats(struct ingenic_mac_local *lp)
  * ingenic_mac_watchdog - Timer Call-back
  * @data: pointer to lp cast into an unsigned long
  **/
-static void ingenic_mac_watchdog(unsigned long data) {
-	struct ingenic_mac_local *lp = (struct ingenic_mac_local *)data;
+static void ingenic_mac_watchdog(struct timer_list *t)
+    struct ingenic_mac_local *lp = from_timer(lp, t, watchdog_timer);
 
 	ingenic_mac_update_stats(lp);
 
@@ -1033,7 +1033,7 @@ static int ingenic_mac_tx_map(struct ingenic_mac_local *lp,
 	count++;
 
 	for (f = 0; f < nr_frags; f++) {
-		struct skb_frag_struct *frag;
+		struct skb_frag_t *frag;
 
 //		struct page *p;
 		frag = &skb_shinfo(skb)->frags[f];
@@ -1661,7 +1661,7 @@ static void ingenic_mac_enable(struct ingenic_mac_local *lp) {
 	/* we only enable rx here */
 	synopGMAC_enable_dma_rx(gmacdev);
 	/* We can accept TX packets again */
-	lp->netdev->trans_start = jiffies;
+	//lp->netdev->trans_start = jiffies;
 	netif_wake_queue(lp->netdev);
 }
 
@@ -1769,7 +1769,7 @@ static int ingenic_mac_open(struct net_device *dev)
 	synopGMAC_enable_dma_rx(gmacdev);
 
 	/* We can accept TX packets again */
-	lp->netdev->trans_start = jiffies;
+	//lp->netdev->trans_start = jiffies;
 	netif_start_queue(dev);
 
 	return 0;
@@ -2234,7 +2234,7 @@ static int ingenic_mac_probe(struct platform_device *pdev)
 	lp->mii.mdio_write   = ingenic_mdio_phy_write;
 	lp->mii.supports_gmii	= mii_check_gmii_support(&lp->mii);
 
-	init_timer(&lp->watchdog_timer);
+	timer_setup(&lp->watchdog_timer, ingenic_mac_watchdog, 0);
 	lp->watchdog_timer.data = (unsigned long)lp;
 	lp->watchdog_timer.function = &ingenic_mac_watchdog;
 
