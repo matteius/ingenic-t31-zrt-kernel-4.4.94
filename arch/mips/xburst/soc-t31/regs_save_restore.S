@@ -34,6 +34,7 @@ _regs_stack:
 	.global save_goto
 	.align 2
 	.ent save_goto,0
+.cfi_startproc
 save_goto:
 	.set	push
 	.set	noreorder
@@ -112,6 +113,7 @@ save_goto:
 	.global restore_goto
 	.align 2
 	.ent restore_goto,0
+.cfi_startproc
 restore_goto:
 	.set	push
 	.set	noreorder

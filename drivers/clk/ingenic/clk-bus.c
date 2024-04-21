@@ -202,9 +202,8 @@ struct clk *clk_register_bus_divider_table(struct device *dev, const char *name,
 		spinlock_t *lock)
 {
     return clk_register_bus_divider(dev, name, parent_name, flags, reg, shift1,
-            width1, shift2, width2, busy_reg, busy_shift, ce_shift, clk_divider_flags, div_flags, NULL, lock);
+            width1, shift2, width2, busy_reg, busy_shift, ce_shift, clk_divider_flags, div_flags, lock);
 }
-
 
 /**
  * clk_register_bus_divider - register a divider clock with the clock framework
@@ -227,6 +226,6 @@ struct clk *clk_register_bus_divider(struct device *dev, const char *name,
                                     u8 clk_divider_flags, u8 div_flags, spinlock_t *lock)
 {
     return clk_register_bus_divider(dev, name, parent_name, flags, reg, shift1,
-            width1, busy_reg, busy_shift, ce_shift, clk_divider_flags, table, lock);
+            width1, shift2, width2, busy_reg, busy_shift, ce_shift, clk_divider_flags, div_flags, lock);
 }
 
