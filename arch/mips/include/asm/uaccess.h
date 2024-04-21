@@ -15,6 +15,7 @@
 #include <linux/errno.h>
 #include <linux/thread_info.h>
 #include <asm/asm-eva.h>
+#include <asm/extable.h>
 
 /*
  * The fs value determines whether argument validity checking should be
@@ -933,9 +934,7 @@ extern size_t __copy_user_inatomic(void *__to, const void *__from, size_t __n);
 	__cu_len;							\
 })
 
-#ifndef CONFIG_EVA
-
-#define __invoke_copy_from_user(to, from, n)				\
+#define __invoke_copy_from(func, to, from, n)				\
 ({									\
 	register void *__cu_to_r __asm__("$4");				\
 	register const void __user *__cu_from_r __asm__("$5");		\
