@@ -188,7 +188,7 @@ __attribute__((__unused__)) static void ingenic_mac_dump_skb_data(struct sk_buff
 	printk("head = 0x%08x, data = 0x%08x, tail = 0x%08x, end = 0x%08x\n",
 			(unsigned int)(skb->head), (unsigned int)(skb->data),
 			(unsigned int)(skb->tail), (unsigned int)(skb->end));
-	printk("len = %d\n", skb_trim(skb, length););
+	printk("len = %d\n", skb->len);
 	ingenic_mac_dump_pkt_data(skb->data, skb->len);
 	printk("\n=====================================\n");
 }
@@ -367,7 +367,7 @@ __attribute__((__unused__)) static void ingenic_mac_phy_dump(struct ingenic_mac_
 
 	printk("\n-------->PHY dump: %08X\n", lp->phydev->phy_id);
 	for (i = 0; i < sizeof(phy) / sizeof(u16); i++)
-		data[i] = lp->mii_bus->read(lp->mii_bus, lp->phydev->mdio.addr, phy[i]);
+		data[i] = lp->mii_bus->read(lp->mii_bus, lp->phydev->addr, phy[i]);
 
 	for (i = 0; i < sizeof(phy) / sizeof(u16); i++)
 		printk("PHY reg%d, value %04X\n", phy[i], data[i]);
@@ -831,7 +831,7 @@ static int mii_probe(struct net_device *dev)
 
 	/* search for connect PHY device */
 	for (i = 0; i < PHY_MAX_ADDR; i++) {
-		struct phy_device *const tmp_phydev = lp->mii_bus->phy_mask[i];
+		struct phy_device *const tmp_phydev = lp->mii_bus->phy_map[i];
 
 		if (!tmp_phydev)
 			continue; /* no PHY here... */
@@ -1033,7 +1033,7 @@ static int ingenic_mac_tx_map(struct ingenic_mac_local *lp,
 	count++;
 
 	for (f = 0; f < nr_frags; f++) {
-		struct skb_frag_t *frag;
+		struct skb_frag_struct *frag;
 
 //		struct page *p;
 		frag = &skb_shinfo(skb)->frags[f];
