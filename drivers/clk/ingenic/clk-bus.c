@@ -129,7 +129,7 @@ static int clk_bus_divider_set_rate(struct clk_hw *hw, unsigned long rate,
 static struct clk_ops clk_bus_divider_ops = {
         .recalc_rate = clk_bus_divider_recalc_rate,
         .round_rate = clk_bus_divider_round_rate,
-        .set_rate = clk_bus_divider_ops_set_rate,
+        .set_rate = clk_bus_divider_set_rate,
 };
 
 struct clk *register_clk_bus_divider(
@@ -201,7 +201,7 @@ struct clk *clk_register_bus_divider_table(struct device *dev, const char *name,
 		const struct clk_div_table *table,
 		spinlock_t *lock)
 {
-	return _register_bus_divider(dev, name, parent_name, flags, reg, shift1,
+	return clk_register_bus_divider(dev, name, parent_name, flags, reg, shift1,
 			width1, shift2, width2, busy_reg, busy_shift, ce_shift, clk_divider_flags, div_flags, table, lock);
 }
 
@@ -226,6 +226,6 @@ struct clk *clk_register_bus_divider(struct device *dev, const char *name,
 		void __iomem *busy_reg, u8 busy_shift, int ce_shift,
 		u8 clk_divider_flags, u8 div_flags, spinlock_t *lock)
 {
-	return _register_bus_divider(dev, name, parent_name, flags, reg, shift1, width1, shift2, width2, busy_reg, busy_shift, ce_shift, clk_divider_flags, div_flags, NULL, lock);
+	return clk_register_bus_divider(dev, name, parent_name, flags, reg, shift1, width1, shift2, width2, busy_reg, busy_shift, ce_shift, clk_divider_flags, div_flags, NULL, lock);
 }
 
