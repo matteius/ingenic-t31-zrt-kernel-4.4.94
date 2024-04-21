@@ -15,7 +15,7 @@
 #include <linux/io.h>
 #include <linux/err.h>
 #include <linux/string.h>
-
+#include <linux/clk/ti.h>
 #include "power-gate.h"
 
 
