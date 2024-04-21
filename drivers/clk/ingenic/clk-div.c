@@ -231,8 +231,30 @@ struct clk *clk_register_cgu_divider_table(struct device *dev, const char *name,
 		const struct clk_div_table *table,
 		spinlock_t *lock)
 {
-	return _register_cgu_divider(dev, name, parent_name, flags, reg, shift,
-			width, busy_shift, en_shift, stop_shift, clk_divider_flags, table, lock);
+    struct clk_hw *hw;
+    struct clk_divider *divider;
+
+    divider = kzalloc(sizeof(*divider), GFP_KERNEL);
+    if (!divider)
+        return ERR_PTR(-ENOMEM);
+
+    divider->reg = reg;
+    divider->shift = shift;
+    divider->width = width;
+    divider->flags = clk_divider_flags;
+    divider->table = table;
+    divider->lock = lock;
+
+    hw = &divider->hw;
+    hw->init = &init;
+
+    init.name = name;
+    init.ops = &clk_divider_ops;
+    init.flags = flags | CLK_IS_BASIC;
+    init.parent_names = parent_name ? &parent_name : NULL;
+    init.num_parents = parent_name ? 1 : 0;
+
+    return clk_register(dev, hw);
 }
 
 
@@ -255,6 +277,28 @@ struct clk *clk_register_cgu_divider(struct device *dev, const char *name,
 		int en_shift, u8 stop_shift,
 		u8 clk_divider_flags, spinlock_t *lock)
 {
-	return _register_cgu_divider(dev, name, parent_name, flags, reg, shift, width, busy_shift, en_shift, stop_shift, clk_divider_flags, NULL, lock);
+    struct clk_hw *hw;
+    struct clk_divider *divider;
+
+    divider = kzalloc(sizeof(*divider), GFP_KERNEL);
+    if (!divider)
+        return ERR_PTR(-ENOMEM);
+
+    divider->reg = reg;
+    divider->shift = shift;
+    divider->width = width;
+    divider->flags = clk_divider_flags;
+    divider->lock = lock;
+
+    hw = &divider->hw;
+    hw->init = &init;
+
+    init.name = name;
+    init.ops = &clk_divider_ops;
+    init.flags = flags | CLK_IS_BASIC;
+    init.parent_names = parent_name ? &parent_name : NULL;
+    init.num_parents = parent_name ? 1 : 0;
+
+    return clk_register(dev, hw);
 }
 
