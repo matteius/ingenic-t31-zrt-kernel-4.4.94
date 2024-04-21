@@ -180,7 +180,7 @@ struct clk *_register_bus_divider(struct device *dev, const char *name,
 	if (IS_ERR(clk)) {
 		kfree(bus_div);
     } else {
-        __clk_set_flags(clk, 1);
+	clk_set_flags(clk, CLK_SET_RATE_PARENT);
     }
 
 	return clk;

@@ -8,7 +8,7 @@
 #include <linux/slab.h>
 #include <linux/seq_file.h>
 #include <linux/page-flags.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <jz_proc.h>
 static struct proc_dir_entry *proc_jz_root;
 struct proc_dir_entry * jz_proc_mkdir(char *s)
