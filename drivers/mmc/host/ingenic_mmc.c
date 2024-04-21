@@ -875,7 +875,7 @@ static void ingenic_mmc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 
 static void ingenic_mmc_request_timeout(struct timer_list *timer)
 {
-	struct ingenic_mmc_host *host = (struct ingenic_mmc_host *)data;
+	struct ingenic_mmc_host *host = (struct ingenic_mmc_host *)timer;
 	unsigned int status = msc_readl(host, STAT);
 	if (host->timeout_cnt++ < (3000 / TIMEOUT_PERIOD)) {
 		dev_warn(host->dev, "timeout %dms op:%d %s sz:%d state:%d "
@@ -973,7 +973,7 @@ static void set_pin_status(struct ingenic_mmc_pin *pin, int enable)
 
 static void ingenic_mmc_detect(struct timer_list *timer)
 {
-	struct ingenic_mmc_host *host = (struct ingenic_mmc_host *)data;
+	struct ingenic_mmc_host *host = (struct ingenic_mmc_host *)timer;
 	bool present;
 	bool present_old;
 	static int irq_disable_count;
