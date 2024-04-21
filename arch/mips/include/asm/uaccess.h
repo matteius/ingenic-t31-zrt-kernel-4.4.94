@@ -927,14 +927,16 @@ extern size_t __copy_in_user_eva(void *__to, const void *__from, size_t __n);
 
 #endif /* CONFIG_EVA */
 
+
 static inline unsigned long
-raw_copy_to_user(void __user *to, const void *from, unsigned long n)
+raw_copy_to_user(void *to, const void __user *from, unsigned long n)
 {
 	if (eva_kernel_access())
 		return __invoke_copy_to_kernel(to, from, n);
 	else
 		return __invoke_copy_to_user(to, from, n);
 }
+
 
 static inline unsigned long
 raw_copy_from_user(void *to, const void __user *from, unsigned long n)
