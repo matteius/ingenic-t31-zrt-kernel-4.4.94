@@ -863,54 +863,11 @@ extern size_t __copy_user(void *__to, const void *__from, size_t __n);
 
 /* EVA specific functions */
 
-extern size_t __copy_user_inatomic_eva(void *__to, const void *__from,
-				       size_t __n);
 extern size_t __copy_from_user_eva(void *__to, const void *__from,
 				   size_t __n);
 extern size_t __copy_to_user_eva(void *__to, const void *__from,
 				 size_t __n);
 extern size_t __copy_in_user_eva(void *__to, const void *__from, size_t __n);
-
-#define __invoke_copy_from_user_eva_generic(to, from, n, func_ptr)	\
-({									\
-	register void *__cu_to_r __asm__("$4");				\
-	register const void __user *__cu_from_r __asm__("$5");		\
-	register long __cu_len_r __asm__("$6");				\
-									\
-	__cu_to_r = (to);						\
-	__cu_from_r = (from);						\
-	__cu_len_r = (n);						\
-	__asm__ __volatile__(						\
-	".set\tnoreorder\n\t"						\
-	__MODULE_JAL(func_ptr)						\
-	".set\tnoat\n\t"						\
-	__UA_ADDU "\t$1, %1, %2\n\t"					\
-	".set\tat\n\t"							\
-	".set\treorder"							\
-	: "+r" (__cu_to_r), "+r" (__cu_from_r), "+r" (__cu_len_r)	\
-	:								\
-	: "$8", "$9", "$10", "$11", "$12", "$14", "$15", "$24", "$31",	\
-	  DADDI_SCRATCH, "memory");					\
-	__cu_len_r;							\
-})
-
-#define __invoke_copy_to_user_eva_generic(to, from, n, func_ptr)	\
-({									\
-	register void *__cu_to_r __asm__("$4");				\
-	register const void __user *__cu_from_r __asm__("$5");		\
-	register long __cu_len_r __asm__("$6");				\
-									\
-	__cu_to_r = (to);						\
-	__cu_from_r = (from);						\
-	__cu_len_r = (n);						\
-	__asm__ __volatile__(						\
-	__MODULE_JAL(func_ptr)						\
-	: "+r" (__cu_to_r), "+r" (__cu_from_r), "+r" (__cu_len_r)	\
-	:								\
-	: "$8", "$9", "$10", "$11", "$12", "$14", "$15", "$24", "$31",	\
-	  DADDI_SCRATCH, "memory");					\
-	__cu_len_r;							\
-})
 
 /*
  * Source or destination address is in userland. We need to go through
@@ -936,6 +893,7 @@ raw_copy_to_user(void *to, const void __user *from, unsigned long n)
 	else
 		return __invoke_copy_to_user(to, from, n);
 }
+EXPORT_SYMBOL(raw_copy_to_user);
 
 
 static inline unsigned long
@@ -946,6 +904,7 @@ raw_copy_from_user(void *to, const void __user *from, unsigned long n)
 	else
 		return __invoke_copy_from_user(to, from, n);
 }
+EXPORT_SYMBOL(raw_copy_from_user);
 
 #define INLINE_COPY_FROM_USER
 #define INLINE_COPY_TO_USER
