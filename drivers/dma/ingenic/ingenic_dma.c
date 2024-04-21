@@ -1031,7 +1031,7 @@ static int __init ingenic_dma_probe(struct platform_device *pdev)
 		ingenic_dma_chan_init(dma, i);
 	}
 	dma_cap_set(DMA_MEMCPY, dma->dma_device.cap_mask);
-	dma_cap_set(DMA_SG, dma->dma_device.cap_mask);
+	// dma_cap_set(DMA_SG, dma->dma_device.cap_mask);
 	dma_cap_set(DMA_SLAVE, dma->dma_device.cap_mask);
 	dma_cap_set(DMA_CYCLIC, dma->dma_device.cap_mask);
 
@@ -1040,11 +1040,11 @@ static int __init ingenic_dma_probe(struct platform_device *pdev)
 	dma->dma_device.device_free_chan_resources = ingenic_dma_free_chan_resources;
 	dma->dma_device.device_tx_status = ingenic_dma_tx_status;
 	dma->dma_device.device_prep_slave_sg = ingenic_dma_prep_slave_sg;
-	dma->dma_device.device_prep_dma_sg = ingenic_dma_prep_dma_sg;
+	//dma->dma_device.device_prep_dma_sg = ingenic_dma_prep_dma_sg;
 	dma->dma_device.device_prep_dma_cyclic = ingenic_dma_prep_dma_cyclic;
 	dma->dma_device.device_prep_dma_memcpy = ingenic_dma_prep_dma_memcpy;
 	dma->dma_device.device_config = ingenic_dma_config;
-	dma->dma_device.get_current_trans_addr = jzdma_get_current_trans_addr;
+	// dma->dma_device.get_current_trans_addr = jzdma_get_current_trans_addr;
 	dma->dma_device.device_terminate_all = ingenic_dma_terminate_all;
 	dma->dma_device.device_issue_pending = ingenic_dma_issue_pending;
 	dma->dma_device.copy_align = DMAENGINE_ALIGN_4_BYTES;
