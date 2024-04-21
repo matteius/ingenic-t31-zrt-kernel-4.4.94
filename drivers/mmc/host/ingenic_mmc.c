@@ -873,7 +873,7 @@ static void ingenic_mmc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		host->cmdat_def &= ~CMDAT_INIT;
 }
 
-static void ingenic_mmc_request_timeout(unsigned long data)
+static void ingenic_mmc_request_timeout(struct timer_list *timer)
 {
 	struct ingenic_mmc_host *host = (struct ingenic_mmc_host *)data;
 	unsigned int status = msc_readl(host, STAT);
@@ -971,7 +971,7 @@ static void set_pin_status(struct ingenic_mmc_pin *pin, int enable)
 	gpio_set_value(pin->num, enable);
 }
 
-static void ingenic_mmc_detect(unsigned long data)
+static void ingenic_mmc_detect(struct timer_list *timer)
 {
 	struct ingenic_mmc_host *host = (struct ingenic_mmc_host *)data;
 	bool present;
