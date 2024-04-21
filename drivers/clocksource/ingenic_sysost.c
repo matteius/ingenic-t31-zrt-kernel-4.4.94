@@ -41,12 +41,12 @@ struct tmr_src {
 	void __iomem *iobase;
 };
 
-static cycle_t ingenic_read_cycles(struct clocksource *cs)
+static u64 ingenic_read_cycles(struct clocksource *cs)
 {
 	struct tmr_src *tmr = container_of(cs, struct tmr_src, cs);
 	union clycle_type
 	{
-		cycle_t cycle64;
+		u64 cycle64;
 		unsigned int cycle32[2];
 	} cycle;
 

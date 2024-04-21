@@ -562,6 +562,7 @@ static int dmmu_make_present(unsigned long addr, unsigned long end)
 {
     int ret;
     unsigned long pages;
+    unsigned long vm_page_prot;
     unsigned int gup_flags = 0;
     struct vm_area_struct *vma;
 
@@ -582,7 +583,7 @@ static int dmmu_make_present(unsigned long addr, unsigned long end)
     BUG_ON(end > vma->vm_end);
 
     // Update the page protection flags temporarily
-    unsigned long vm_page_prot = pgprot_val(vma->vm_page_prot);
+    vm_page_prot = pgprot_val(vma->vm_page_prot);
     vma->vm_page_prot = __pgprot(vm_page_prot | _PAGE_VALID | _PAGE_ACCESSED | _PAGE_PRESENT);
 
     // Calculate the number of pages
