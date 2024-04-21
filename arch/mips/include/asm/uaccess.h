@@ -14,6 +14,7 @@
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/thread_info.h>
+#include <linux/uaccess.h> /* for uaccess_kernel() */
 #include <asm/asm-eva.h>
 #include <asm/extable.h>
 
