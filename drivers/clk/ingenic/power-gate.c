@@ -16,6 +16,7 @@
 #include <linux/err.h>
 #include <linux/string.h>
 #include <linux/clk/ti.h>
+#include <linux/regmap.h#include <linux/regmap.h>>
 #include "power-gate.h"
 
 
@@ -61,7 +62,7 @@ static int power_gate_is_enabled(struct clk_hw *hw)
 	u32 reg;
 	struct power_gate *gate = to_power_gate(hw);
 
-	reg = clk_readl(gate->reg);
+	reg = read_reg(gate->reg);
 
 	/* if a set bit disables this clk, flip it before masking */
 	if (gate->flags & CLK_GATE_SET_TO_DISABLE)
@@ -92,7 +93,7 @@ static void power_gate_endisable(struct clk_hw *hw, int enable)
 		reg |= BIT(gate->ctrl_bit);
 	else
 		reg &= ~BIT(gate->ctrl_bit);
-	clk_writel(reg, gate->reg);
+	write_reg(reg, gate->reg);
 
 	if (gate->lock)
 		spin_unlock_irqrestore(gate->lock, flags);
