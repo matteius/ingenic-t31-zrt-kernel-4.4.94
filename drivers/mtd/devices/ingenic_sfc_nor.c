@@ -544,15 +544,15 @@ static int ingenic_spi_norflash_erase(struct mtd_info *mtd, struct erase_info *i
 		if (ret) {
 			dev_err(flash->dev,"erase error !\n");
 			mutex_unlock(&flash->lock);
-			instr->state = MTD_ERASE_FAILED;
+			instr->fail_addr = instr->addr;
 			return ret;
 		}
 		addr += spi_nor_info->erase_size;
 	}
 	mutex_unlock(&flash->lock);
-	instr->state = MTD_ERASE_DONE;
+	instr->fail_addr = 0;
 
-	mtd_erase_callback(instr);
+	mtd_erase_done(instr->mtd, instr);
 	return 0;
 }
 
