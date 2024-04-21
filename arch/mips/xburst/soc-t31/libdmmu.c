@@ -557,47 +557,49 @@ static struct dmmu_handle *create_handle(void)
 	return h;
 }
 
-static int dmmu_make_present(unsigned long addr,unsigned long end)
+
+static int dmmu_make_present(unsigned long addr, unsigned long end)
 {
-#if 0
-	unsigned long i;
-	for(i = addr; i < end; i += 4096) {
-		*(volatile unsigned char *)(i) = 0;
-	}
-	*(volatile unsigned char *)(end - 1) = 0;
-	return 0;
-#else
-	int ret, len, write;
-	struct vm_area_struct * vma;
-	unsigned long vm_page_prot;
+    int ret;
+    unsigned long pages;
+    unsigned int gup_flags = 0;
+    struct vm_area_struct *vma;
 
-	vma = find_vma(current->mm, addr);
-	if (!vma) {
-		printk("dmmu_make_present error. addr=%lx len=%lx\n",addr,end-addr);
-		return -1;
-	}
+    vma = find_vma(current->mm, addr);
+    if (!vma) {
+        printk("dmmu_make_present error. addr=%lx len=%lx\n", addr, end - addr);
+        return -1;
+    }
 
-	if(vma->vm_flags & VM_PFNMAP)
-		return 0;
+    if (vma->vm_flags & VM_PFNMAP)
+        return 0;
 
-	write = (vma->vm_flags & VM_WRITE) != 0;
-	BUG_ON(addr >= end);
-	BUG_ON(end > vma->vm_end);
+    // Set GUP flags based on VMA flags
+    if (vma->vm_flags & VM_WRITE)
+        gup_flags |= FOLL_WRITE;
 
-	vm_page_prot = pgprot_val(vma->vm_page_prot);
-	vma->vm_page_prot = __pgprot(vm_page_prot | _PAGE_VALID| _PAGE_ACCESSED | _PAGE_PRESENT);
+    BUG_ON(addr >= end);
+    BUG_ON(end > vma->vm_end);
 
-	len = DIV_ROUND_UP(end, PAGE_SIZE) - addr/PAGE_SIZE;
-	ret = get_user_pages(current, current->mm, addr,
-			len, write, 0, NULL, NULL);
-	vma->vm_page_prot = __pgprot(vm_page_prot);
-	if (ret < 0) {
-		printk("dmmu_make_present get_user_pages error(%d). addr=%lx len=%lx\n",0-ret,addr,end-addr);
-		return ret;
-	}
-	return ret == len ? 0 : -1;
-#endif
+    // Update the page protection flags temporarily
+    unsigned long vm_page_prot = pgprot_val(vma->vm_page_prot);
+    vma->vm_page_prot = __pgprot(vm_page_prot | _PAGE_VALID | _PAGE_ACCESSED | _PAGE_PRESENT);
+
+    // Calculate the number of pages
+    pages = (end - addr + PAGE_SIZE - 1) / PAGE_SIZE;
+    ret = get_user_pages(addr, pages, gup_flags, NULL, NULL);
+
+    // Restore the original page protection flags
+    vma->vm_page_prot = __pgprot(vm_page_prot);
+
+    if (ret < 0) {
+        printk("dmmu_make_present get_user_pages error(%d). addr=%lx len=%lx\n", -ret, addr, end - addr);
+        return ret;
+    }
+
+    return ret == pages ? 0 : -1;  // Check if all requested pages were processed
 }
+
 
 static void dmmu_cache_wback(struct dmmu_handle *h)
 {
