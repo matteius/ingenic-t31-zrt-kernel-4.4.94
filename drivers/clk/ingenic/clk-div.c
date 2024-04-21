@@ -231,30 +231,40 @@ struct clk *clk_register_cgu_divider_table(struct device *dev, const char *name,
 		const struct clk_div_table *table,
 		spinlock_t *lock)
 {
-    struct clk_hw *hw;
-    struct clk_divider *divider;
+    struct clk_divider *div;
+    struct clk *clk;
+    struct clk_init_data init = {};
 
-    divider = kzalloc(sizeof(*divider), GFP_KERNEL);
-    if (!divider)
+    // Allocate memory for the clock divider structure
+    div = kzalloc(sizeof(*div), GFP_KERNEL);
+    if (!div)
         return ERR_PTR(-ENOMEM);
 
-    divider->reg = reg;
-    divider->shift = shift;
-    divider->width = width;
-    divider->flags = clk_divider_flags;
-    divider->table = table;
-    divider->lock = lock;
-
-    hw = &divider->hw;
-    hw->init = &init;
-
+    // Setup initial data structure
     init.name = name;
-    init.ops = &clk_divider_ops;
-    init.flags = flags | CLK_IS_BASIC;
-    init.parent_names = parent_name ? &parent_name : NULL;
-    init.num_parents = parent_name ? 1 : 0;
+    init.ops = &clk_divider_ops; // This needs to be defined according to your specific divider operations
+    init.flags = flags;
+    init.parent_names = &parent_name;
+    init.num_parents = 1;
 
-    return clk_register(dev, hw);
+    // Setup divider specific configuration
+    div->reg = reg;
+    div->shift = shift;
+    div->width = width;
+    div->lock = lock;
+    div->table = table;
+    div->flags = clk_divider_flags | CLK_DIVIDER_ONE_BASED | CLK_DIVIDER_ALLOW_ZERO;
+    div->hw.init = &init;
+
+    // Register the clock
+    clk = clk_register(dev, &div->hw);
+    if (IS_ERR(clk)) {
+        kfree(div);
+        return clk;
+    }
+
+    return clk;
+
 }
 
 
@@ -277,28 +287,40 @@ struct clk *clk_register_cgu_divider(struct device *dev, const char *name,
 		int en_shift, u8 stop_shift,
 		u8 clk_divider_flags, spinlock_t *lock)
 {
-    struct clk_hw *hw;
-    struct clk_divider *divider;
+    struct clk *clk;
+    struct clk_init_data init;
+    struct clk_divider *div;
 
-    divider = kzalloc(sizeof(*divider), GFP_KERNEL);
-    if (!divider)
+    // Allocate memory for the clock divider structure
+    div = kzalloc(sizeof(*div), GFP_KERNEL);
+    if (!div)
         return ERR_PTR(-ENOMEM);
 
-    divider->reg = reg;
-    divider->shift = shift;
-    divider->width = width;
-    divider->flags = clk_divider_flags;
-    divider->lock = lock;
-
-    hw = &divider->hw;
-    hw->init = &init;
-
+    // Initialize the init data structure
     init.name = name;
     init.ops = &clk_divider_ops;
-    init.flags = flags | CLK_IS_BASIC;
-    init.parent_names = parent_name ? &parent_name : NULL;
-    init.num_parents = parent_name ? 1 : 0;
+    init.flags = flags;
+    init.parent_names = (parent_name ? &parent_name : NULL);
+    init.num_parents = (parent_name ? 1 : 0);
 
-    return clk_register(dev, hw);
+    // Configure the divider
+    div->reg = reg;
+    div->shift = shift;
+    div->width = width;
+    div->lock = lock;
+    div->flags = clk_divider_flags;
+
+    // This should be adjusted if you have specific functions handling the busy or stop bits
+    div->hw.init = &init;
+
+    // Register the clock
+    clk = clk_register(dev, &div->hw);
+    if (IS_ERR(clk)) {
+        kfree(div);
+        return clk;
+    }
+
+    return clk;
+
 }
 
