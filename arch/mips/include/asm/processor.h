@@ -364,11 +364,6 @@ struct thread_struct {
 	/*							\
 	 * Saved FPU/FPU emulator stuff				\
 	 */							\
-	.fpu			= {				\
-		.fpr		= {{{0,},},},			\
-		.fcr31		= 0,				\
-		.msacsr		= 0,				\
-	},
 	FPU_INIT						\
 	/*							\
 	 * FPU affinity state (null if not FPAFF)		\
