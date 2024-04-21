@@ -209,9 +209,12 @@ static int ingenic_rtc_get_time(struct device *dev, struct rtc_time *tm)
 	return rtc_valid_tm(tm);
 }
 
-static int ingenic_rtc_set_mmss(struct device *dev, unsigned long secs)
+static int ingenic_rtc_set_mmss(struct device *dev,  struct rtc_time *tm)
 {
 	struct ingenic_rtc_device *rtc = dev_get_drvdata(dev);
+        unsigned long secs;
+
+        rtc_tm_to_time(tm, &secs);
 	return ingenic_rtc_write(rtc, RTC_RTCSR, secs);
 }
 
