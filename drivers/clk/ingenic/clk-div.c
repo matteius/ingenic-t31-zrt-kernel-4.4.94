@@ -202,7 +202,7 @@ struct clk *registercgu_divider(struct device *dev, const char *name,
     if (IS_ERR(clk)) {
         kfree(cgu_div);
     } else {
-        clk_set_flags(clk, CLK_SET_RATE_PARENT);
+        //clk_set_flags(clk, CLK_SET_RATE_PARENT);
     }
 
     return clk;

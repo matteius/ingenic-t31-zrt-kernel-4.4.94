@@ -159,7 +159,7 @@ static void __init _ingenic_clk_register_pll(struct ingenic_clk_provider *ctx,
 		return;
 	}
 
-        clk_set_flags(clk, CLK_SET_RATE_PARENT);
+        // clk_set_flags(clk, CLK_SET_RATE_PARENT);
 	ingenic_clk_add_lookup(ctx, clk, pll_clk->id);
 
 
