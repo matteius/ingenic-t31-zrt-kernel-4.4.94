@@ -1363,8 +1363,7 @@ static void __init ingenic_mmc_host_init(struct ingenic_mmc_host *host, struct m
 	mmc->max_seg_size = mmc->max_req_size;
 
 	host->mmc = mmc;
-	setup_timer(&host->request_timer, ingenic_mmc_request_timeout,
-				(unsigned long)host);
+	timer_setup(&host->request_timer, ingenic_mmc_request_timeout, (unsigned long)host);
 
 	mmc_of_parse(mmc);
 
@@ -1483,7 +1482,7 @@ static int __init ingenic_mmc_gpio_init(struct ingenic_mmc_host *host)
 			/* msc cd not pull up/down */
 			jzgpio_set_func(GPIO_PORT_B, GPIO_PULL_HIZ, 1 << (card_gpio->cd.num - GPIO_PORT_B * 32));
 
-			setup_timer(&host->detect_timer, ingenic_mmc_detect,
+			timer_setup(&host->detect_timer, ingenic_mmc_detect,
 						(unsigned long)host);
 
 			ret = devm_request_irq(host->dev, gpio_to_irq(card_gpio->cd.num),
