@@ -232,7 +232,7 @@ static void __init tegra20_init_timer(struct device_node *np)
 	clockevents_config_and_register(&tegra_clockevent, 1000000,
 					0x1, 0x1fffffff);
 }
-CLOCKSOURCE_OF_DECLARE(tegra20_timer, "nvidia,tegra20-timer", tegra20_init_timer);
+TIMER_OF_DECLARE(tegra20_timer, "nvidia,tegra20-timer", tegra20_init_timer);
 
 static void __init tegra20_init_rtc(struct device_node *np)
 {
@@ -256,7 +256,7 @@ static void __init tegra20_init_rtc(struct device_node *np)
 
 	register_persistent_clock(NULL, tegra_read_persistent_clock64);
 }
-CLOCKSOURCE_OF_DECLARE(tegra20_rtc, "nvidia,tegra20-rtc", tegra20_init_rtc);
+TIMER_OF_DECLARE(tegra20_rtc, "nvidia,tegra20-rtc", tegra20_init_rtc);
 
 #ifdef CONFIG_PM
 static u32 usec_config;

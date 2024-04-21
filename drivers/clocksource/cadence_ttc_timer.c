@@ -521,4 +521,4 @@ static void __init ttc_timer_init(struct device_node *timer)
 	pr_info("%s #0 at %p, irq=%d\n", timer->name, timer_baseaddr, irq);
 }
 
-CLOCKSOURCE_OF_DECLARE(ttc, "cdns,ttc", ttc_timer_init);
+TIMER_OF_DECLARE(ttc, "cdns,ttc", ttc_timer_init);

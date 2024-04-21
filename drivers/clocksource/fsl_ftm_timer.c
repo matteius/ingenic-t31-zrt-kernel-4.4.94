@@ -363,4 +363,4 @@ static void __init ftm_timer_init(struct device_node *np)
 err:
 	kfree(priv);
 }
-CLOCKSOURCE_OF_DECLARE(flextimer, "fsl,ftm-timer", ftm_timer_init);
+TIMER_OF_DECLARE(flextimer, "fsl,ftm-timer", ftm_timer_init);

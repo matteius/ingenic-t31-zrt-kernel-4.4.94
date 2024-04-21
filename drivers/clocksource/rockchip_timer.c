@@ -173,4 +173,4 @@ static void __init rk_timer_init(struct device_node *np)
 
 	clockevents_config_and_register(ce, bc_timer.freq, 1, UINT_MAX);
 }
-CLOCKSOURCE_OF_DECLARE(rk_timer, "rockchip,rk3288-timer", rk_timer_init);
+TIMER_OF_DECLARE(rk_timer, "rockchip,rk3288-timer", rk_timer_init);

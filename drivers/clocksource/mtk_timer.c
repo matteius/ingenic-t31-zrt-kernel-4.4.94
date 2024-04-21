@@ -261,4 +261,4 @@ err_mem:
 	of_address_to_resource(node, 0, &res);
 	release_mem_region(res.start, resource_size(&res));
 }
-CLOCKSOURCE_OF_DECLARE(mtk_mt6577, "mediatek,mt6577-timer", mtk_timer_init);
+TIMER_OF_DECLARE(mtk_mt6577, "mediatek,mt6577-timer", mtk_timer_init);

@@ -63,4 +63,4 @@ static void __init tango_clocksource_init(struct device_node *np)
 	register_current_timer_delay(&delay_timer);
 }
 
-CLOCKSOURCE_OF_DECLARE(tango, "sigma,tick-counter", tango_clocksource_init);
+TIMER_OF_DECLARE(tango, "sigma,tick-counter", tango_clocksource_init);

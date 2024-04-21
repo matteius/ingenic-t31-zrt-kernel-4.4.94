@@ -340,7 +340,7 @@ static void __init armada_xp_timer_init(struct device_node *np)
 
 	armada_370_xp_timer_common_init(np);
 }
-CLOCKSOURCE_OF_DECLARE(armada_xp, "marvell,armada-xp-timer",
+TIMER_OF_DECLARE(armada_xp, "marvell,armada-xp-timer",
 		       armada_xp_timer_init);
 
 static void __init armada_375_timer_init(struct device_node *np)
@@ -368,7 +368,7 @@ static void __init armada_375_timer_init(struct device_node *np)
 
 	armada_370_xp_timer_common_init(np);
 }
-CLOCKSOURCE_OF_DECLARE(armada_375, "marvell,armada-375-timer",
+TIMER_OF_DECLARE(armada_375, "marvell,armada-375-timer",
 		       armada_375_timer_init);
 
 static void __init armada_370_timer_init(struct device_node *np)
@@ -382,5 +382,5 @@ static void __init armada_370_timer_init(struct device_node *np)
 
 	armada_370_xp_timer_common_init(np);
 }
-CLOCKSOURCE_OF_DECLARE(armada_370, "marvell,armada-370-timer",
+TIMER_OF_DECLARE(armada_370, "marvell,armada-370-timer",
 		       armada_370_timer_init);

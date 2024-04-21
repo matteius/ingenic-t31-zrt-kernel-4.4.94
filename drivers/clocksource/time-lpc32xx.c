@@ -269,4 +269,4 @@ static void __init lpc32xx_timer_init(struct device_node *np)
 		}
 	}
 }
-CLOCKSOURCE_OF_DECLARE(lpc32xx_timer, "nxp,lpc3220-timer", lpc32xx_timer_init);
+TIMER_OF_DECLARE(lpc32xx_timer, "nxp,lpc3220-timer", lpc32xx_timer_init);

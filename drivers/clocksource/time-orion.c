@@ -145,4 +145,4 @@ static void __init orion_timer_init(struct device_node *np)
 	clockevents_config_and_register(&orion_clkevt, clk_get_rate(clk),
 					ORION_ONESHOT_MIN, ORION_ONESHOT_MAX);
 }
-CLOCKSOURCE_OF_DECLARE(orion_timer, "marvell,orion-timer", orion_timer_init);
+TIMER_OF_DECLARE(orion_timer, "marvell,orion-timer", orion_timer_init);

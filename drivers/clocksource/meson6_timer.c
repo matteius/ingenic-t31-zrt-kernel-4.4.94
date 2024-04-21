@@ -167,5 +167,5 @@ static void __init meson6_timer_init(struct device_node *node)
 	clockevents_config_and_register(&meson6_clockevent, USEC_PER_SEC,
 					1, 0xfffe);
 }
-CLOCKSOURCE_OF_DECLARE(meson6, "amlogic,meson6-timer",
+TIMER_OF_DECLARE(meson6, "amlogic,meson6-timer",
 		       meson6_timer_init);

@@ -165,4 +165,4 @@ static void __init moxart_timer_init(struct device_node *node)
 	clockevents_config_and_register(&moxart_clockevent, pclk,
 					0x4, 0xfffffffe);
 }
-CLOCKSOURCE_OF_DECLARE(moxart, "moxa,moxart-timer", moxart_timer_init);
+TIMER_OF_DECLARE(moxart, "moxa,moxart-timer", moxart_timer_init);

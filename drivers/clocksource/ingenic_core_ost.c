@@ -557,4 +557,4 @@ static void __init ingenic_ost_init(struct device_node *np)
 	core_clocksource_init(core_ost, tmr);
 }
 
-CLOCKSOURCE_OF_DECLARE(ingenic_ost_init, "ingenic,core-ost", ingenic_ost_init);
+TIMER_OF_DECLARE(ingenic_ost_init, "ingenic,core-ost", ingenic_ost_init);
