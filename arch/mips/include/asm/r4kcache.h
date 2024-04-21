@@ -49,6 +49,81 @@ extern void (*r4k_blast_icache)(void);
 	:								\
 	: "i" (op), "R" (*(unsigned char *)(addr)))
 
+#ifdef CONFIG_MACH_XBURST
+#define __inv_btb()	\
+	do {			\
+		unsigned long tmp;		\
+		__asm__ __volatile__(		\
+				".set push\n\t"	\
+				".set noreorder\n\t"	\
+				".set mips32\n\t"	\
+				"mfc0 %0, $16, 7\n\t"	\
+				"nop\n\t"		\
+				"ori %0, 2\n\t"		\
+				"mtc0 %0, $16, 7\n\t"	\
+				"nop\n\t"		\
+				".set pop\n\t"		\
+				: "=&r" (tmp));		\
+	} while(0)
+#define __sync_wb()	__sync()
+#define __bridge_sync_war()	\
+	do {		\
+		if (MIPS_BRIDGE_SYNC_WAR)	\
+			__fast_iob();	\
+	} while (0)
+static inline void blast_inclusive_scache(void)
+{
+	__bridge_sync_war();
+}
+#else
+#define __inv_btb()	do {} while(0)
+#define __sync_wb()	do {} while(0)
+#define __bridge_sync_war() do {} while(0)
+static inline void blast_inclusive_scache(void)
+{
+}
+#endif
+
+#ifdef CONFIG_MIPS_MT
+
+#define __iflush_prologue						\
+	unsigned long redundance;					\
+	extern int mt_n_iflushes;					\
+	for (redundance = 0; redundance < mt_n_iflushes; redundance++) {
+
+#define __iflush_epilogue						\
+	}
+
+#define __dflush_prologue						\
+	unsigned long redundance;					\
+	extern int mt_n_dflushes;					\
+	for (redundance = 0; redundance < mt_n_dflushes; redundance++) {
+
+#define __dflush_epilogue \
+	}
+
+#define __inv_dflush_prologue __dflush_prologue
+#define __inv_dflush_epilogue __dflush_epilogue
+#define __sflush_prologue {
+#define __sflush_epilogue }
+#define __inv_sflush_prologue __sflush_prologue
+#define __inv_sflush_epilogue __sflush_epilogue
+
+#else /* CONFIG_MIPS_MT */
+
+#define __iflush_prologue {
+#define __iflush_epilogue __inv_btb(); }	/*CONFIG_MACH_XBURST*/
+#define __dflush_prologue {
+#define __dflush_epilogue __sync_wb(); }	/*CONFIG_MACH_XBURST*/
+#define __inv_dflush_prologue {
+#define __inv_dflush_epilogue }
+#define __sflush_prologue {
+#define __sflush_epilogue __bridge_sync_war(); }	/*CONFIG_MACH_XBURST*/
+#define __inv_sflush_prologue {
+#define __inv_sflush_epilogue }
+
+#endif /* CONFIG_MIPS_MT */
+
 static inline void flush_icache_line_indexed(unsigned long addr)
 {
 	cache_op(Index_Invalidate_I, addr);

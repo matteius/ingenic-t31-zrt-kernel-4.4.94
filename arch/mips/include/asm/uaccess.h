@@ -12,9 +12,9 @@
 #define _ASM_UACCESS_H
 
 #include <linux/kernel.h>
-#include <linux/string.h>
+#include <linux/errno.h>
+#include <linux/thread_info.h>
 #include <asm/asm-eva.h>
-#include <asm/extable.h>
 
 /*
  * The fs value determines whether argument validity checking should be
@@ -69,6 +69,10 @@ extern u64 __ua_limit;
 #define USER_DS		((mm_segment_t) { __UA_LIMIT })
 #endif
 
+#define VERIFY_READ    0
+#define VERIFY_WRITE   1
+
+#define get_ds()	(KERNEL_DS)
 #define get_fs()	(current_thread_info()->addr_limit)
 #define set_fs(x)	(current_thread_info()->addr_limit = (x))
 
@@ -493,6 +497,283 @@ do {									\
 extern void __put_user_unknown(void);
 
 /*
+ * ul{b,h,w} are macros and there are no equivalent macros for EVA.
+ * EVA unaligned access is handled in the ADE exception handler.
+ */
+#ifndef CONFIG_EVA
+/*
+ * put_user_unaligned: - Write a simple value into user space.
+ * @x:	 Value to copy to user space.
+ * @ptr: Destination address, in user space.
+ *
+ * Context: User context only. This function may sleep if pagefaults are
+ *          enabled.
+ *
+ * This macro copies a single simple value from kernel space to user
+ * space.  It supports simple types like char and int, but not larger
+ * data types like structures or arrays.
+ *
+ * @ptr must have pointer-to-simple-variable type, and @x must be assignable
+ * to the result of dereferencing @ptr.
+ *
+ * Returns zero on success, or -EFAULT on error.
+ */
+#define put_user_unaligned(x,ptr)	\
+	__put_user_unaligned_check((x),(ptr),sizeof(*(ptr)))
+
+/*
+ * get_user_unaligned: - Get a simple variable from user space.
+ * @x:	 Variable to store result.
+ * @ptr: Source address, in user space.
+ *
+ * Context: User context only. This function may sleep if pagefaults are
+ *          enabled.
+ *
+ * This macro copies a single simple variable from user space to kernel
+ * space.  It supports simple types like char and int, but not larger
+ * data types like structures or arrays.
+ *
+ * @ptr must have pointer-to-simple-variable type, and the result of
+ * dereferencing @ptr must be assignable to @x without a cast.
+ *
+ * Returns zero on success, or -EFAULT on error.
+ * On error, the variable @x is set to zero.
+ */
+#define get_user_unaligned(x,ptr) \
+	__get_user_unaligned_check((x),(ptr),sizeof(*(ptr)))
+
+/*
+ * __put_user_unaligned: - Write a simple value into user space, with less checking.
+ * @x:	 Value to copy to user space.
+ * @ptr: Destination address, in user space.
+ *
+ * Context: User context only. This function may sleep if pagefaults are
+ *          enabled.
+ *
+ * This macro copies a single simple value from kernel space to user
+ * space.  It supports simple types like char and int, but not larger
+ * data types like structures or arrays.
+ *
+ * @ptr must have pointer-to-simple-variable type, and @x must be assignable
+ * to the result of dereferencing @ptr.
+ *
+ * Caller must check the pointer with access_ok() before calling this
+ * function.
+ *
+ * Returns zero on success, or -EFAULT on error.
+ */
+#define __put_user_unaligned(x,ptr) \
+	__put_user_unaligned_nocheck((x),(ptr),sizeof(*(ptr)))
+
+/*
+ * __get_user_unaligned: - Get a simple variable from user space, with less checking.
+ * @x:	 Variable to store result.
+ * @ptr: Source address, in user space.
+ *
+ * Context: User context only. This function may sleep if pagefaults are
+ *          enabled.
+ *
+ * This macro copies a single simple variable from user space to kernel
+ * space.  It supports simple types like char and int, but not larger
+ * data types like structures or arrays.
+ *
+ * @ptr must have pointer-to-simple-variable type, and the result of
+ * dereferencing @ptr must be assignable to @x without a cast.
+ *
+ * Caller must check the pointer with access_ok() before calling this
+ * function.
+ *
+ * Returns zero on success, or -EFAULT on error.
+ * On error, the variable @x is set to zero.
+ */
+#define __get_user_unaligned(x,ptr) \
+	__get_user_unaligned_nocheck((x),(ptr),sizeof(*(ptr)))
+
+/*
+ * Yuck.  We need two variants, one for 64bit operation and one
+ * for 32 bit mode and old iron.
+ */
+#ifdef CONFIG_32BIT
+#define __GET_USER_UNALIGNED_DW(val, ptr)				\
+	__get_user_unaligned_asm_ll32(val, ptr)
+#endif
+#ifdef CONFIG_64BIT
+#define __GET_USER_UNALIGNED_DW(val, ptr)				\
+	__get_user_unaligned_asm(val, "uld", ptr)
+#endif
+
+extern void __get_user_unaligned_unknown(void);
+
+#define __get_user_unaligned_common(val, size, ptr)			\
+do {									\
+	switch (size) {							\
+	case 1: __get_data_asm(val, "lb", ptr); break;			\
+	case 2: __get_data_unaligned_asm(val, "ulh", ptr); break;	\
+	case 4: __get_data_unaligned_asm(val, "ulw", ptr); break;	\
+	case 8: __GET_USER_UNALIGNED_DW(val, ptr); break;		\
+	default: __get_user_unaligned_unknown(); break;			\
+	}								\
+} while (0)
+
+#define __get_user_unaligned_nocheck(x,ptr,size)			\
+({									\
+	int __gu_err;							\
+									\
+	__get_user_unaligned_common((x), size, ptr);			\
+	__gu_err;							\
+})
+
+#define __get_user_unaligned_check(x,ptr,size)				\
+({									\
+	int __gu_err = -EFAULT;						\
+	const __typeof__(*(ptr)) __user * __gu_ptr = (ptr);		\
+									\
+	if (likely(access_ok(VERIFY_READ,  __gu_ptr, size)))		\
+		__get_user_unaligned_common((x), size, __gu_ptr);	\
+									\
+	__gu_err;							\
+})
+
+#define __get_data_unaligned_asm(val, insn, addr)			\
+{									\
+	long __gu_tmp;							\
+									\
+	__asm__ __volatile__(						\
+	"1:	" insn "	%1, %3				\n"	\
+	"2:							\n"	\
+	"	.insn						\n"	\
+	"	.section .fixup,\"ax\"				\n"	\
+	"3:	li	%0, %4					\n"	\
+	"	move	%1, $0					\n"	\
+	"	j	2b					\n"	\
+	"	.previous					\n"	\
+	"	.section __ex_table,\"a\"			\n"	\
+	"	"__UA_ADDR "\t1b, 3b				\n"	\
+	"	"__UA_ADDR "\t1b + 4, 3b			\n"	\
+	"	.previous					\n"	\
+	: "=r" (__gu_err), "=r" (__gu_tmp)				\
+	: "0" (0), "o" (__m(addr)), "i" (-EFAULT));			\
+									\
+	(val) = (__typeof__(*(addr))) __gu_tmp;				\
+}
+
+/*
+ * Get a long long 64 using 32 bit registers.
+ */
+#define __get_user_unaligned_asm_ll32(val, addr)			\
+{									\
+	unsigned long long __gu_tmp;					\
+									\
+	__asm__ __volatile__(						\
+	"1:	ulw	%1, (%3)				\n"	\
+	"2:	ulw	%D1, 4(%3)				\n"	\
+	"	move	%0, $0					\n"	\
+	"3:							\n"	\
+	"	.insn						\n"	\
+	"	.section	.fixup,\"ax\"			\n"	\
+	"4:	li	%0, %4					\n"	\
+	"	move	%1, $0					\n"	\
+	"	move	%D1, $0					\n"	\
+	"	j	3b					\n"	\
+	"	.previous					\n"	\
+	"	.section	__ex_table,\"a\"		\n"	\
+	"	" __UA_ADDR "	1b, 4b				\n"	\
+	"	" __UA_ADDR "	1b + 4, 4b			\n"	\
+	"	" __UA_ADDR "	2b, 4b				\n"	\
+	"	" __UA_ADDR "	2b + 4, 4b			\n"	\
+	"	.previous					\n"	\
+	: "=r" (__gu_err), "=&r" (__gu_tmp)				\
+	: "0" (0), "r" (addr), "i" (-EFAULT));				\
+	(val) = (__typeof__(*(addr))) __gu_tmp;				\
+}
+
+/*
+ * Yuck.  We need two variants, one for 64bit operation and one
+ * for 32 bit mode and old iron.
+ */
+#ifdef CONFIG_32BIT
+#define __PUT_USER_UNALIGNED_DW(ptr) __put_user_unaligned_asm_ll32(ptr)
+#endif
+#ifdef CONFIG_64BIT
+#define __PUT_USER_UNALIGNED_DW(ptr) __put_user_unaligned_asm("usd", ptr)
+#endif
+
+#define __put_user_unaligned_common(ptr, size)				\
+do {									\
+	switch (size) {							\
+	case 1: __put_data_asm("sb", ptr); break;			\
+	case 2: __put_user_unaligned_asm("ush", ptr); break;		\
+	case 4: __put_user_unaligned_asm("usw", ptr); break;		\
+	case 8: __PUT_USER_UNALIGNED_DW(ptr); break;			\
+	default: __put_user_unaligned_unknown(); break;			\
+} while (0)
+
+#define __put_user_unaligned_nocheck(x,ptr,size)			\
+({									\
+	__typeof__(*(ptr)) __pu_val;					\
+	int __pu_err = 0;						\
+									\
+	__pu_val = (x);							\
+	__put_user_unaligned_common(ptr, size);				\
+	__pu_err;							\
+})
+
+#define __put_user_unaligned_check(x,ptr,size)				\
+({									\
+	__typeof__(*(ptr)) __user *__pu_addr = (ptr);			\
+	__typeof__(*(ptr)) __pu_val = (x);				\
+	int __pu_err = -EFAULT;						\
+									\
+	if (likely(access_ok(VERIFY_WRITE,  __pu_addr, size)))		\
+		__put_user_unaligned_common(__pu_addr, size);		\
+									\
+	__pu_err;							\
+})
+
+#define __put_user_unaligned_asm(insn, ptr)				\
+{									\
+	__asm__ __volatile__(						\
+	"1:	" insn "	%z2, %3		# __put_user_unaligned_asm\n" \
+	"2:							\n"	\
+	"	.insn						\n"	\
+	"	.section	.fixup,\"ax\"			\n"	\
+	"3:	li	%0, %4					\n"	\
+	"	j	2b					\n"	\
+	"	.previous					\n"	\
+	"	.section	__ex_table,\"a\"		\n"	\
+	"	" __UA_ADDR "	1b, 3b				\n"	\
+	"	.previous					\n"	\
+	: "=r" (__pu_err)						\
+	: "0" (0), "Jr" (__pu_val), "o" (__m(ptr)),			\
+	  "i" (-EFAULT));						\
+}
+
+#define __put_user_unaligned_asm_ll32(ptr)				\
+{									\
+	__asm__ __volatile__(						\
+	"1:	sw	%2, (%3)	# __put_user_unaligned_asm_ll32 \n" \
+	"2:	sw	%D2, 4(%3)				\n"	\
+	"3:							\n"	\
+	"	.insn						\n"	\
+	"	.section	.fixup,\"ax\"			\n"	\
+	"4:	li	%0, %4					\n"	\
+	"	j	3b					\n"	\
+	"	.previous					\n"	\
+	"	.section	__ex_table,\"a\"		\n"	\
+	"	" __UA_ADDR "	1b, 4b				\n"	\
+	"	" __UA_ADDR "	1b + 4, 4b			\n"	\
+	"	" __UA_ADDR "	2b, 4b				\n"	\
+	"	" __UA_ADDR "	2b + 4, 4b			\n"	\
+	"	.previous"						\
+	: "=r" (__pu_err)						\
+	: "0" (0), "r" (__pu_val), "r" (ptr),				\
+	  "i" (-EFAULT));						\
+}
+
+extern void __put_user_unaligned_unknown(void);
+#endif
+
+/*
  * We're generating jump to subroutines which will be outside the range of
  * jump instructions
  */
@@ -516,7 +797,145 @@ extern void __put_user_unknown(void);
 
 extern size_t __copy_user(void *__to, const void *__from, size_t __n);
 
-#define __invoke_copy_from(func, to, from, n)				\
+#ifndef CONFIG_EVA
+#define __invoke_copy_to_user(to, from, n)				\
+({									\
+	register void __user *__cu_to_r __asm__("$4");			\
+	register const void *__cu_from_r __asm__("$5");			\
+	register long __cu_len_r __asm__("$6");				\
+									\
+	__cu_to_r = (to);						\
+	__cu_from_r = (from);						\
+	__cu_len_r = (n);						\
+	__asm__ __volatile__(						\
+	__MODULE_JAL(__copy_user)					\
+	: "+r" (__cu_to_r), "+r" (__cu_from_r), "+r" (__cu_len_r)	\
+	:								\
+	: "$8", "$9", "$10", "$11", "$12", "$14", "$15", "$24", "$31",	\
+	  DADDI_SCRATCH, "memory");					\
+	__cu_len_r;							\
+})
+
+#define __invoke_copy_to_kernel(to, from, n)				\
+	__invoke_copy_to_user(to, from, n)
+
+#endif
+
+/*
+ * __copy_to_user: - Copy a block of data into user space, with less checking.
+ * @to:	  Destination address, in user space.
+ * @from: Source address, in kernel space.
+ * @n:	  Number of bytes to copy.
+ *
+ * Context: User context only. This function may sleep if pagefaults are
+ *          enabled.
+ *
+ * Copy data from kernel space to user space.  Caller must check
+ * the specified block with access_ok() before calling this function.
+ *
+ * Returns number of bytes that could not be copied.
+ * On success, this will be zero.
+ */
+#define __copy_to_user(to, from, n)					\
+({									\
+	void __user *__cu_to;						\
+	const void *__cu_from;						\
+	long __cu_len;							\
+									\
+	__cu_to = (to);							\
+	__cu_from = (from);						\
+	__cu_len = (n);							\
+	might_fault();							\
+	if (eva_kernel_access())					\
+		__cu_len = __invoke_copy_to_kernel(__cu_to, __cu_from,	\
+						   __cu_len);		\
+	else								\
+		__cu_len = __invoke_copy_to_user(__cu_to, __cu_from,	\
+						 __cu_len);		\
+	__cu_len;							\
+})
+
+extern size_t __copy_user_inatomic(void *__to, const void *__from, size_t __n);
+
+#define __copy_to_user_inatomic(to, from, n)				\
+({									\
+	void __user *__cu_to;						\
+	const void *__cu_from;						\
+	long __cu_len;							\
+									\
+	__cu_to = (to);							\
+	__cu_from = (from);						\
+	__cu_len = (n);							\
+	if (eva_kernel_access())					\
+		__cu_len = __invoke_copy_to_kernel(__cu_to, __cu_from,	\
+						   __cu_len);		\
+	else								\
+		__cu_len = __invoke_copy_to_user(__cu_to, __cu_from,	\
+						 __cu_len);		\
+	__cu_len;							\
+})
+
+#define __copy_from_user_inatomic(to, from, n)				\
+({									\
+	void *__cu_to;							\
+	const void __user *__cu_from;					\
+	long __cu_len;							\
+									\
+	__cu_to = (to);							\
+	__cu_from = (from);						\
+	__cu_len = (n);							\
+	if (eva_kernel_access())					\
+		__cu_len = __invoke_copy_from_kernel_inatomic(__cu_to,	\
+							      __cu_from,\
+							      __cu_len);\
+	else								\
+		__cu_len = __invoke_copy_from_user_inatomic(__cu_to,	\
+							    __cu_from,	\
+							    __cu_len);	\
+	__cu_len;							\
+})
+
+/*
+ * copy_to_user: - Copy a block of data into user space.
+ * @to:	  Destination address, in user space.
+ * @from: Source address, in kernel space.
+ * @n:	  Number of bytes to copy.
+ *
+ * Context: User context only. This function may sleep if pagefaults are
+ *          enabled.
+ *
+ * Copy data from kernel space to user space.
+ *
+ * Returns number of bytes that could not be copied.
+ * On success, this will be zero.
+ */
+#define copy_to_user(to, from, n)					\
+({									\
+	void __user *__cu_to;						\
+	const void *__cu_from;						\
+	long __cu_len;							\
+									\
+	__cu_to = (to);							\
+	__cu_from = (from);						\
+	__cu_len = (n);							\
+	if (eva_kernel_access()) {					\
+		__cu_len = __invoke_copy_to_kernel(__cu_to,		\
+						   __cu_from,		\
+						   __cu_len);		\
+	} else {							\
+		if (access_ok(VERIFY_WRITE, __cu_to, __cu_len)) {       \
+			might_fault();                                  \
+			__cu_len = __invoke_copy_to_user(__cu_to,	\
+							 __cu_from,	\
+							 __cu_len);     \
+		}							\
+	}								\
+	__cu_len;							\
+})
+
+#ifndef CONFIG_EVA
+
+#define __invoke_copy_from_user(to, from, n)				\
 ({									\
 	register void *__cu_to_r __asm__("$4");				\
 	register const void __user *__cu_from_r __asm__("$5");		\
@@ -580,11 +999,54 @@ extern size_t __copy_user(void *__to, const void *__from, size_t __n);
 
 /* EVA specific functions */
 
+extern size_t __copy_user_inatomic_eva(void *__to, const void *__from,
+				       size_t __n);
 extern size_t __copy_from_user_eva(void *__to, const void *__from,
 				   size_t __n);
 extern size_t __copy_to_user_eva(void *__to, const void *__from,
 				 size_t __n);
 extern size_t __copy_in_user_eva(void *__to, const void *__from, size_t __n);
+
+#define __invoke_copy_from_user_eva_generic(to, from, n, func_ptr)	\
+({									\
+	register void *__cu_to_r __asm__("$4");				\
+	register const void __user *__cu_from_r __asm__("$5");		\
+	register long __cu_len_r __asm__("$6");				\
+									\
+	__cu_to_r = (to);						\
+	__cu_from_r = (from);						\
+	__cu_len_r = (n);						\
+	__asm__ __volatile__(						\
+	".set\tnoreorder\n\t"						\
+	__MODULE_JAL(func_ptr)						\
+	".set\tnoat\n\t"						\
+	__UA_ADDU "\t$1, %1, %2\n\t"					\
+	".set\tat\n\t"							\
+	".set\treorder"							\
+	: "+r" (__cu_to_r), "+r" (__cu_from_r), "+r" (__cu_len_r)	\
+	:								\
+	: "$8", "$9", "$10", "$11", "$12", "$14", "$15", "$24", "$31",	\
+	  DADDI_SCRATCH, "memory");					\
+	__cu_len_r;							\
+})
+
+#define __invoke_copy_to_user_eva_generic(to, from, n, func_ptr)	\
+({									\
+	register void *__cu_to_r __asm__("$4");				\
+	register const void __user *__cu_from_r __asm__("$5");		\
+	register long __cu_len_r __asm__("$6");				\
+									\
+	__cu_to_r = (to);						\
+	__cu_from_r = (from);						\
+	__cu_len_r = (n);						\
+	__asm__ __volatile__(						\
+	__MODULE_JAL(func_ptr)						\
+	: "+r" (__cu_to_r), "+r" (__cu_from_r), "+r" (__cu_len_r)	\
+	:								\
+	: "$8", "$9", "$10", "$11", "$12", "$14", "$15", "$24", "$31",	\
+	  DADDI_SCRATCH, "memory");					\
+	__cu_len_r;							\
+})
 
 /*
  * Source or destination address is in userland. We need to go through
@@ -787,5 +1249,13 @@ static inline long strnlen_user(const char __user *s, long n)
 
 	return res;
 }
+
+struct exception_table_entry
+{
+	unsigned long insn;
+	unsigned long nextinsn;
+};
+
+extern int fixup_exception(struct pt_regs *regs);
 
 #endif /* _ASM_UACCESS_H */
