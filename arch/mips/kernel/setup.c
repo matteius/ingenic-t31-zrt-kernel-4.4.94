@@ -88,7 +88,6 @@ EXPORT_SYMBOL(mips_io_port_base);
 
 static struct resource code_resource = { .name = "Kernel code", };
 static struct resource data_resource = { .name = "Kernel data", };
-static struct resource bss_resource = { .name = "Kernel bss", };
 
 static void *detect_magic __initdata = detect_memory_region;
 
@@ -731,7 +730,7 @@ static void __init resource_init(void)
 		if (end >= HIGHMEM_START)
 			end = HIGHMEM_START - 1;
 
-		res = alloc_bootmem(sizeof(struct resource));
+        res = memblock_alloc(sizeof(struct resource), SMP_CACHE_BYTES);
 		switch (boot_mem_map.map[i].type) {
 		case BOOT_MEM_RAM:
 		case BOOT_MEM_INIT_RAM:
