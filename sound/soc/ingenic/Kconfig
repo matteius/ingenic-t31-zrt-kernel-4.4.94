@@ -147,4 +147,3 @@ endmenu
 
 endif
 
-source sound/soc/ingenic/ecodec/Kconfig
