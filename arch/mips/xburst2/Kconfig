@@ -37,18 +37,21 @@ config SOC_X2000_V12
 
 endchoice
 
+
 choice
-	prompt "device tree select"
-	default DT_NONE
-config DT_NONE
+    prompt "device tree select"
+    default DT_NONE
 
-if SOC_T40
-source "arch/mips/xburst2/soc-t40/Kconfig.DT"
-endif
+    config DT_NONE
+        bool "No device tree"
 
-if SOC_X2000_V12
-source "arch/mips/xburst2/soc-x2000-v12/Kconfig.DT"
-endif
+    if SOC_T40
+        source "arch/mips/xburst2/soc-t40/Kconfig.DT"
+    endif
+
+    if SOC_X2000_V12
+        source "arch/mips/xburst2/soc-x2000-v12/Kconfig.DT"
+    endif
 
 endchoice
 

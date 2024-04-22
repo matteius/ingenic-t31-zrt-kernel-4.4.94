@@ -14,7 +14,7 @@ config INGENIC_MAC_DMA_INTERFACES
 choice
 	prompt "Ingenic mac dma bus interfaces"
 	depends on INGENIC_MAC_DMA_INTERFACES
-	default CONFIG_INGENIC_MAC_AHB_BUS
+	default INGENIC_MAC_AHB_BUS
 
 config INGENIC_MAC_AXI_BUS
 	bool "MAC_AXI_BUS"
