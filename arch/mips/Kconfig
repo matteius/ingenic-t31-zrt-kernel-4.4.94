@@ -3071,8 +3071,6 @@ config HZ
 config SCHED_HRTICK
 	def_bool HIGH_RES_TIMERS
 
-source "kernel/Kconfig.preempt"
-
 config KEXEC
 	bool "Kexec system call"
 	select KEXEC_CORE
@@ -3308,10 +3306,6 @@ config HT_PCI
 config PCI_DOMAINS
 	bool
 
-source "drivers/pci/Kconfig"
-
-source "drivers/pci/pcie/Kconfig"
-
 #
 # ISA support is now enabled via select.  Too many systems still have the one
 # or other ISA chip on the board that users don't know about so don't expect
@@ -3319,26 +3313,6 @@ source "drivers/pci/pcie/Kconfig"
 #
 config ISA
 	bool
-
-config EISA
-	bool "EISA support"
-	depends on HW_HAS_EISA
-	select ISA
-	select GENERIC_ISA_DMA
-	---help---
-	  The Extended Industry Standard Architecture (EISA) bus was
-	  developed as an open alternative to the IBM MicroChannel bus.
-
-	  The EISA bus provided some of the features of the IBM MicroChannel
-	  bus while maintaining backward compatibility with cards made for
-	  the older ISA bus.  The EISA bus saw limited use between 1988 and
-	  1995 when it was made obsolete by the PCI bus.
-
-	  Say Y here if you are building a kernel for an EISA-based machine.
-
-	  Otherwise, say N.
-
-source "drivers/eisa/Kconfig"
 
 config TC
 	bool "TURBOchannel support"
@@ -3383,25 +3357,7 @@ config ZONE_DMA
 config ZONE_DMA32
 	bool
 
-source "drivers/pcmcia/Kconfig"
-
-source "drivers/pci/hotplug/Kconfig"
-
-config RAPIDIO
-	tristate "RapidIO support"
-	depends on PCI
-	default n
-	help
-	  If you say Y here, the kernel will include drivers and
-	  infrastructure code to support RapidIO interconnect devices.
-
-source "drivers/rapidio/Kconfig"
-
 endmenu
-
-menu "Executable file formats"
-
-source "fs/Kconfig.binfmt"
 
 config TRAD_SIGNALS
 	bool
@@ -3448,7 +3404,7 @@ config BINFMT_ELF32
 	bool
 	default y if MIPS32_O32 || MIPS32_N32
 	select ELFCORE
-endmenu
+
 
 menu "Power management options"
 
