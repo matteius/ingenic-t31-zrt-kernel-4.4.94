@@ -47,26 +47,25 @@ config SOC_T31
 
 endchoice
 
+
 choice
-    prompt "device tree select"
-    default DT_NONE
+	prompt "device tree select"
+	default DT_NONE
+config DT_NONE
 
-    config DT_NONE
-        bool "No device tree"
+if SOC_X1000
+source "arch/mips/xburst/soc-x1000/Kconfig.DT"
+endif
 
-    if SOC_X1000
-        source "arch/mips/xburst/soc-x1000/Kconfig.DT"
-    endif
+if SOC_X1800
+source "arch/mips/xburst/soc-x1800/Kconfig.DT"
+endif
 
-    if SOC_X1800
-        source "arch/mips/xburst/soc-x1800/Kconfig.DT"
-    endif
+if SOC_T31
+source "arch/mips/xburst/soc-t31/Kconfig.DT"
+endif
 
-    if SOC_T31
-        source "arch/mips/xburst/soc-t31/Kconfig.DT"
-    endif
 endchoice
-
 
 config KERNEL_4_4_94
 	bool "kernel version 4.4.94"
