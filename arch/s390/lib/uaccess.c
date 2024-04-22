@@ -170,7 +170,7 @@ unsigned long raw_copy_from_user(void *to, const void __user *from, unsigned lon
 		return copy_from_user_mvcos(to, from, n);
 	return copy_from_user_mvcp(to, from, n);
 }
-EXPORT_SYMBOL(raw_copy_from_user);
+//EXPORT_SYMBOL(raw_copy_from_user);
 
 static inline unsigned long copy_to_user_mvcos(void __user *ptr, const void *x,
 					       unsigned long size)
@@ -245,7 +245,7 @@ unsigned long raw_copy_to_user(void __user *to, const void *from, unsigned long 
 		return copy_to_user_mvcos(to, from, n);
 	return copy_to_user_mvcs(to, from, n);
 }
-EXPORT_SYMBOL(raw_copy_to_user);
+//EXPORT_SYMBOL(raw_copy_to_user);
 
 static inline unsigned long copy_in_user_mvcos(void __user *to, const void __user *from,
 					       unsigned long size)

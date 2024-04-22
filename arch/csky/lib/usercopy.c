@@ -13,7 +13,7 @@ unsigned long raw_copy_from_user(void *to, const void *from,
 		memset(to, 0, n);
 	return n;
 }
-EXPORT_SYMBOL(raw_copy_from_user);
+// EXPORT_SYMBOL(raw_copy_from_user);
 
 unsigned long raw_copy_to_user(void *to, const void *from,
 			unsigned long n)
@@ -22,7 +22,7 @@ unsigned long raw_copy_to_user(void *to, const void *from,
 		__copy_user(to, from, n);
 	return n;
 }
-EXPORT_SYMBOL(raw_copy_to_user);
+// EXPORT_SYMBOL(raw_copy_to_user);
 
 
 /*

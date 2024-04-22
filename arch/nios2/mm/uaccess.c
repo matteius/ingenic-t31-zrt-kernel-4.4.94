@@ -65,7 +65,7 @@ asm(".global	raw_copy_from_user\n"
 	".word 7b,13b\n"
 	".previous\n"
 	);
-EXPORT_SYMBOL(raw_copy_from_user);
+// EXPORT_SYMBOL(raw_copy_from_user);
 
 asm(
 	"   .global raw_copy_to_user\n"
@@ -127,4 +127,4 @@ asm(
 	".word 11b,13b\n"
 	".word 12b,13b\n"
 	".previous\n");
-EXPORT_SYMBOL(raw_copy_to_user);
+//EXPORT_SYMBOL(raw_copy_to_user);

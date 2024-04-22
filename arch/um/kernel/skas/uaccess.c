@@ -148,7 +148,7 @@ unsigned long raw_copy_from_user(void *to, const void __user *from, unsigned lon
 
 	return buffer_op((unsigned long) from, n, 0, copy_chunk_from_user, &to);
 }
-EXPORT_SYMBOL(raw_copy_from_user);
+//EXPORT_SYMBOL(raw_copy_from_user);
 
 static int copy_chunk_to_user(unsigned long to, int len, void *arg)
 {
@@ -168,7 +168,7 @@ unsigned long raw_copy_to_user(void __user *to, const void *from, unsigned long 
 
 	return buffer_op((unsigned long) to, n, 1, copy_chunk_to_user, &from);
 }
-EXPORT_SYMBOL(raw_copy_to_user);
+//EXPORT_SYMBOL(raw_copy_to_user);
 
 static int strncpy_chunk_from_user(unsigned long from, int len, void *arg)
 {
