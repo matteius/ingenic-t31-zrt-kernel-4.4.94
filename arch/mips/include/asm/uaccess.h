@@ -893,7 +893,7 @@ raw_copy_to_user(void *to, const void __user *from, unsigned long n)
 	else
 		return __invoke_copy_to_user(to, from, n);
 }
-EXPORT_SYMBOL(raw_copy_to_user);
+// EXPORT_SYMBOL(raw_copy_to_user);
 
 
 static inline unsigned long
@@ -904,7 +904,7 @@ raw_copy_from_user(void *to, const void __user *from, unsigned long n)
 	else
 		return __invoke_copy_from_user(to, from, n);
 }
-EXPORT_SYMBOL(raw_copy_from_user);
+// EXPORT_SYMBOL(raw_copy_from_user);
 
 #define INLINE_COPY_FROM_USER
 #define INLINE_COPY_TO_USER
