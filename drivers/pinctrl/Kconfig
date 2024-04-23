@@ -313,6 +313,8 @@ config PINCTRL_INGENIC
 	depends on OF
 	depends on MACH_INGENIC || COMPILE_TEST
 	select GENERIC_PINCONF
+        select PINMUX
+	select PINCONF
 	select GENERIC_PINCTRL_GROUPS
 	select GENERIC_PINMUX_FUNCTIONS
 	select REGMAP_MMIO

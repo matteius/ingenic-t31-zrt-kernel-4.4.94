@@ -88,3 +88,6 @@ obj-$(CONFIG_GOLDFISH_PIC) 		+= irq-goldfish-pic.o
 obj-$(CONFIG_NDS32)			+= irq-ativic32.o
 obj-$(CONFIG_QCOM_PDC)			+= qcom-pdc.o
 obj-$(CONFIG_SIFIVE_PLIC)		+= irq-sifive-plic.o
+obj-$(CONFIG_INGENIC_INTC)		+= irq-ingenic.o
+obj-$(CONFIG_IRQ_INGENIC_CPU)		+= irq-ingenic-cpu.o
+obj-$(CONFIG_INGENIC_INTC_CHIP)		+= irq-ingenic-chip.o

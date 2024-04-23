@@ -485,6 +485,17 @@ config VEXPRESS_SYSCFG
 	  bus. System Configuration interface is one of the possible means
 	  of generating transactions on this bus.
 
+config INGENIC_RSA
+	bool "JZ RSA Driver"
+	depends on MACH_XBURST2
+	help
+		this driver is used to Encrypt/Decrypt by RSA.
+	default n
+
+config RMEM
+	bool "Reserved memory driver(rmem)"
+	default y
+
 config ASPEED_LPC_CTRL
 	depends on (ARCH_ASPEED || COMPILE_TEST) && REGMAP && MFD_SYSCON
 	tristate "Aspeed ast2400/2500 HOST LPC to BMC bridge control"
