@@ -20,7 +20,7 @@
 #include <asm/cpu-features.h>
 #include <asm/cpu-type.h>
 #include <asm/mipsmtregs.h>
-#include <asm/uaccess.h> /* for segment_eq() */
+#include <linux/uaccess.h> /* for uaccess_kernel() */
 
 extern void (*r4k_blast_dcache)(void);
 extern void (*r4k_blast_icache)(void);
@@ -47,41 +47,6 @@ extern void (*r4k_blast_icache)(void);
 	"	.set	pop					\n"	\
 	:								\
 	: "i" (op), "R" (*(unsigned char *)(addr)))
-
-#ifdef CONFIG_MACH_XBURST
-#define __inv_btb()	\
-	do {			\
-		unsigned long tmp;		\
-		__asm__ __volatile__(		\
-				".set push\n\t"	\
-				".set noreorder\n\t"	\
-				".set mips32\n\t"	\
-				"mfc0 %0, $16, 7\n\t"	\
-				"nop\n\t"		\
-				"ori %0, 2\n\t"		\
-				"mtc0 %0, $16, 7\n\t"	\
-				"nop\n\t"		\
-				".set pop\n\t"		\
-				: "=&r" (tmp));		\
-	} while(0)
-#define __sync_wb()	__sync()
-#define __bridge_sync_war()	\
-	do {		\
-		if (MIPS_BRIDGE_SYNC_WAR)	\
-			__fast_iob();	\
-	} while (0)
-static inline void blast_inclusive_scache(void)
-{
-	__bridge_sync_war();
-}
-#else
-#define __inv_btb()	do {} while(0)
-#define __sync_wb()	do {} while(0)
-#define __bridge_sync_war() do {} while(0)
-static inline void blast_inclusive_scache(void)
-{
-}
-#endif
 
 #ifdef CONFIG_MIPS_MT
 
@@ -111,13 +76,13 @@ static inline void blast_inclusive_scache(void)
 #else /* CONFIG_MIPS_MT */
 
 #define __iflush_prologue {
-#define __iflush_epilogue __inv_btb(); }	/*CONFIG_MACH_XBURST*/
+#define __iflush_epilogue }
 #define __dflush_prologue {
-#define __dflush_epilogue __sync_wb(); }	/*CONFIG_MACH_XBURST*/
+#define __dflush_epilogue }
 #define __inv_dflush_prologue {
 #define __inv_dflush_epilogue }
 #define __sflush_prologue {
-#define __sflush_epilogue __bridge_sync_war(); }	/*CONFIG_MACH_XBURST*/
+#define __sflush_epilogue }
 #define __inv_sflush_prologue {
 #define __inv_sflush_epilogue }
 
@@ -140,7 +105,6 @@ static inline void flush_dcache_line_indexed(unsigned long addr)
 static inline void flush_scache_line_indexed(unsigned long addr)
 {
 	cache_op(Index_Writeback_Inv_SD, addr);
-	__bridge_sync_war();	/*CONFIG_MACH_XBURST*/
 }
 
 static inline void flush_icache_line(unsigned long addr)
@@ -180,54 +144,69 @@ static inline void invalidate_scache_line(unsigned long addr)
 static inline void flush_scache_line(unsigned long addr)
 {
 	cache_op(Hit_Writeback_Inv_SD, addr);
-	__bridge_sync_war();	/*CONFIG_MACH_XBURST*/
 }
 
 #define protected_cache_op(op,addr)				\
+({								\
+	int __err = 0;						\
 	__asm__ __volatile__(					\
 	"	.set	push			\n"		\
 	"	.set	noreorder		\n"		\
 	"	.set "MIPS_ISA_ARCH_LEVEL"	\n"		\
-	"1:	cache	%0, (%1)		\n"		\
-	"2:	.set	pop			\n"		\
+	"1:	cache	%1, (%2)		\n"		\
+	"2:	.insn				\n"		\
+	"	.set	pop			\n"		\
+	"	.section .fixup,\"ax\"		\n"		\
+	"3:	li	%0, %3			\n"		\
+	"	j	2b			\n"		\
+	"	.previous			\n"		\
 	"	.section __ex_table,\"a\"	\n"		\
-	"	"STR(PTR)" 1b, 2b		\n"		\
+	"	"STR(PTR)" 1b, 3b		\n"		\
 	"	.previous"					\
-	:							\
-	: "i" (op), "r" (addr))
+	: "+r" (__err)						\
+	: "i" (op), "r" (addr), "i" (-EFAULT));			\
+	__err;							\
+})
+
 
 #define protected_cachee_op(op,addr)				\
+({								\
+	int __err = 0;						\
 	__asm__ __volatile__(					\
 	"	.set	push			\n"		\
 	"	.set	noreorder		\n"		\
 	"	.set	mips0			\n"		\
 	"	.set	eva			\n"		\
-	"1:	cachee	%0, (%1)		\n"		\
-	"2:	.set	pop			\n"		\
+	"1:	cachee	%1, (%2)		\n"		\
+	"2:	.insn				\n"		\
+	"	.set	pop			\n"		\
+	"	.section .fixup,\"ax\"		\n"		\
+	"3:	li	%0, %3			\n"		\
+	"	j	2b			\n"		\
+	"	.previous			\n"		\
 	"	.section __ex_table,\"a\"	\n"		\
-	"	"STR(PTR)" 1b, 2b		\n"		\
+	"	"STR(PTR)" 1b, 3b		\n"		\
 	"	.previous"					\
-	:							\
-	: "i" (op), "r" (addr))
+	: "+r" (__err)						\
+	: "i" (op), "r" (addr), "i" (-EFAULT));			\
+	__err;							\
+})
 
 /*
  * The next two are for badland addresses like signal trampolines.
  */
-static inline void protected_flush_icache_line(unsigned long addr)
+static inline int protected_flush_icache_line(unsigned long addr)
 {
 	switch (boot_cpu_type()) {
 	case CPU_LOONGSON2:
-		protected_cache_op(Hit_Invalidate_I_Loongson2, addr);
-		break;
+		return protected_cache_op(Hit_Invalidate_I_Loongson2, addr);
 
 	default:
 #ifdef CONFIG_EVA
-		protected_cachee_op(Hit_Invalidate_I, addr);
+		return protected_cachee_op(Hit_Invalidate_I, addr);
 #else
-		protected_cache_op(Hit_Invalidate_I, addr);
+		return protected_cache_op(Hit_Invalidate_I, addr);
 #endif
-		__inv_btb();	/*CONFIG_MACH_XBURST*/
-		break;
 	}
 }
 
@@ -237,21 +216,22 @@ static inline void protected_flush_icache_line(unsigned long addr)
  * caches.  We're talking about one cacheline unnecessarily getting invalidated
  * here so the penalty isn't overly hard.
  */
-static inline void protected_writeback_dcache_line(unsigned long addr)
+static inline int protected_writeback_dcache_line(unsigned long addr)
 {
 #ifdef CONFIG_EVA
-	protected_cachee_op(Hit_Writeback_Inv_D, addr);
+	return protected_cachee_op(Hit_Writeback_Inv_D, addr);
 #else
-	protected_cache_op(Hit_Writeback_Inv_D, addr);
+	return protected_cache_op(Hit_Writeback_Inv_D, addr);
 #endif
-	__sync_wb();	/*CONFIG_MACH_XBURST*/
 }
 
-static inline void protected_writeback_scache_line(unsigned long addr)
+static inline int protected_writeback_scache_line(unsigned long addr)
 {
-	protected_cache_op(Hit_Writeback_Inv_SD, addr);
-
-	__bridge_sync_war();	/*CONFIG_MACH_XBURST*/
+#ifdef CONFIG_EVA
+	return protected_cachee_op(Hit_Writeback_Inv_SD, addr);
+#else
+	return protected_cache_op(Hit_Writeback_Inv_SD, addr);
+#endif
 }
 
 /*
@@ -734,7 +714,7 @@ static inline void protected_blast_##pfx##cache##_range(unsigned long start,\
 									\
 	__##pfx##flush_prologue						\
 									\
-	if (segment_eq(get_fs(), USER_DS)) {				\
+	if (!uaccess_kernel()) {					\
 		while (1) {						\
 			protected_cachee_op(hitop, addr);		\
 			if (addr == aend)				\

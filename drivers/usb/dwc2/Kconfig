@@ -1,6 +1,8 @@
 config USB_DWC2
 	tristate "DesignWare USB2 DRD Core Support"
+	depends on HAS_DMA
 	depends on USB || USB_GADGET
+	depends on HAS_IOMEM
 	help
 	  Say Y here if your system has a Dual Role Hi-Speed USB
 	  controller based on the DesignWare HSOTG IP Core.
@@ -50,25 +52,10 @@ config USB_DWC2_DUAL_ROLE
 	  option requires USB_GADGET to be enabled.
 endchoice
 
-
-choice
-	bool "DWC2 DMA Mode Selection"
-	default USB_DWC2_DMA_BUFFER_MODE
-config USB_DWC2_DMA_BUFFER_MODE
-	bool "dma buffer mode"
-
-config USB_DWC2_DMA_DESCRIPTOR_MODE
-	bool "dma descriptor mode"
-endchoice
-
-config USB_DWC2_HIGHWIDTH_FIFO
-	bool "Enable usb dwc2 highwidth fifo"
-	help
-	  Say Y here to enable debugging messages in the DWC2 Driver.
-
 config USB_DWC2_PCI
 	tristate "DWC2 PCI"
-	depends on PCI
+	depends on USB_PCI
+	depends on USB_GADGET || !USB_GADGET
 	default n
 	select NOP_USB_XCEIV
 	help
