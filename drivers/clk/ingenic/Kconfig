@@ -2,7 +2,6 @@ config COMMON_CLK_INGENIC
 	bool
 	depends on MACH_XBURST || MACH_XBURST2
 	select MFD_SYSCON
-	select COMMON_CLK
 	select INGENIC_CLK_DEBUG_FS
 
 config INGENIC_CLK_DEBUG_FS

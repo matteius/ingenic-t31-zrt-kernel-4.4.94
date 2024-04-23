@@ -11,8 +11,8 @@ config HAVE_MACH_CLKDEV
 
 config COMMON_CLK
 	bool "common clk"
-    default y
-    select HAVE_CLK_PREPARE
+        default y
+        select HAVE_CLK_PREPARE
 	select CLKDEV_LOOKUP
 	select SRCU
 	select RATIONAL
