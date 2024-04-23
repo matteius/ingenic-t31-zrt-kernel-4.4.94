@@ -641,4 +641,3 @@ config CLKSRC_INGENIC_CORE_OST
 
 endmenu
 
-endmenu
