@@ -608,26 +608,60 @@ extern size_t __copy_in_user_eva(void *__to, const void *__from, size_t __n);
 
 #endif /* CONFIG_EVA */
 
+#ifndef CONFIG_EVA
 static inline unsigned long
-raw_copy_to_user(void __user *to, const void *from, unsigned long n)
+__copy_user_inatomic(void __user *to, const void *from, unsigned long n)
 {
-	if (eva_kernel_access())
-		return __invoke_copy_to_kernel(to, from, n);
-	else
-		return __invoke_copy_to_user(to, from, n);
+return __invoke_copy_to_user(to, from, n);
 }
-EXPORT_SYMBOL(raw_copy_to_user);
 
+static inline unsigned long
+__copy_user_inatomic_nocache(void __user *to, const void *from, unsigned long n)
+{
+return __invoke_copy_to_user(to, from, n);
+}
 
 static inline unsigned long
 raw_copy_from_user(void *to, const void __user *from, unsigned long n)
 {
-	if (eva_kernel_access())
-		return __invoke_copy_from_kernel(to, from, n);
-	else
-		return __invoke_copy_from_user(to, from, n);
+return __invoke_copy_from_user(to, from, n);
 }
-EXPORT_SYMBOL(raw_copy_from_user);
+
+static inline unsigned long
+raw_copy_to_user(void __user *to, const void *from, unsigned long n)
+{
+return __invoke_copy_to_user(to, from, n);
+}
+
+#else
+
+/* EVA specific functions */
+
+static inline unsigned long
+__copy_user_inatomic(void __user *to, const void *from, unsigned long n)
+{
+    return __invoke_copy_to_kernel(to, from, n);
+}
+
+static inline unsigned long
+__copy_user_inatomic_nocache(void __user *to, const void *from, unsigned long n)
+{
+    return __invoke_copy_to_kernel(to, from, n);
+}
+
+static inline unsigned long
+raw_copy_from_user(void *to, const void __user *from, unsigned long n)
+{
+    return __invoke_copy_from_kernel(to, from, n);
+}
+
+static inline unsigned long
+raw_copy_to_user(void __user *to, const void *from, unsigned long n)
+{
+    return __invoke_copy_to_kernel(to, from, n);
+}
+
+#endif /* CONFIG_EVA */
 
 #define INLINE_COPY_FROM_USER
 #define INLINE_COPY_TO_USER
