@@ -175,27 +175,26 @@ static void ingenic_gpio_set_pull(struct ingenic_gpio_chip *chip,
 
 static int ingenic_gpio_get_pull_state(struct ingenic_gpio_chip *chip, u32 pins)
 {
-	unsigned int pull_down = 0;
-	unsigned int pull_up = 0;
-	int state = 0;
+    unsigned int pull_down = 0;
+    unsigned int pull_up = 0;
+    int state = 0;
 
-	pull_down = (ingenic_gpio_readl(chip, PxPDEN) & BIT(pins)) >> pins;
-	pull_up = (ingenic_gpio_readl(chip, PxPUEN) & BIT(pins)) >> pins;
+    pull_down = (ingenic_gpio_readl(chip, PxPDEN) & BIT(pins)) >> pins;
+    pull_up = (ingenic_gpio_readl(chip, PxPUEN) & BIT(pins)) >> pins;
 
-	if(pull_down && pull_up) {
-		dev_warn(chip->gc.dev, "Set both pull_up and pull_down on %s %d\n", chip->name, pins);
-	}
+    if (pull_down && pull_up) {
+        dev_warn(chip->gc.parent, "Set both pull_up and pull_down on %s %d\n", chip->name, pins);
+    }
 
-	if(pull_down) {
-		state = INGENIC_GPIO_PULLDOWN;
-	} else if(pull_up) {
-		state = INGENIC_GPIO_PULLUP;
-	} else {
-		state = INGENIC_GPIO_HIZ;
-	}
+    if (pull_down) {
+        state = INGENIC_GPIO_PULLDOWN;
+    } else if (pull_up) {
+        state = INGENIC_GPIO_PULLUP;
+    } else {
+        state = INGENIC_GPIO_HIZ;
+    }
 
-	return state;
-
+    return state;
 }
 
 /*************************************************************
@@ -526,26 +525,25 @@ static int ingenic_gpio_to_irq(struct gpio_chip *chip,
 }
 static int ingenic_gpio_request(struct gpio_chip *chip, unsigned offset)
 {
-	struct ingenic_gpio_chip *jzgc = gc_to_ingenic_gc(chip);
-	unsigned gpio = chip->base + offset;
+    struct ingenic_gpio_chip *jzgc = gc_to_ingenic_gc(chip);
+    unsigned gpio = chip->base + offset;
 
-	if(jzgc->used_pins_bitmap & (1 << offset)) {
-		printk("%s: GP:%s  used_pins_bitmap: 0X%08X\n", __func__, jzgc->name, jzgc->used_pins_bitmap);
-		printk("current gpio request pin: chip->name %s, gpio: 0X%08X\n", chip->of_node->name, 1 << offset);
-		dump_stack();
-		printk("%s:gpio functions has redefinition\n", __FILE__);
-	}
+    if (jzgc->used_pins_bitmap & (1 << offset)) {
+        printk("%s: GP:%s  used_pins_bitmap: 0X%08X\n", __func__, jzgc->name, jzgc->used_pins_bitmap);
+        printk("current gpio request pin: chip->name %s, gpio: 0X%08X\n", chip->of_node->name, 1 << offset);
+        dump_stack();
+        printk("%s:gpio functions has redefinition\n", __FILE__);
+    }
 
-	jzgc->used_pins_bitmap |= 1 << offset;
+    jzgc->used_pins_bitmap |= 1 << offset;
 
-	return pinctrl_request_gpio(gpio);
+    return 0;
 }
+
 static void ingenic_gpio_free(struct gpio_chip *chip, unsigned offset)
 {
-	struct ingenic_gpio_chip *jzgc = gc_to_ingenic_gc(chip);
-	unsigned gpio = chip->base + offset;
-	pinctrl_free_gpio(gpio);
-	jzgc->used_pins_bitmap &= ~(1 << offset);
+    struct ingenic_gpio_chip *jzgc = gc_to_ingenic_gc(chip);
+    jzgc->used_pins_bitmap &= ~(1 << offset);
 }
 
 static const struct gpio_chip ingenic_gpiolib_chip = {
@@ -634,7 +632,7 @@ static int ingenic_gpio_chip_add(struct ingenic_pinctrl *pctl,
 	gc->ngpio = (u16)ngpio;
 	gc->of_node = np;
 	gc->base = base;
-	gc->dev = pctl->dev;
+	gc->parent = pctl->dev;
 	gc->label = jzgc->name;
 	gc->of_xlate = ingenic_of_gpio_xlate;
 
@@ -1109,11 +1107,10 @@ static int ingenic_pinmux_gpio_set_dir(struct pinctrl_dev *pctldev,
 }
 
 static const struct pinmux_ops ingenic_pinmux_ops = {
-	.get_functions_count    = ingenic_pinmux_get_functions_count,
-	.get_function_name      = ingenic_pinmux_get_function_name,
-	.get_function_groups    = ingenic_pinmux_get_groups,
-	.set_mux		= ingenic_pinmux_enable,
-	.gpio_set_direction	= ingenic_pinmux_gpio_set_dir,
+        .get_functions_count    = ingenic_pinmux_get_functions_count,
+        .get_function_name      = ingenic_pinmux_get_function_name,
+        .get_function_groups    = ingenic_pinmux_get_groups,
+        .set_mux                = ingenic_pinmux_enable,
 };
 
 static int ingenic_pinconf_get(struct pinctrl_dev *pctldev,
@@ -1264,10 +1261,10 @@ static int ingenic_pinconf_group_get(struct pinctrl_dev *pctldev,
 
 
 static const struct pinconf_ops ingenic_pinconf_ops = {
-	.pin_config_get   	= ingenic_pinconf_get,
-	.pin_config_set   	= ingenic_pinconf_set,
-	.pin_config_group_get	= ingenic_pinconf_group_get,
-	.pin_config_group_set	= ingenic_pinconf_group_set,
+        .pin_config_get         = ingenic_pinconf_get,
+        .pin_config_set         = ingenic_pinconf_set,
+        .pin_config_group_get   = ingenic_pinconf_group_get,
+        .pin_config_group_set   = ingenic_pinconf_group_set,
 };
 
 static int ingenic_init_group(struct device *dev, struct device_node *np,
