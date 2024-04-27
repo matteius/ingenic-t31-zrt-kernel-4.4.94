@@ -17,6 +17,7 @@
 #include <asm/fw/fw.h>
 #include <asm/io.h>
 #include <linux/kernel.h>
+#include <asm/mach-types.h>
 #ifdef CONFIG_XBURST_MXUV2
 #include <asm/current.h>
 #include <linux/sched.h>
@@ -34,7 +35,7 @@ void __init prom_init(void)
 		_fw_fdt_addr = phys_to_virt(fw_arg2);
 	else if ((int)fw_arg0 == -2)	/*UHI*/
 		_fw_fdt_addr = (void *)fw_arg1;
-	else if (__dtb_start != __dtb_end)
+    else if (&__dtb_start[0] != &__dtb_end[0])
 		_fw_fdt_addr = __dtb_start;
 	else
 		panic("no dtb found!\n");
