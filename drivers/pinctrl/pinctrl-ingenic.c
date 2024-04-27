@@ -612,8 +612,8 @@ static int ingenic_gpio_chip_add(struct ingenic_pinctrl *pctl,
     jzgc->gc = ingenic_gpiolib_chip;
     snprintf(jzgc->name, sizeof(jzgc->name), "GP%c", 'A' + idx);
 
-    if (of_property_read_u32(np, "ingenic,num-gpios", &ngpio))
-        ngpio = MAX_GPIOS_ON_CHIP;
+    //if (of_property_read_u32(np, "ingenic,num-gpios", &ngpio))
+    ngpio = MAX_GPIOS_ON_CHIP;
     if (of_property_read_u32(np, "ingenic,filter-gpios", &jzgc->filter_bitmap))
         jzgc->filter_bitmap = 0;
     if (of_property_read_u32(np, "ingenic,pull-gpios", &jzgc->pull_bitmap))

@@ -10,18 +10,6 @@
 	compatible = "generic,wyze_v3", "ingenic,t31";
 };
 
-&gpa {
-	ingenic,num-gpios = <32>;
-};
-
-&gpb {
-	ingenic,num-gpios = <32>;
-};
-
-&gpc {
-	ingenic,num-gpios = <32>;
-};
-
 &uart0 {
 	status = "disabled";
 };

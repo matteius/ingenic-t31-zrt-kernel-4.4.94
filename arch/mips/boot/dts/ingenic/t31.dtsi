@@ -168,7 +168,6 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
-				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
@@ -183,7 +182,6 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
-				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
@@ -198,7 +196,6 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
-				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
