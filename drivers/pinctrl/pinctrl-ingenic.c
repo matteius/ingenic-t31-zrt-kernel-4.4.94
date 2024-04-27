@@ -1107,10 +1107,16 @@ static int ingenic_pinmux_gpio_set_dir(struct pinctrl_dev *pctldev,
 }
 
 static const struct pinmux_ops ingenic_pinmux_ops = {
-        .get_functions_count    = ingenic_pinmux_get_functions_count,
-        .get_function_name      = ingenic_pinmux_get_function_name,
-        .get_function_groups    = ingenic_pinmux_get_groups,
-        .set_mux                = ingenic_pinmux_enable,
+        .request = NULL,
+        .free = NULL,
+        .get_functions_count = ingenic_pinmux_get_functions_count,
+        .get_function_name = ingenic_pinmux_get_function_name,
+        .get_function_groups = ingenic_pinmux_get_groups,
+        .set_mux = ingenic_pinmux_enable,
+        .gpio_request_enable = NULL,
+        .gpio_disable_free = NULL,
+        .gpio_set_direction = ingenic_pinmux_gpio_set_dir,
+        .strict = false,
 };
 
 
@@ -1278,11 +1284,16 @@ static int ingenic_pinconf_group_set(struct pinctrl_dev *pctldev,
 }
 
 static const struct pinconf_ops ingenic_pinconf_ops = {
-        .is_generic             = true,
-        .pin_config_get         = ingenic_pinconf_get,
-        .pin_config_set         = ingenic_pinconf_set,
-        .pin_config_group_get   = ingenic_pinconf_group_get,
-        .pin_config_group_set   = ingenic_pinconf_group_set,
+#ifdef CONFIG_GENERIC_PINCONF
+        .is_generic = true,
+#endif
+        .pin_config_get = ingenic_pinconf_get,
+        .pin_config_set = ingenic_pinconf_set,
+        .pin_config_group_get = ingenic_pinconf_group_get,
+        .pin_config_group_set = ingenic_pinconf_group_set,
+        .pin_config_dbg_show = NULL,
+        .pin_config_group_dbg_show = NULL,
+        .pin_config_config_dbg_show = NULL,
 };
 
 static int ingenic_init_group(struct device *dev, struct device_node *np,
