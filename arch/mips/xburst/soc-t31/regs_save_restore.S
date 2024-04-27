@@ -109,8 +109,7 @@ nop
 .set   reorder
 .set   pop
 .cfi_endproc
-        END(save_goto)
-
+.end save_goto
 .text
 .global restore_goto
 .align 2
@@ -188,4 +187,4 @@ nop
 .set   reorder
 .set   pop
 .cfi_endproc
-        END(restore_goto)
+.end restore_goto
