@@ -1269,12 +1269,18 @@ static int ingenic_pinconf_group_get(struct pinctrl_dev *pctldev,
 
 
 static const struct pinconf_ops ingenic_pinconf_ops = {
-        .pin_config_get   	= ingenic_pinconf_get,
-        .pin_config_set   	= ingenic_pinconf_set,
-        .pin_config_group_get	= ingenic_pinconf_group_get,
-        .pin_config_group_set	= ingenic_pinconf_group_set,
+#ifdef CONFIG_GENERIC_PINCONF
+        .is_generic = false,
+#endif
+        .pin_config_get           = ingenic_pinconf_get,
+        .pin_config_set           = ingenic_pinconf_set,
+        .pin_config_group_get     = ingenic_pinconf_group_get,
+        .pin_config_group_set     = ingenic_pinconf_group_set,
+        .pin_config_dbg_parse_modify = NULL,
+        .pin_config_dbg_show      = NULL,
+        .pin_config_group_dbg_show = NULL,
+        .pin_config_config_dbg_show = NULL,
 };
-
 static int ingenic_init_group(struct device *dev, struct device_node *np,
                               struct ingenic_pinctrl_group *grp)
 {
