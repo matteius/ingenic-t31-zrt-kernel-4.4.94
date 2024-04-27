@@ -2,6 +2,7 @@
 ./drivers/tty/serial/8250/8250_ingenic.c
 ./drivers/tty/serial/ingenic_uart.c
 ./drivers/tty/serial/ingenic_uart.h
+./drivers/watchdog/ingenic_wdt.c
 ./drivers/clocksource/ingenic_core_ost.c
 ./drivers/clocksource/ingenic_sysost.c
 ./drivers/pinctrl/pinctrl-ingenic.c
@@ -36,6 +37,8 @@
 ./drivers/clk/ingenic/power-gate.c
 ./drivers/clk/ingenic/clk.c
 ./drivers/clk/ingenic/power-gate.h
+./drivers/rtc/rtc-ingenic.c
+./drivers/rtc/rtc-ingenic.h
 ./drivers/spi/ingenic_spi.c
 ./drivers/spi/ingenic_spi.h
 ./drivers/misc/ingenic_rsa.c
@@ -106,6 +109,7 @@
 ./drivers/mtd/devices/ingenic_sfc_nand.c
 ./drivers/mtd/devices/ingenic_sfc_ops.c
 ./include/linux/irqchip/ingenic.h
+./include/linux/ingenic_adc.h
 ./include/linux/mfd/ingenic-tcu.h
 ./include/dt-bindings/pinctrl/ingenic-pinctrl.h
 ./include/dt-bindings/sound/ingenic-baic.h
