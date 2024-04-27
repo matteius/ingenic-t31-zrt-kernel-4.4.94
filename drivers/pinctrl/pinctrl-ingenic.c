@@ -183,7 +183,7 @@ static int ingenic_gpio_get_pull_state(struct ingenic_gpio_chip *chip, u32 pins)
     pull_up = (ingenic_gpio_readl(chip, PxPUEN) & BIT(pins)) >> pins;
 
     if(pull_down && pull_up) {
-        dev_warn(chip->gc.dev, "Set both pull_up and pull_down on %s %d\n", chip->name, pins);
+        dev_warn(chip->gc.parent, "Set both pull_up and pull_down on %s %d\n", chip->name, pins);
     }
 
     if(pull_down) {
@@ -538,13 +538,13 @@ static int ingenic_gpio_request(struct gpio_chip *chip, unsigned offset)
 
     jzgc->used_pins_bitmap |= 1 << offset;
 
-    return pinctrl_request_gpio(gpio);
+    return pinctrl_gpio_request(gpio);
 }
 static void ingenic_gpio_free(struct gpio_chip *chip, unsigned offset)
 {
     struct ingenic_gpio_chip *jzgc = gc_to_ingenic_gc(chip);
     unsigned gpio = chip->base + offset;
-    pinctrl_free_gpio(gpio);
+    pinctrl_gpio_free(gpio);
     jzgc->used_pins_bitmap &= ~(1 << offset);
 }
 
@@ -634,7 +634,7 @@ static int ingenic_gpio_chip_add(struct ingenic_pinctrl *pctl,
     gc->ngpio = (u16)ngpio;
     gc->of_node = np;
     gc->base = base;
-    gc->dev = pctl->dev;
+    gc->parent = pctl->dev;
     gc->label = jzgc->name;
     gc->of_xlate = ingenic_of_gpio_xlate;
 
