@@ -17,7 +17,6 @@
 #include <asm/fw/fw.h>
 #include <asm/io.h>
 #include <linux/kernel.h>
-#include <asm/mach-types.h>
 #ifdef CONFIG_XBURST_MXUV2
 #include <asm/current.h>
 #include <linux/sched.h>

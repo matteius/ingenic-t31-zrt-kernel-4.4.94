@@ -78,4 +78,3 @@ void __restore_mxu(void * tsk_void)
 	reg_val = tsk->thread.mxu.regs[15];
 	asm volatile(".word	0x700803ef \n\t"::"r"(reg_val));
 }
-
