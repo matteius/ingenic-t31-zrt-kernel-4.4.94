@@ -150,7 +150,7 @@
 			interrupts = <IRQ_TCU0>;
 			status = "disabled";
 		};
-		
+
 		pinctrl: pinctrl@0x10010000 {
 			compatible = "ingenic,t31-pinctrl";
 			reg = <0x10010000 0x1000>;
@@ -168,7 +168,7 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
-				// ingenic,num-gpios = <32>;
+				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
@@ -183,7 +183,7 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
-				// ingenic,num-gpios = <32>;
+				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
@@ -193,14 +193,14 @@
 				#gpio-cells = <3>;
 				#ingenic,pincfg-cells = <3>;
 				#ingenic,pinmux-cells = <2>;
+				gpio-ranges = <&pinctrl 0 64 32>;
 				interrupts = <IRQ_GPIO2>;
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
-				// ingenic,num-gpios = <32>;
+				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
-				gpio-ranges = <&pinctrl 0 64 32>;
 			};
 
 			i2c0_pins: i2c0-pins {
