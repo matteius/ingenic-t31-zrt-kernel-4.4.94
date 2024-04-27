@@ -1037,8 +1037,8 @@ static const struct pinctrl_ops ingenic_pctl_ops = {
 
 static int ingenic_pinmux_get_functions_count(struct pinctrl_dev *pctldev)
 {
-	struct ingenic_pinctrl *pctl = pinctrl_dev_get_drvdata(pctldev);
-	return pctl->num_funs;
+    struct ingenic_pinctrl *pctl = pinctrl_dev_get_drvdata(pctldev);
+    return pctl->num_funs;
 }
 
 static const char *ingenic_pinmux_get_function_name(struct pinctrl_dev *pctldev,
@@ -1113,154 +1113,172 @@ static const struct pinmux_ops ingenic_pinmux_ops = {
         .set_mux                = ingenic_pinmux_enable,
 };
 
+
 static int ingenic_pinconf_get(struct pinctrl_dev *pctldev,
-		unsigned gpio,
-		unsigned long *config)
+                               unsigned pin,
+                               unsigned long *config)
 {
-	struct gpio_chip *gc = gpio_to_chip(gpio);
-	struct ingenic_gpio_chip *jzgc = gc_to_ingenic_gc(gc);
-	enum pin_config_param param;
-	unsigned pin;
-	unsigned arg;
-	bool pull;
+    struct ingenic_gpio_chip *jzgc;
+    struct pinctrl_gpio_range *range = pinctrl_find_gpio_range_from_pin(pctldev, pin);
+    enum pin_config_param param;
+    unsigned arg;
+    bool pull;
 
-	if (!jzgc) return -EINVAL;
+    if (!range)
+        return -EINVAL;
 
-	pin = gpio - jzgc->gc.base;
+    jzgc = gc_to_ingenic_gc(range->gc);
 
-	param = pinconf_to_config_param(*config);
+    if (!jzgc)
+        return -EINVAL;
 
-	switch (param) {
-	case PIN_CONFIG_BIAS_PULL_PIN_DEFAULT:
-	case PIN_CONFIG_BIAS_DISABLE:
-		pull = ingenic_gpio_readl(jzgc, PxPUEN)&BIT(pin);
-		if ((jzgc->pull_bitmap & BIT(pin)) && pull)
-			*config = pinconf_to_config_packed(PIN_CONFIG_BIAS_PULL_PIN_DEFAULT, 1);
-		else
-			*config = pinconf_to_config_packed(PIN_CONFIG_BIAS_DISABLE, 1);
-		break;
-	case PIN_CONFIG_DRIVE_STRENGTH:
-		arg = ingenic_gpio_get_drive_strength(jzgc, pin);
-		*config = pinconf_to_config_packed(param, arg);
-		break;
-	case PIN_CONFIG_BIAS_PULL_UP:
-	case PIN_CONFIG_BIAS_PULL_DOWN:
-	case PIN_CONFIG_BIAS_HIGH_IMPEDANCE:
-		arg = ingenic_gpio_get_pull_state(jzgc, pin);
-		*config = pinconf_to_config_packed(param, arg);
-		break;
-	case PIN_CONFIG_SLEW_RATE:
-		arg = !!(ingenic_gpio_readl(jzgc, PxPSLW) & BIT(pin));
-		*config = pinconf_to_config_packed(param, arg);
-		break;
-	case PIN_CONFIG_INPUT_SCHMITT_ENABLE:
-		arg = !!(ingenic_gpio_readl(jzgc, PxPSMT) & BIT(pin));
-		*config = pinconf_to_config_packed(param, arg);
-		break;
-	default:
-		return -ENOTSUPP;
-		break;
-	}
-	return 0;
+    pin = pin - range->pin_base + range->base;
+
+    param = pinconf_to_config_param(*config);
+
+    switch (param) {
+        case PIN_CONFIG_BIAS_PULL_PIN_DEFAULT:
+        case PIN_CONFIG_BIAS_DISABLE:
+            pull = ingenic_gpio_readl(jzgc, PxPUEN)&BIT(pin);
+            if ((jzgc->pull_bitmap & BIT(pin)) && pull)
+                *config = pinconf_to_config_packed(PIN_CONFIG_BIAS_PULL_PIN_DEFAULT, 1);
+            else
+                *config = pinconf_to_config_packed(PIN_CONFIG_BIAS_DISABLE, 1);
+            break;
+        case PIN_CONFIG_DRIVE_STRENGTH:
+            arg = ingenic_gpio_get_drive_strength(jzgc, pin);
+            *config = pinconf_to_config_packed(param, arg);
+            break;
+        case PIN_CONFIG_BIAS_PULL_UP:
+        case PIN_CONFIG_BIAS_PULL_DOWN:
+        case PIN_CONFIG_BIAS_HIGH_IMPEDANCE:
+            arg = ingenic_gpio_get_pull_state(jzgc, pin);
+            *config = pinconf_to_config_packed(param, arg);
+            break;
+        case PIN_CONFIG_SLEW_RATE:
+            arg = !!(ingenic_gpio_readl(jzgc, PxPSLW) & BIT(pin));
+            *config = pinconf_to_config_packed(param, arg);
+            break;
+        case PIN_CONFIG_INPUT_SCHMITT_ENABLE:
+            arg = !!(ingenic_gpio_readl(jzgc, PxPSMT) & BIT(pin));
+            *config = pinconf_to_config_packed(param, arg);
+            break;
+        default:
+            return -ENOTSUPP;
+            break;
+    }
+    return 0;
 }
+
 
 static int ingenic_pinconf_set(struct pinctrl_dev *pctldev,
-			       unsigned gpio,
-			       unsigned long *configs,
-			       unsigned num_configs)
+                               unsigned pin,
+                               unsigned long *configs,
+                               unsigned num_configs)
 {
-	struct gpio_chip *gc = gpio_to_chip(gpio);
-	struct ingenic_gpio_chip *jzgc = gc_to_ingenic_gc(gc);
-	enum pin_config_param param;
-	u16 value;
-	unsigned pin;
-	int i;
+    struct ingenic_gpio_chip *jzgc;
+    struct pinctrl_gpio_range *range = pinctrl_find_gpio_range_from_pin(pctldev, pin);
+    enum pin_config_param param;
+    u16 value;
+    int i;
 
+    if (!range)
+        return -EINVAL;
 
-	if (!jzgc) {
-		return -EINVAL;
-	}
+    jzgc = gc_to_ingenic_gc(range->gc);
 
-	pin = gpio - jzgc->gc.base;
+    if (!jzgc) {
+        return -EINVAL;
+    }
 
-	dev_dbg(pctldev->dev, "%s %s %u %lx\n", __func__, jzgc->gc.label, pin, *configs);
+    pin = pin - range->pin_base + range->base;
 
-	for(i = 0; i < num_configs; i++) {
-		param = pinconf_to_config_param(configs[i]);
-		switch (param) {
-			case PIN_CONFIG_BIAS_PULL_PIN_DEFAULT:
-				if (!(jzgc->pull_bitmap & BIT(pin)))
-					return -EINVAL;
-				ingenic_gpio_set_pull(jzgc, BIT(pin), INGENIC_GPIO_PULLUP);
-				break;
-			case PIN_CONFIG_BIAS_DISABLE:
-				if ((!(jzgc->pull_bitmap & BIT(pin))))
-					return -EINVAL;
-				ingenic_gpio_set_pull(jzgc, BIT(pin), INGENIC_GPIO_HIZ);
-				break;
-			case PIN_CONFIG_INPUT_DEBOUNCE:
-				value = pinconf_to_config_argument(configs[i]);
-				ingenic_gpio_set_filter(jzgc, pin, value);
-				break;
-			case PIN_CONFIG_DRIVE_STRENGTH:
-				value = pinconf_to_config_argument(configs[i]);
-				ingenic_gpio_set_drive_strength(jzgc, pin, value);
-				break;
-			case PIN_CONFIG_INPUT_SCHMITT_ENABLE:
-				ingenic_gpio_set_schmitt_enable(jzgc, pin, 1);
-				break;
-			case PIN_CONFIG_SLEW_RATE:
-				ingenic_gpio_set_slew_rate(jzgc, pin, 1);
-				break;
-			case PIN_CONFIG_BIAS_PULL_UP:
-				ingenic_gpio_set_pull(jzgc, BIT(pin), INGENIC_GPIO_PULLUP);
-				break;
-			case PIN_CONFIG_BIAS_PULL_DOWN:
-				ingenic_gpio_set_pull(jzgc, BIT(pin), INGENIC_GPIO_PULLDOWN);
-				break;
-			case PIN_CONFIG_BIAS_HIGH_IMPEDANCE:
-				ingenic_gpio_set_pull(jzgc, BIT(pin), INGENIC_GPIO_HIZ);
-				break;
-			default:
-				return -ENOTSUPP;
-		}
-	}
-	return 0;
+    dev_dbg(pctldev->dev, "%s %s %u %lx\n", __func__, jzgc->gc.label, pin, *configs);
+
+    for(i = 0; i < num_configs; i++) {
+        param = pinconf_to_config_param(configs[i]);
+        switch (param) {
+            case PIN_CONFIG_BIAS_PULL_PIN_DEFAULT:
+                if (!(jzgc->pull_bitmap & BIT(pin)))
+                    return -EINVAL;
+                ingenic_gpio_set_pull(jzgc, BIT(pin), INGENIC_GPIO_PULLUP);
+                break;
+            case PIN_CONFIG_BIAS_DISABLE:
+                if ((!(jzgc->pull_bitmap & BIT(pin))))
+                    return -EINVAL;
+                ingenic_gpio_set_pull(jzgc, BIT(pin), INGENIC_GPIO_HIZ);
+                break;
+            case PIN_CONFIG_INPUT_DEBOUNCE:
+                value = pinconf_to_config_argument(configs[i]);
+                ingenic_gpio_set_filter(jzgc, pin, value);
+                break;
+            case PIN_CONFIG_DRIVE_STRENGTH:
+                value = pinconf_to_config_argument(configs[i]);
+                ingenic_gpio_set_drive_strength(jzgc, pin, value);
+                break;
+            case PIN_CONFIG_INPUT_SCHMITT_ENABLE:
+                ingenic_gpio_set_schmitt_enable(jzgc, pin, 1);
+                break;
+            case PIN_CONFIG_SLEW_RATE:
+                ingenic_gpio_set_slew_rate(jzgc, pin, 1);
+                break;
+            case PIN_CONFIG_BIAS_PULL_UP:
+                ingenic_gpio_set_pull(jzgc, BIT(pin), INGENIC_GPIO_PULLUP);
+                break;
+            case PIN_CONFIG_BIAS_PULL_DOWN:
+                ingenic_gpio_set_pull(jzgc, BIT(pin), INGENIC_GPIO_PULLDOWN);
+                break;
+            case PIN_CONFIG_BIAS_HIGH_IMPEDANCE:
+                ingenic_gpio_set_pull(jzgc, BIT(pin), INGENIC_GPIO_HIZ);
+                break;
+            default:
+                return -ENOTSUPP;
+        }
+    }
+    return 0;
 }
-
-/* set the pin config settings for a specified pin group */
-static int ingenic_pinconf_group_set(struct pinctrl_dev *pctldev,
-			unsigned group, unsigned long *configs,
-			unsigned num_configs)
-{
-	struct ingenic_pinctrl *pctl = pinctrl_dev_get_drvdata(pctldev);
-	struct ingenic_pinctrl_group *grp = NULL;
-	const unsigned int *pins;
-	unsigned int cnt;
-
-	grp = &pctl->groups[group];
-	pins = grp->pins;
-
-	for (cnt = 0; cnt < grp->num_pins; cnt++)
-		ingenic_pinconf_set(pctldev, pins[cnt], configs, num_configs);
-
-	return 0;
-}
-
-/* get the pin config settings for a specified pin group */
 static int ingenic_pinconf_group_get(struct pinctrl_dev *pctldev,
-				unsigned int group, unsigned long *config)
+                                     unsigned group,
+                                     unsigned long *config)
 {
-	struct ingenic_pinctrl *pctl = pinctrl_dev_get_drvdata(pctldev);
-	const unsigned int *pins;
+    const unsigned *pins;
+    unsigned npins;
+    int ret;
 
-	pins = pctl->groups[group].pins;
-	ingenic_pinconf_get(pctldev, pins[0], config);
-	return 0;
+    ret = pinctrl_get_group_pins(pctldev, group, &pins, &npins);
+    if (ret)
+        return ret;
+
+    if (!npins)
+        return -EINVAL;
+
+    return ingenic_pinconf_get(pctldev, pins[0], config);
 }
 
+static int ingenic_pinconf_group_set(struct pinctrl_dev *pctldev,
+                                     unsigned group,
+                                     unsigned long *configs,
+                                     unsigned num_configs)
+{
+    const unsigned *pins;
+    unsigned npins;
+    int i, ret;
+
+    ret = pinctrl_get_group_pins(pctldev, group, &pins, &npins);
+    if (ret)
+        return ret;
+
+    for (i = 0; i < npins; i++) {
+        ret = ingenic_pinconf_set(pctldev, pins[i], configs, num_configs);
+        if (ret)
+            return ret;
+    }
+
+    return 0;
+}
 
 static const struct pinconf_ops ingenic_pinconf_ops = {
+        .is_generic             = true,
         .pin_config_get         = ingenic_pinconf_get,
         .pin_config_set         = ingenic_pinconf_set,
         .pin_config_group_get   = ingenic_pinconf_group_get,
