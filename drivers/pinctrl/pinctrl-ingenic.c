@@ -1109,11 +1109,16 @@ static int ingenic_pinmux_gpio_set_dir(struct pinctrl_dev *pctldev,
 }
 
 static const struct pinmux_ops ingenic_pinmux_ops = {
+        .request                = NULL,
+        .free                   = NULL,
         .get_functions_count    = ingenic_pinmux_get_functions_count,
         .get_function_name      = ingenic_pinmux_get_function_name,
         .get_function_groups    = ingenic_pinmux_get_groups,
-        .set_mux		= ingenic_pinmux_enable,
-        .gpio_set_direction	= ingenic_pinmux_gpio_set_dir,
+        .set_mux                = ingenic_pinmux_enable,
+        .gpio_request_enable    = NULL,
+        .gpio_disable_free      = NULL,
+        .gpio_set_direction     = ingenic_pinmux_gpio_set_dir,
+        .strict                 = false,
 };
 
 static int ingenic_pinconf_get(struct pinctrl_dev *pctldev,
