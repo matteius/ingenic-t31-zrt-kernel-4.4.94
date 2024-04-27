@@ -89,7 +89,7 @@ static inline bool eva_kernel_access(void)
 	if (!IS_ENABLED(CONFIG_EVA))
 		return false;
 
-	return uaccess_kernel();
+	return (get_fs().seg == KERNEL_DS.seg);
 }
 
 /*
