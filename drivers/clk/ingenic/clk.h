@@ -13,14 +13,14 @@ struct clk;
 
 /**
  * struct ingenic_clk_provider: information about clock provider
- * @reg_base: virtual address for the register base.
- * @clk_data: holds clock related data like clk* and number of clocks.
+ * @base: virtual address for the register base.
+ * @clocks: holds clock related data like clk* and number of clocks.
  * @lock: maintains exclusion between callbacks for a given clock-provider.
  */
 struct ingenic_clk_provider {
     struct device_node *np;
-    void __iomem *reg_base;
-	struct clk_onecell_data clk_data;
+    void __iomem *base;
+	struct clk_onecell_data clocks;
     const struct ingenic_cgu_clk_info *clock_info;
     spinlock_t lock;
 };
@@ -475,7 +475,7 @@ struct ingenic_pll_clock {
 
 struct ingenic_clock_reg_cache {
 	struct list_head node;
-	void __iomem *reg_base;
+	void __iomem *base;
 	struct ingenic_clk_reg_dump *rdump;
 	unsigned int rd_num;
 };
