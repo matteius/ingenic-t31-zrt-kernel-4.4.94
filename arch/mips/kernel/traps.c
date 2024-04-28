@@ -1133,7 +1133,18 @@ no_r2_instr:
 	if (unlikely(compute_return_epc(regs) < 0))
 		goto out;
 
-	if (!get_isa16_mode(regs->cp0_epc)) {
+	if (get_isa16_mode(regs->cp0_epc)) {
+		unsigned short mmop[2] = { 0 };
+
+		if (unlikely(get_user(mmop[0], epc) < 0))
+			status = SIGSEGV;
+		if (unlikely(get_user(mmop[1], epc) < 0))
+			status = SIGSEGV;
+		opcode = (mmop[0] << 16) | mmop[1];
+
+		if (status < 0)
+			status = simulate_rdhwr_mm(regs, opcode);
+	} else {
 		if (unlikely(get_user(opcode, epc) < 0))
 			status = SIGSEGV;
 
@@ -1148,18 +1159,6 @@ no_r2_instr:
 
 		if (status < 0)
 			status = simulate_fp(regs, opcode, old_epc, old31);
-	} else if (cpu_has_mmips) {
-		unsigned short mmop[2] = { 0 };
-
-		if (unlikely(get_user(mmop[0], (u16 __user *)epc + 0) < 0))
-			status = SIGSEGV;
-		if (unlikely(get_user(mmop[1], (u16 __user *)epc + 1) < 0))
-			status = SIGSEGV;
-		opcode = mmop[0];
-		opcode = (opcode << 16) | mmop[1];
-
-		if (status < 0)
-			status = simulate_rdhwr_mm(regs, opcode);
 	}
 
 	if (status < 0)
@@ -1387,12 +1386,26 @@ asmlinkage void do_cpu(struct pt_regs *regs)
 		if (unlikely(compute_return_epc(regs) < 0))
 			break;
 
-		if (!get_isa16_mode(regs->cp0_epc)) {
+		if (get_isa16_mode(regs->cp0_epc)) {
+			unsigned short mmop[2] = { 0 };
+
+			if (unlikely(get_user(mmop[0], epc) < 0))
+				status = SIGSEGV;
+			if (unlikely(get_user(mmop[1], epc) < 0))
+				status = SIGSEGV;
+			opcode = (mmop[0] << 16) | mmop[1];
+
+			if (status < 0)
+				status = simulate_rdhwr_mm(regs, opcode);
+		} else {
 			if (unlikely(get_user(opcode, epc) < 0))
 				status = SIGSEGV;
 
 			if (!cpu_has_llsc && status < 0)
 				status = simulate_llsc(regs, opcode);
+
+			if (status < 0)
+				status = simulate_rdhwr_normal(regs, opcode);
 		}
 
 		if (status < 0)
@@ -1529,6 +1542,13 @@ asmlinkage void do_watch(struct pt_regs *regs)
 	cause = read_c0_cause();
 	cause &= ~(1 << 22);
 	write_c0_cause(cause);
+
+	if(do_watch_show_stack) {
+		/*Quick Debug for ingenic debugfs.*/
+		show_registers(regs);
+		show_code((unsigned int __user *) regs->cp0_epc);
+		dump_stack();
+	}
 
 	/*
 	 * If the current thread has the watch registers loaded, save
