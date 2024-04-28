@@ -159,7 +159,7 @@ static void __init _ingenic_clk_register_pll(struct ingenic_clk_provider *ctx,
 		return;
 	}
 
-    clk->ops->set_flags(clk->id, 1);
+    // clk->ops->set_flags(clk->id, 1);  // How to set clk flags in 4.6+?
 	ingenic_clk_add_lookup(ctx, clk, pll_clk->id);
 
 
