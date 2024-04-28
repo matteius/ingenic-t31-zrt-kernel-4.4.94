@@ -1543,13 +1543,6 @@ asmlinkage void do_watch(struct pt_regs *regs)
 	cause &= ~(1 << 22);
 	write_c0_cause(cause);
 
-	if(do_watch_show_stack) {
-		/*Quick Debug for ingenic debugfs.*/
-		show_registers(regs);
-		show_code((unsigned int __user *) regs->cp0_epc);
-		dump_stack();
-	}
-
 	/*
 	 * If the current thread has the watch registers loaded, save
 	 * their values and send SIGTRAP.  Otherwise another thread
