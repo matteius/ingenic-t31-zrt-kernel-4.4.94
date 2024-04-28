@@ -513,7 +513,7 @@ struct ingenic_cpm_info {
 
 };
 
-extern void __init ingenic_clk_of_add_provider(struct device_node *np,
+extern int __init ingenic_clk_of_add_provider(struct device_node *np,
 			struct ingenic_clk_provider *ctx);
 extern void __init ingenic_clk_of_register_fixed_ext(
 			struct ingenic_clk_provider *ctx,

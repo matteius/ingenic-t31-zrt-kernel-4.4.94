@@ -43,14 +43,17 @@ struct ingenic_clk_reg_dump *ingenic_clk_alloc_reg_dump(
 }
 
 
-void __init ingenic_clk_of_add_provider(struct device_node *np,
+int __init ingenic_clk_of_add_provider(struct device_node *np,
 				struct ingenic_clk_provider *ctx)
 {
 	if (np) {
 		if (of_clk_add_provider(np, of_clk_src_onecell_get,
 					&ctx->clocks))
-			panic("could not register clk provider\n");
+			printk("could not register clk provider\n");
+            return 1
+        return 0
 	}
+    return 1
 }
 
 void ingenic_clk_of_dump(struct ingenic_clk_provider *ctx)
