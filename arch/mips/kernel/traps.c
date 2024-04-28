@@ -86,11 +86,7 @@ extern asmlinkage void handle_ov(void);
 extern asmlinkage void handle_tr(void);
 extern asmlinkage void handle_msa_fpe(void);
 extern asmlinkage void handle_fpe(void);
-#ifdef CONFIG_XBURST_MXUV2
-extern asmlinkage void handle_mfpe(void);
-#else
 extern asmlinkage void handle_ftlb(void);
-#endif
 extern asmlinkage void handle_msa(void);
 extern asmlinkage void handle_mdmx(void);
 extern asmlinkage void handle_watch(void);
@@ -149,7 +145,7 @@ static void show_backtrace(struct task_struct *task, const struct pt_regs *regs)
 	if (!task)
 		task = current;
 
-	if (raw_show_trace || !__kernel_text_address(pc)) {
+	if (raw_show_trace || user_mode(regs) || !__kernel_text_address(pc)) {
 		show_raw_backtrace(sp);
 		return;
 	}
@@ -426,12 +422,8 @@ __asm__(
 static const struct exception_table_entry *search_dbe_tables(unsigned long addr)
 {
 	const struct exception_table_entry *e;
-	if (__stop___dbe_table > __start___dbe_table) {
-	    e = search_extable(__start___dbe_table, __stop___dbe_table - 1, addr);
-	} else {
-	    // Handle the case where there are no entries in the table
-	    e = NULL;  // Or another appropriate error handling
-	}
+
+	e = search_extable(__start___dbe_table, __stop___dbe_table - 1, addr);
 	if (!e)
 		e = search_module_dbetables(addr);
 	return e;
@@ -887,7 +879,8 @@ asmlinkage void do_mfpe(struct pt_regs * regs)
 	force_sig(SIGILL, current);
 }
 #endif
-void do_trap_or_bp(struct pt_regs *regs, unsigned int code, int si_code,
+
+void do_trap_or_bp(struct pt_regs *regs, unsigned int code,
 	const char *str)
 {
 	siginfo_t info = { 0 };
@@ -1137,18 +1130,7 @@ no_r2_instr:
 	if (unlikely(compute_return_epc(regs) < 0))
 		goto out;
 
-	if (get_isa16_mode(regs->cp0_epc)) {
-		unsigned short mmop[2] = { 0 };
-
-		if (unlikely(get_user(mmop[0], epc) < 0))
-			status = SIGSEGV;
-		if (unlikely(get_user(mmop[1], epc) < 0))
-			status = SIGSEGV;
-		opcode = (mmop[0] << 16) | mmop[1];
-
-		if (status < 0)
-			status = simulate_rdhwr_mm(regs, opcode);
-	} else {
+	if (!get_isa16_mode(regs->cp0_epc)) {
 		if (unlikely(get_user(opcode, epc) < 0))
 			status = SIGSEGV;
 
@@ -1163,6 +1145,18 @@ no_r2_instr:
 
 		if (status < 0)
 			status = simulate_fp(regs, opcode, old_epc, old31);
+	} else if (cpu_has_mmips) {
+		unsigned short mmop[2] = { 0 };
+
+		if (unlikely(get_user(mmop[0], (u16 __user *)epc + 0) < 0))
+			status = SIGSEGV;
+		if (unlikely(get_user(mmop[1], (u16 __user *)epc + 1) < 0))
+			status = SIGSEGV;
+		opcode = mmop[0];
+		opcode = (opcode << 16) | mmop[1];
+
+		if (status < 0)
+			status = simulate_rdhwr_mm(regs, opcode);
 	}
 
 	if (status < 0)
@@ -1263,7 +1257,7 @@ static int enable_restore_fp_context(int msa)
 		err = init_fpu();
 		if (msa && !err) {
 			enable_msa();
-			_init_msa_upper();
+			init_msa_upper();
 			set_thread_flag(TIF_USEDMSA);
 			set_thread_flag(TIF_MSA_CTX_LIVE);
 		}
@@ -1326,7 +1320,7 @@ static int enable_restore_fp_context(int msa)
 	 */
 	prior_msa = test_and_set_thread_flag(TIF_MSA_CTX_LIVE);
 	if (!prior_msa && was_fpu_owner) {
-		_init_msa_upper();
+		init_msa_upper();
 
 		goto out;
 	}
@@ -1343,7 +1337,7 @@ static int enable_restore_fp_context(int msa)
 		 * of each vector register such that it cannot see data left
 		 * behind by another task.
 		 */
-		_init_msa_upper();
+		init_msa_upper();
 	} else {
 		/* We need to restore the vector context. */
 		restore_msa(current);
@@ -1390,26 +1384,12 @@ asmlinkage void do_cpu(struct pt_regs *regs)
 		if (unlikely(compute_return_epc(regs) < 0))
 			break;
 
-		if (get_isa16_mode(regs->cp0_epc)) {
-			unsigned short mmop[2] = { 0 };
-
-			if (unlikely(get_user(mmop[0], epc) < 0))
-				status = SIGSEGV;
-			if (unlikely(get_user(mmop[1], epc) < 0))
-				status = SIGSEGV;
-			opcode = (mmop[0] << 16) | mmop[1];
-
-			if (status < 0)
-				status = simulate_rdhwr_mm(regs, opcode);
-		} else {
+		if (!get_isa16_mode(regs->cp0_epc)) {
 			if (unlikely(get_user(opcode, epc) < 0))
 				status = SIGSEGV;
 
 			if (!cpu_has_llsc && status < 0)
 				status = simulate_llsc(regs, opcode);
-
-			if (status < 0)
-				status = simulate_rdhwr_normal(regs, opcode);
 		}
 
 		if (status < 0)
@@ -1465,14 +1445,7 @@ asmlinkage void do_cpu(struct pt_regs *regs)
 		break;
 
 	case 2:
-#ifdef CONFIG_MACH_XBURST2
-	        /* Processing of MXA instructions needs setting MSA enable. */
-		err = enable_restore_fp_context(1);
-		if (err)
-			force_sig(SIGILL, current);
-#else
 		raw_notifier_call_chain(&cu2_chain, CU2_EXCEPTION, regs);
-#endif
 		break;
 	}
 
@@ -2349,12 +2322,8 @@ void __init trap_init(void)
 	if (cpu_has_fpu && !cpu_has_nofpuex)
 		set_except_vector(EXCCODE_FPE, handle_fpe);
 
-#ifdef CONFIG_XBURST_MXUV2
-	if(cpu_has_mxu_v2)
-		set_except_vector(16, handle_mfpe);
-#else
 	set_except_vector(MIPS_EXCCODE_TLBPAR, handle_ftlb);
-#endif
+
 	if (cpu_has_rixiex) {
 		set_except_vector(EXCCODE_TLBRI, tlb_do_page_fault_0);
 		set_except_vector(EXCCODE_TLBXI, tlb_do_page_fault_0);
