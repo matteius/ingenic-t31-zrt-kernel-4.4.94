@@ -3,6 +3,7 @@
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/clkdev.h>
+#include <linux/clk-provider.h>
 #include "clk.h"
 #include "clk-pll.h"
 
@@ -126,9 +127,9 @@ static void __init _ingenic_clk_register_pll(struct ingenic_clk_provider *ctx,
 	}
 
 	init.name = pll_clk->dev_name;
-//	init.flags = pll_clk->flags;
+	init.flags = pll_clk->flags;
 	init.parent_names = &pll_clk->parent_name;
-	init.num_parents = 1;
+    init.flags = pll_clk->flags | CLK_SET_RATE_PARENT;
 	init.ops = &ingenic_tx_pll_clk_ops;
 
 
@@ -159,7 +160,6 @@ static void __init _ingenic_clk_register_pll(struct ingenic_clk_provider *ctx,
 		return;
 	}
 
-    // clk->ops->set_flags(clk->id, 1);  // How to set clk flags in 4.6+?
 	ingenic_clk_add_lookup(ctx, clk, pll_clk->id);
 
 

@@ -264,12 +264,14 @@ static void __init t31_clk_init(struct device_node *np, void __iomem *base)
 	if (np) {
 		reg_base = of_iomap(np, 0);
 		if (!reg_base)
+            printk("failed to map registers!\n")
 			panic("%s: failed to map registers\n", __func__);
 	}
 
 
 	ctx = ingenic_clk_init(np, reg_base, NR_CLKS);
 	if (!ctx)
+        printk("unable to allocate context!\n")
 		panic("%s: unable to allocate context.\n", __func__);
 
 	/* Register Ext Clocks From DT */

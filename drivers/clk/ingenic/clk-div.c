@@ -203,9 +203,7 @@ struct clk *_register_cgu_divider(struct device *dev, const char *name,
 	clk = clk_register(dev, &cgu_div->div.hw);
 	if (IS_ERR(clk)) {
 		kfree(cgu_div);
-    } // else {
-        // clk->ops->set_flags(clk->id, 1);
-    //} How to set clk flags in 4.8+?
+    }
 
 	return clk;
 }
