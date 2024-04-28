@@ -101,22 +101,6 @@ static const struct clk_ops ingenic_tx_pll_clk_ops = {
         .set_rate = ingenic_tx_pll_set_rate,
 };
 
-struct clk *ingenic_clk_register_pll(struct ingenic_clk_provider *ctx,
-                                     struct ingenic_pll_clock *pll_clk,
-                                     void __iomem *base)
-{
-struct ingenic_clk_pll *pll;
-struct clk *clk;
-struct clk_init_data init;
-int len;
-
-pll = kzalloc(sizeof(*pll), GFP_KERNEL);
-if (!pll) {
-pr_err("%s: could not allocate pll clk %s\n",
-__func__, pll_clk->name);
-return ERR_PTR(-ENOMEM);
-}
-
 init.name = pll_clk->name;
 init.flags = pll_clk->flags | CLK_SET_RATE_PARENT;
 init.parent_names = &pll_clk->parent_name;

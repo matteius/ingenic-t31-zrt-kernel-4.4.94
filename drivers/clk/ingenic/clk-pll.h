@@ -25,8 +25,19 @@ struct ingenic_pll_rate_table {
 // Function declaration
 struct clk *ingenic_clk_register_pll(struct ingenic_clk_provider *ctx,
                                      struct ingenic_pll_clock *pll_clk,
-                                     void __iomem *base);
+                                     void __iomem *base)
+{
+struct ingenic_clk_pll *pll;
+struct clk *clk;
+struct clk_init_data init;
+int len;
 
+pll = kzalloc(sizeof(*pll), GFP_KERNEL);
+if (!pll) {
+pr_err("%s: could not allocate pll clk %s\n",
+__func__, pll_clk->name);
+return ERR_PTR(-ENOMEM);
+}
 
 #define PLL_DESC(_regoff, _m, _m_w, _n, _n_w, _od1, _od1_w, _od0, _od0_w, _on, _en, _bs)	\
 {				\

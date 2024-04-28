@@ -211,7 +211,7 @@ static int clocks_show(struct seq_file *m, void *v)
                 if (__clk_get_name(clk) == NULL) {
                     seq_printf(m, "--------------------------------------------------------\n");
                 } else {
-                    unsigned int mhz = _get_rate(__clk_get_name(clk)) / 1000;
+                    unsigned int mhz = clk_get_rate(__clk_get_name(clk)) / 1000;
                     seq_printf(m, "%3d %-15s %4d.%03dMHz %7sable   %d %10s\n", i, __clk_get_name(clk),
                                mhz/1000, mhz%1000,
                                __clk_get_flags(clk) & CLK_FLG_ENABLE ? "en" : "dis",
@@ -277,10 +277,10 @@ static void __init t31_clk_init(struct device_node *np)
             "\tcpu_clk  = %lu, l2c_clk  = %lu\n"
             "\tahb0_clk = %lu, ahb2_clk = %lu\n"
             "\tapb_clk  = %lu, ext_clk  = %lu, ddr_clk  = %lu\n\n",
-            _get_rate("apll"), _get_rate("mpll"),
-            _get_rate("div_cpu"), _get_rate("div_l2c"),
-            _get_rate("div_ahb0"), _get_rate("div_ahb2"),
-            _get_rate("div_apb"), _get_rate("ext"), _get_rate("div_ddr"));
+            clk_get_rate("apll"), clk_get_rate("mpll"),
+            clk_get_rate("div_cpu"), clk_get_rate("div_l2c"),
+            clk_get_rate("div_ahb0"), clk_get_rate("div_ahb2"),
+            clk_get_rate("div_apb"), clk_get_rate("ext"), clk_get_rate("div_ddr"));
 }
 
 CLK_OF_DECLARE(t31_clk, "ingenic,t31-clocks", t31_clk_init);
