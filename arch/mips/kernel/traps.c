@@ -426,8 +426,12 @@ __asm__(
 static const struct exception_table_entry *search_dbe_tables(unsigned long addr)
 {
 	const struct exception_table_entry *e;
-
-	e = search_extable(__start___dbe_table, __stop___dbe_table - 1, addr);
+	if (__stop___dbe_table > __start___dbe_table) {
+	    e = search_extable(__start___dbe_table, __stop___dbe_table - 1, addr);
+	} else {
+	    // Handle the case where there are no entries in the table
+	    e = NULL;  // Or another appropriate error handling
+	}
 	if (!e)
 		e = search_module_dbetables(addr);
 	return e;
