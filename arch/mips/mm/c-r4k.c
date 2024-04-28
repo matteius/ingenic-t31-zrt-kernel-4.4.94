@@ -60,10 +60,8 @@ static inline void r4k_on_each_cpu(void (*func) (void *info), void *info)
 	 * to restrict that call when a CM is not present because both
 	 * CM-based SMP protocols (CMP & CPS) restrict index-based cache ops.
 	 */
-#ifndef CONFIG_MACH_XBURST2
 	if (!mips_cm_present())
 		smp_call_function_many(&cpu_foreign_map, func, info, 1);
-#endif
 	func(info);
 	preempt_enable();
 }
@@ -380,13 +378,9 @@ static void r4k_blast_scache_page_setup(void)
 {
 	unsigned long sc_lsize = cpu_scache_line_size();
 
-	if (scache_size == 0) {
-#ifdef MIPS_BRIDGE_SYNC_WAR
-		r4k_blast_scache_page = (void *)blast_inclusive_scache;	/*CONFIG_MACH_XBURST*/
-#else
+	if (scache_size == 0)
 		r4k_blast_scache_page = (void *)cache_noop;
-#endif
-	} else if (sc_lsize == 16)
+	else if (sc_lsize == 16)
 		r4k_blast_scache_page = blast_scache16_page;
 	else if (sc_lsize == 32)
 		r4k_blast_scache_page = blast_scache32_page;
@@ -402,13 +396,9 @@ static void r4k_blast_scache_page_indexed_setup(void)
 {
 	unsigned long sc_lsize = cpu_scache_line_size();
 
-	if (scache_size == 0) {
-#ifdef MIPS_BRIDGE_SYNC_WAR
-		r4k_blast_scache_page_indexed = (void *)blast_inclusive_scache; /*CONFIG_MACH_XBURST*/
-#else
+	if (scache_size == 0)
 		r4k_blast_scache_page_indexed = (void *)cache_noop;
-#endif
-	} else if (sc_lsize == 16)
+	else if (sc_lsize == 16)
 		r4k_blast_scache_page_indexed = blast_scache16_page_indexed;
 	else if (sc_lsize == 32)
 		r4k_blast_scache_page_indexed = blast_scache32_page_indexed;
@@ -424,13 +414,9 @@ static void r4k_blast_scache_setup(void)
 {
 	unsigned long sc_lsize = cpu_scache_line_size();
 
-	if (scache_size == 0) {
-#ifdef MIPS_BRIDGE_SYNC_WAR
-		r4k_blast_scache = (void *)blast_inclusive_scache;	/*CONFIG_MACH_XBURST*/
-#else
+	if (scache_size == 0)
 		r4k_blast_scache = (void *)cache_noop;
-#endif
-	} else if (sc_lsize == 16)
+	else if (sc_lsize == 16)
 		r4k_blast_scache = blast_scache16;
 	else if (sc_lsize == 32)
 		r4k_blast_scache = blast_scache32;
@@ -601,7 +587,8 @@ static inline void local_r4k_flush_cache_page(void *args)
 		 * another ASID than the current one.
 		 */
 		map_coherent = (cpu_has_dc_aliases &&
-				page_mapped(page) && !Page_dcache_dirty(page));
+				page_mapcount(page) &&
+				!Page_dcache_dirty(page));
 		if (map_coherent)
 			vaddr = kmap_coherent(page, addr);
 		else
@@ -784,18 +771,7 @@ static void r4k_dma_cache_inv(unsigned long addr, unsigned long size)
 	if (cpu_has_safe_index_cacheops && size >= dcache_size) {
 		r4k_blast_dcache();
 	} else {
-#if defined(CONFIG_MACH_XBURST) || defined(CONFIG_MACH_XBURST2)
-		unsigned long lsize = cpu_dcache_line_size();
-		unsigned long cmask = (lsize - 1);
-		unsigned long lmask = ~(cmask);
-#endif
 		R4600_HIT_CACHEOP_WAR_IMPL;
-#if defined(CONFIG_MACH_XBURST) || defined(CONFIG_MACH_XBURST2)
-		if (addr & cmask)
-			cache_op(Hit_Writeback_Inv_D, addr & lmask);
-		if ((addr + size) & cmask)
-			cache_op(Hit_Writeback_Inv_D, (addr + size - 1) & lmask);
-#endif
 		blast_inv_dcache_range(addr, addr + size);
 	}
 	preempt_enable();
@@ -822,10 +798,6 @@ static void local_r4k_flush_cache_sigtramp(void * arg)
 		protected_writeback_dcache_line(addr & ~(dc_lsize - 1));
 	if (!cpu_icache_snoops_remote_store && scache_size)
 		protected_writeback_scache_line(addr & ~(sc_lsize - 1));
-#ifdef MIPS_BRIDGE_SYNC_WAR
-	else if (!cpu_icache_snoops_remote_store && MIPS_BRIDGE_SYNC_WAR)	/*CONFIG_MACH_XBURST*/
-		__fast_iob();
-#endif
 	if (ic_lsize)
 		protected_flush_icache_line(addr & ~(ic_lsize - 1));
 	if (MIPS4K_ICACHE_REFILL_WAR) {
@@ -1516,9 +1488,6 @@ static void setup_scache(void)
 	case CPU_LOONGSON3:
 		loongson3_sc_init();
 		return;
-	case CPU_JZRISC:
-		mips_sc_init();
-		return;
 
 	case CPU_CAVIUM_OCTEON3:
 	case CPU_XLP:
@@ -1529,7 +1498,7 @@ static void setup_scache(void)
 		if (c->isa_level & (MIPS_CPU_ISA_M32R1 | MIPS_CPU_ISA_M32R2 |
 				    MIPS_CPU_ISA_M32R6 | MIPS_CPU_ISA_M64R1 |
 				    MIPS_CPU_ISA_M64R2 | MIPS_CPU_ISA_M64R6)) {
-#if defined(CONFIG_MIPS_CPU_SCACHE)
+#ifdef CONFIG_MIPS_CPU_SCACHE
 			if (mips_sc_init ()) {
 				scache_size = c->scache.ways * c->scache.sets * c->scache.linesz;
 				printk("MIPS secondary cache %ldkB, %s, linesize %d bytes.\n",
@@ -1622,10 +1591,7 @@ static void coherency_setup(void)
 	if (cca < 0 || cca > 7)
 		cca = read_c0_config() & CONF_CM_CMASK;
 	_page_cachable_default = cca << _CACHE_SHIFT;
-#ifdef CONFIG_MACH_XBURST
-	if (cca == CONF_CM_UNCACHED || cca == CONF_CM_CACHABLE_ACCELERATED)
-		pr_warn("WARNNIGG: Using Uncacheable Kseg0\n");
-#endif
+
 	pr_debug("Using cache attribute %d\n", cca);
 	change_c0_config(CONF_CM_CMASK, cca);
 

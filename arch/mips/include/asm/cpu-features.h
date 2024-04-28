@@ -311,23 +311,6 @@
 #define cpu_has_mipsmt		(cpu_data[0].ases & MIPS_ASE_MIPSMT)
 #endif
 
-
-#ifndef cpu_has_mxu_v2
-#define cpu_has_mxu_v2      (cpu_data[0].ases & MIPS_ASE_XBURSTMXUV2)
-#endif
-
-#if defined(CONFIG_MACH_XBURST) && !defined(cpu_has_mxu)
-#define cpu_has_mxu            (cpu_data[0].ases & MIPS_ASE_CU2)
-#elif !defined(cpu_has_mxu)
-#define cpu_has_mxu            0
-#endif
-
-#if defined(CONFIG_MACH_XBURST2) && !defined(cpu_has_mxuv3)
-#define cpu_has_mxuv3          (cpu_data[0].ases & MIPS_ASE_CU2)
-#elif !defined(cpu_has_mxu)
-#define cpu_has_mxuv3          0
-#endif
-
 #ifndef cpu_has_userlocal
 #define cpu_has_userlocal	(cpu_data[0].options & MIPS_CPU_ULRI)
 #endif
@@ -429,6 +412,13 @@
 
 #ifndef cpu_has_small_pages
 # define cpu_has_small_pages	(cpu_data[0].options & MIPS_CPU_SP)
+#endif
+
+#ifndef cpu_has_nan_legacy
+#define cpu_has_nan_legacy	(cpu_data[0].options & MIPS_CPU_NAN_LEGACY)
+#endif
+#ifndef cpu_has_nan_2008
+#define cpu_has_nan_2008	(cpu_data[0].options & MIPS_CPU_NAN_2008)
 #endif
 
 #endif /* __ASM_CPU_FEATURES_H */
