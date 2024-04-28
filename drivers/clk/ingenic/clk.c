@@ -5,6 +5,9 @@
 #include <linux/of_address.h>
 #include <linux/syscore_ops.h>
 
+// TODO This would need a macro to import the right binding for the SOC
+#include <dt-bindings/clock/ingenic-t31.h>
+
 #include "clk.h"
 
 static LIST_HEAD(clock_reg_cache_list);
