@@ -50,10 +50,10 @@ int __init ingenic_clk_of_add_provider(struct device_node *np,
 		if (of_clk_add_provider(np, of_clk_src_onecell_get,
 					&ctx->clocks))
 			printk("could not register clk provider\n");
-            return 1
-        return 0
+            return 1;
+        return 0;
 	}
-    return 1
+    return 1;
 }
 
 void ingenic_clk_of_dump(struct ingenic_clk_provider *ctx)
