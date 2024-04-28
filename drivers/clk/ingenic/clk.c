@@ -42,6 +42,60 @@ struct ingenic_clk_reg_dump *ingenic_clk_alloc_reg_dump(
 	return rd;
 }
 
+
+static int _ingenic_register_clock(struct ingenic_clk_provider *ctx, unsigned idx)
+{
+    struct clk_init_data clk_init;
+    struct clk *clk;
+    const char *parent_names[4];
+    unsigned int i;
+
+    clk_init.name = ctx->clock_info[idx].name;
+    clk_init.flags = 0;
+    clk_init.parent_names = parent_names;
+
+    if (ctx->clock_info[idx].type & CGU_CLK_MUX) {
+        clk_init.num_parents = 0;
+
+        for (i = 0; i < ARRAY_SIZE(ctx->clock_info[idx].parents); i++) {
+            if (ctx->clock_info[idx].parents[i] == -1)
+                continue;
+
+            parent_names[clk_init.num_parents] =
+                    ctx->clock_info[ctx->clock_info[idx].parents[i]].name;
+            clk_init.num_parents++;
+        }
+
+        BUG_ON(!clk_init.num_parents);
+        BUG_ON(clk_init.num_parents > ARRAY_SIZE(parent_names));
+
+        clk_init.ops = &ingenic_clk_mux_ops;
+    } else {
+        BUG_ON(ctx->clock_info[idx].parents[0] == -1);
+
+        clk_init.num_parents = 1;
+        parent_names[0] = ctx->clock_info[ctx->clock_info[idx].parents[0]].name;
+
+        if (ctx->clock_info[idx].type & CGU_CLK_GATE)
+            clk_init.ops = &ingenic_clk_gate_ops;
+        else if (ctx->clock_info[idx].type & CGU_CLK_PLL)
+            clk_init.ops = &ingenic_clk_pll_ops;
+        else
+            clk_init.ops = &ingenic_clk_ops;
+    }
+
+    clk = clk_register(NULL, &clk_init);
+    if (IS_ERR(clk)) {
+        pr_err("%s: failed to register clock '%s': %ld\n",
+               __func__, clk_init.name, PTR_ERR(clk));
+        return PTR_ERR(clk);
+    }
+
+    ctx->clocks.clks[idx] = clk;
+    return 0;
+}
+
+
 /* setup the essentials required to support clock lookup using ccf */
 struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
 			void __iomem *base, unsigned long nr_clks)
@@ -78,7 +132,7 @@ struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
     }
 
     for (i = 0; i < ctx->clocks.clk_num; i++) {
-        err = ingenic_register_clock(ctx, i);
+        err = _ingenic_register_clock(ctx, i);
         if (err)
             goto err_out_unregister;
     }
