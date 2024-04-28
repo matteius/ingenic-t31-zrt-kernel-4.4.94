@@ -513,9 +513,6 @@ struct ingenic_cpm_info {
 
 };
 
-extern struct ingenic_clk_provider *__init ingenic_clk_init(
-			struct device_node *np, void __iomem *base,
-			unsigned long nr_clks);
 extern void __init ingenic_clk_of_add_provider(struct device_node *np,
 			struct ingenic_clk_provider *ctx);
 extern void __init ingenic_clk_of_register_fixed_ext(

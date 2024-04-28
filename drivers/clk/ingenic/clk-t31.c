@@ -203,6 +203,161 @@ static void clk_div_table_generate(void)
 
 }
 
+
+static int ingenic_register_t31_clock(struct ingenic_clk_provider *ctx, unsigned idx)
+{
+    struct clk *clk;
+    int err = -EINVAL;
+
+    if (idx >= ctx->clocks.clk_num) {
+        pr_err("%s: invalid clock index %u\n", __func__, idx);
+        goto out;
+    }
+
+    // Determine the clock type based on the index
+    switch (idx) {
+        case CLK_EXT:
+        case CLK_RTC_EXT:
+            // Register fixed-rate clocks
+            ingenic_clk_register_fixed_rate(ctx, &t31_fixed_rate_ext_clks[idx], 1);
+            break;
+
+        case CLK_PLL_APLL:
+        case CLK_PLL_MPLL:
+        case CLK_PLL_VPLL:
+            // Register PLL clocks
+            ingenic_clk_register_pll(ctx, &t31_pll_clks[idx - CLK_PLL_APLL], 1, ctx->base);
+            break;
+
+        case CLK_MUX_SCLKA:
+        case CLK_MUX_CPU_L2C:
+        case CLK_MUX_AHB0:
+        case CLK_MUX_AHB2:
+            // Register MUX clocks
+            ingenic_clk_register_mux(ctx, &t31_mux_clks[idx - CLK_MUX_SCLKA], 1);
+            break;
+
+        case CLK_DIV_CPU:
+        case CLK_DIV_L2C:
+        case CLK_DIV_AHB0:
+        case CLK_DIV_AHB2:
+        case CLK_DIV_APB:
+        case CLK_DIV_CPU_L2C_X1:
+        case CLK_DIV_CPU_L2C_X2:
+            // Register bus divider clocks
+            ingenic_clk_register_bus_div(ctx, &t31_bus_div_clks[idx - CLK_DIV_CPU], 1);
+            break;
+
+        case CLK_DIV_DDR:
+        case CLK_DIV_MACPHY:
+        case CLK_DIV_LCD:
+        case CLK_DIV_MSC0:
+        case CLK_DIV_MSC1:
+        case CLK_DIV_SFC:
+        case CLK_DIV_SSI:
+        case CLK_DIV_CIM:
+        case CLK_DIV_ISP:
+        case CLK_DIV_RSA:
+        case CLK_DIV_EL150:
+            // Register divider clocks
+            ingenic_clk_register_cgu_div(ctx, &t31_div_clks[idx - CLK_DIV_DDR], 1);
+            break;
+
+        case CLK_DIV_I2ST:
+        case CLK_DIV_I2SR:
+            // Register fractional divider clocks
+            ingenic_clk_register_fra_div(ctx, &t31_fdiv_clks[idx - CLK_DIV_I2ST], 1);
+            break;
+
+        case CLK_GATE_DDR:
+        case CLK_GATE_TCU:
+        case CLK_GATE_DES:
+            // Register gate clocks
+            ingenic_clk_register_gate(ctx, &t31_gate_clks[idx - CLK_GATE_DDR], 1);
+            break;
+
+        default:
+            pr_err("%s: unsupported clock type for index %u\n", __func__, idx);
+            goto out;
+    }
+
+    clk = ctx->clocks.clks[idx];
+    if (IS_ERR(clk)) {
+        pr_err("%s: failed to register clock with index %u\n", __func__, idx);
+        err = PTR_ERR(clk);
+        goto out;
+    }
+
+    err = 0;
+
+    out:
+    return err;
+}
+
+struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
+                                                     void __iomem *base, unsigned long nr_clks)
+{
+    struct ingenic_clk_provider *ctx;
+    struct clk **clk_table;
+    int i;
+
+    ctx = kzalloc(sizeof(struct ingenic_clk_provider), GFP_KERNEL);
+    if (!ctx)
+        panic("could not allocate clock provider context.\n");
+
+    ctx->base = of_iomap(np, 0);
+    if (!ctx->base) {
+        pr_err("%s: failed to map CGU registers\n", __func__);
+        goto err_out_free;
+    }
+
+    clk_table = kcalloc(nr_clks, sizeof(struct clk *), GFP_KERNEL);
+    if (!clk_table)
+        panic("could not allocate clock lookup table\n");
+
+    for (i = 0; i < nr_clks; ++i)
+        clk_table[i] = ERR_PTR(-ENOENT);
+
+        ctx->base = base;
+        ctx->clocks.clks = clk_table;
+        ctx->clocks.clk_num = nr_clks;
+        spin_lock_init(&ctx->lock);
+
+        if (!ctx->clocks.clks) {
+            err = -ENOMEM;
+            goto err_out_free;
+    }
+
+    for (i = 0; i < ctx->clocks.clk_num; i++) {
+        err = _ingenic_register_clock(ctx, i); // This is the method you are to implement
+        if (err)
+            goto err_out_unregister;
+    }
+
+    err = ingenic_clk_of_add_provider(ctx->np, ctx);
+    if (err)
+        goto err_out_unregister;
+
+    return ctx;
+
+    err_out_unregister:
+    for (i = 0; i < cgu->clocks.clk_num; i++) {
+        if (!cgu->clocks.clks[i])
+            continue;
+        if (cgu->clock_info[i].type & CGU_CLK_EXT)
+            clk_put(cgu->clocks.clks[i]);
+        else
+            clk_unregister(cgu->clocks.clks[i]);
+    }
+    kfree(ctx->clocks.clks);
+    err_out_free:
+    kfree(ctx);
+    err_out:
+    return NULL;
+}
+
+
+
 static const struct of_device_id ext_clk_match[] __initconst = {
 	        { .compatible = "ingenic,fixed-clock", .data = (void *)0, },
 			{},
