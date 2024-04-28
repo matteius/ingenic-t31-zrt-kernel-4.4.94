@@ -525,6 +525,18 @@ config VEXPRESS_SYSCFG
 	  ARM Ltd. Versatile Express uses specialised platform configuration
 	  bus. System Configuration interface is one of the possible means
 	  of generating transactions on this bus.
+	  
+config INGENIC_RSA
+	bool "JZ RSA Driver"
+	depends on MACH_XBURST2
+	help
+		this driver is used to Encrypt/Decrypt by RSA.
+	default n
+
+config RMEM
+	bool "Reserved memory driver(rmem)"
+	default y
+	  
 config PANEL
 	tristate "Parallel port LCD/Keypad Panel support"
 	depends on PARPORT
