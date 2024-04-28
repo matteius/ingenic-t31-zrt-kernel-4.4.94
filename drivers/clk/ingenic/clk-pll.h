@@ -3,6 +3,17 @@
 
 #include "clk.h"
 
+
+extern struct ingenic_clk_pll {
+    struct clk_hw		hw;
+    void __iomem		*con_reg;
+    unsigned int		rate_count;
+    struct ingenic_pll_hwdesc *hwdesc;
+    struct ingenic_pll_rate_table *rate_table;
+};
+
+#define to_clk_pll(_hw) container_of(_hw, struct ingenic_clk_pll, hw)
+
 extern const struct clk_ops ingenic_pll_ro_ops;
 
 #define PLL_RATE(_rate, _m, _n, _od1, _od0)	\

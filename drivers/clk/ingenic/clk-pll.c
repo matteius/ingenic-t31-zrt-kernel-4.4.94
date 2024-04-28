@@ -9,16 +9,6 @@
 
 #define PLL_TIMEOUT_MS		10
 
-struct ingenic_clk_pll {
-    struct clk_hw		hw;
-    void __iomem		*con_reg;
-    unsigned int		rate_count;
-    struct ingenic_pll_hwdesc *hwdesc;
-    struct ingenic_pll_rate_table *rate_table;
-};
-
-#define to_clk_pll(_hw) container_of(_hw, struct ingenic_clk_pll, hw)
-
 static long ingenic_pll_round_rate(struct clk_hw *hw, unsigned long drate, unsigned long *prate)
 {
     struct ingenic_clk_pll *pll = to_clk_pll(hw);
