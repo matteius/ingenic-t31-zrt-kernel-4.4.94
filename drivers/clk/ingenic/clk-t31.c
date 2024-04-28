@@ -416,13 +416,6 @@ static void __init t31_clk_init(struct device_node *np)
 	void __iomem *base;
 
 	printk("t31 Clock Power Management Unit init!\n");
-	if (np) {
-		base = of_iomap(np, 0);
-		if (!base)
-            printk("failed to map registers!\n");
-			panic("%s: failed to map registers\n", __func__);
-	}
-
 	ctx = ingenic_clk_init(np, base, NR_CLKS);
 	if (!ctx)
         printk("unable to allocate context!\n");
