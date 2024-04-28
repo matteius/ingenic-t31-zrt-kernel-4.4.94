@@ -300,6 +300,7 @@ struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
     struct ingenic_clk_provider *ctx;
     struct clk **clk_table;
     int i;
+    int err = -EINVAL;
 
     ctx = kzalloc(sizeof(struct ingenic_clk_provider), GFP_KERNEL);
     if (!ctx)
@@ -329,7 +330,7 @@ struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
     }
 
     for (i = 0; i < ctx->clocks.clk_num; i++) {
-        err = _ingenic_register_clock(ctx, i); // This is the method you are to implement
+        err = ingenic_register_t31_clock(ctx, i); // This is the method you are to implement
         if (err)
             goto err_out_unregister;
     }
@@ -341,13 +342,13 @@ struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
     return ctx;
 
     err_out_unregister:
-    for (i = 0; i < cgu->clocks.clk_num; i++) {
-        if (!cgu->clocks.clks[i])
+    for (i = 0; i < ctx->clocks.clk_num; i++) {
+        if (!ctx->clocks.clks[i])
             continue;
-        if (cgu->clock_info[i].type & CGU_CLK_EXT)
-            clk_put(cgu->clocks.clks[i]);
+        if (ctx->clock_info[i].type & CGU_CLK_EXT)
+            clk_put(ctx->clocks.clks[i]);
         else
-            clk_unregister(cgu->clocks.clks[i]);
+            clk_unregister(ctx->clocks.clks[i]);
     }
     kfree(ctx->clocks.clks);
     err_out_free:
