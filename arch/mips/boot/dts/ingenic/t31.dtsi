@@ -73,6 +73,7 @@
 		clock-output-names ="ext";
 		#clock-cells = <0>;
 		clock-frequency  = <24000000>;
+		status = "okay";
 	};
 
 	rtcclk: rtcclk {
@@ -80,6 +81,7 @@
 		clock-output-names ="rtc_ext";
 		#clock-cells = <0>;
 		clock-frequency = <32768>;
+		status = "okay";
     };
 
 	clock: clock-controller@0x10000000 {
@@ -89,6 +91,7 @@
 		clock-names = "ext", "rtc_ext";
 		#clock-cells = <1>;
 		little-endian;
+		status = "okay";
 	};
 
 	apb {
