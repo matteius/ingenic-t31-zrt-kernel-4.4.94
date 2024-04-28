@@ -66,6 +66,7 @@ config AM335X_PHY_USB
 	select USB_PHY
 	select AM335X_CONTROL_USB
 	select NOP_USB_XCEIV
+	select USB_COMMON
 	help
 	  This driver provides PHY support for that phy which part for the
 	  AM335x SoC.
@@ -76,33 +77,6 @@ config SAMSUNG_USBPHY
 	  Enable this to support Samsung USB phy helper driver for Samsung SoCs.
 	  This driver provides common interface to interact, for Samsung USB 2.0 PHY
 	  driver and later for Samsung USB 3.0 PHY driver.
-
-choice
-	prompt "Ingenic usb Phy selects"
-
-config INGENIC_USBPHY
-	tristate "Ingenic usb phy"
-	select USB_PHY
-	help
-	  Enable this to support Ingenic USB phy helper driver for ingenic SoCs.
-	  This driver provides common interface to interact, for ingenic USB 2.0 PHY
-
-config INGENIC_USBPHY_X1800
-	tristate "Ingenic usb phy for x1800"
-	select USB_PHY
-	help
-	  Enable this to support Ingenic USB phy helper driver for ingenic SoCs.
-	  This driver provides common interface to interact, for ingenic USB 2.0 PHY
-
-config INGENIC_INNOPHY
-	tristate "Ingenic usb phy(INNO) implemented."
-	select USB_PHY
-	help
-	  Enable this to support Ingenic USB phy helper driver for ingenic SoCs.
-	  This driver provides common interface to interact, for ingenic Inno PHY,
-	  typically used for X2000 SOCs.
-
-endchoice
 
 config TWL6030_USB
 	tristate "TWL6030 USB Transceiver Driver"
@@ -212,19 +186,6 @@ config USB_MXS_PHY
 	  Enable this to support the Freescale MXS USB PHY.
 
 	  MXS Phy is used by some of the i.MX SoCs, for example imx23/28/6x.
-
-config USB_RCAR_PHY
-	tristate "Renesas R-Car USB PHY support"
-	depends on USB || USB_GADGET
-	depends on ARCH_R8A7778 || ARCH_R8A7779 || COMPILE_TEST
-	select USB_PHY
-	help
-	  Say Y here to add support for the Renesas R-Car USB common PHY driver.
-	  This chip is typically used as USB PHY for USB host, gadget.
-	  This driver supports R8A7778 and R8A7779.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called phy-rcar-usb.
 
 config USB_ULPI
 	bool "Generic ULPI Transceiver Driver"
