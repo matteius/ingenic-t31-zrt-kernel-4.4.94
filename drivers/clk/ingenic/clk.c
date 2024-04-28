@@ -68,8 +68,8 @@ struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
 		clk_table[i] = ERR_PTR(-ENOENT);
 
 	ctx->reg_base = base;
-	ctx->clk_data.clks = clk_table;
-	ctx->clk_data.clk_num = nr_clks;
+	ctx->clocks.clks = clk_table;
+	ctx->clocks.clk_num = nr_clks;
 	spin_lock_init(&ctx->lock);
 
     if (!ctx->clocks.clks) {
@@ -110,22 +110,22 @@ void __init ingenic_clk_of_add_provider(struct device_node *np,
 {
 	if (np) {
 		if (of_clk_add_provider(np, of_clk_src_onecell_get,
-					&ctx->clk_data))
+					&ctx->clocks))
 			panic("could not register clk provider\n");
 	}
 }
 
 void ingenic_clk_of_dump(struct ingenic_clk_provider *ctx)
 {
-	struct clk_onecell_data * clk_data;
+	struct clk_onecell_data * clocks;
 	struct clk *clk;
 	int i;
 
-	clk_data = &ctx->clk_data;
+	clocks = &ctx->clocks;
 
-	for(i = 0; i < clk_data->clk_num; i++) {
+	for(i = 0; i < clocks->clk_num; i++) {
 
-		clk = clk_data->clks[i];
+		clk = clocks->clks[i];
 		if(clk != ERR_PTR(-ENOENT)) {
 			printk("clk->id: %d clk->name: %s \n", i,  __clk_get_name(clk));
 		} else {
@@ -139,8 +139,8 @@ void ingenic_clk_of_dump(struct ingenic_clk_provider *ctx)
 void ingenic_clk_add_lookup(struct ingenic_clk_provider *ctx, struct clk *clk,
 				unsigned int id)
 {
-	if (ctx->clk_data.clks && id) {
-		ctx->clk_data.clks[id] = clk;
+	if (ctx->clocks.clks && id) {
+		ctx->clocks.clks[id] = clk;
 	}
 }
 
@@ -152,7 +152,7 @@ void __init ingenic_clk_register_alias(struct ingenic_clk_provider *ctx,
 	struct clk *clk;
 	unsigned int idx, ret;
 
-	if (!ctx->clk_data.clks) {
+	if (!ctx->clocks.clks) {
 		pr_err("%s: clock table missing\n", __func__);
 		return;
 	}
@@ -164,7 +164,7 @@ void __init ingenic_clk_register_alias(struct ingenic_clk_provider *ctx,
 			continue;
 		}
 
-		clk = ctx->clk_data.clks[list->id];
+		clk = ctx->clocks.clks[list->id];
 		if (!clk) {
 			pr_err("%s: failed to find clock %d\n", __func__,
 				list->id);
