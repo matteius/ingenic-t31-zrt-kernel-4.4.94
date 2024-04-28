@@ -37,8 +37,7 @@ static inline struct clk_bus_divider *to_clk_bus_divider(struct clk_divider *div
     return container_of(div, struct clk_bus_divider, div);
 }
 
-static unsigned long clk_bus_divider_recalc_rate(struct clk_divider *div,
-                                                 unsigned long parent_rate)
+unsigned long clk_bus_divider_recalc_rate(struct clk_divider *div, unsigned long parent_rate)
 {
     struct clk_bus_divider *bus_div = to_clk_bus_divider(div);
 
@@ -48,14 +47,12 @@ static unsigned long clk_bus_divider_recalc_rate(struct clk_divider *div,
     return clk_divider_recalc_rate(div, parent_rate);
 }
 
-static long clk_bus_divider_round_rate(struct clk_divider *div, unsigned long rate,
-                                       unsigned long *prate)
+long clk_bus_divider_round_rate(struct clk_divider *div, unsigned long rate, unsigned long *prate)
 {
     return clk_divider_round_rate(div, rate, prate);
 }
 
-static int clk_bus_divider_set_rate(struct clk_divider *div, unsigned long rate,
-                                    unsigned long parent_rate)
+int clk_bus_divider_set_rate(struct clk_divider *div, unsigned long rate, unsigned long parent_rate)
 {
     struct clk_bus_divider *bus_div = to_clk_bus_divider(div);
     int ret;
