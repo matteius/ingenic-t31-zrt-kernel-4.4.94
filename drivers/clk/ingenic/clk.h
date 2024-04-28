@@ -5,6 +5,7 @@
 #include "clk-pll.h"
 #include "clk-div.h"
 #include "clk-bus.h"
+#include "cgu.h"
 #include "power-gate.h"
 #include <soc/cpm.h>
 
@@ -17,10 +18,13 @@ struct clk;
  * @lock: maintains exclusion between callbacks for a given clock-provider.
  */
 struct ingenic_clk_provider {
-	void __iomem *reg_base;
+    struct device_node *np;
+    void __iomem *reg_base;
 	struct clk_onecell_data clk_data;
-	spinlock_t lock;
+    const struct ingenic_cgu_clk_info *clock_info;
+    spinlock_t lock;
 };
+
 
 /**
  * struct ingenic_clock_alias: information about mux clock

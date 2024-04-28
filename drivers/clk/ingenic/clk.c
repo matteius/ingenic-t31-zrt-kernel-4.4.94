@@ -54,6 +54,12 @@ struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
 	if (!ctx)
 		panic("could not allocate clock provider context.\n");
 
+    ctx->base = of_iomap(np, 0);
+    if (!ctx->base) {
+        pr_err("%s: failed to map CGU registers\n", __func__);
+        goto err_out_free;
+    }
+
 	clk_table = kcalloc(nr_clks, sizeof(struct clk *), GFP_KERNEL);
 	if (!clk_table)
 		panic("could not allocate clock lookup table\n");
@@ -66,7 +72,37 @@ struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
 	ctx->clk_data.clk_num = nr_clks;
 	spin_lock_init(&ctx->lock);
 
+    if (!ctx->clocks.clks) {
+        err = -ENOMEM;
+        goto err_out_free;
+    }
+
+    for (i = 0; i < ctx->clocks.clk_num; i++) {
+        err = ingenic_register_clock(ctx, i);
+        if (err)
+            goto err_out_unregister;
+    }
+
+    err = ingenic_clk_of_add_provider(ctx->np, ctx);
+    if (err)
+        goto err_out_unregister;
+
 	return ctx;
+
+    err_out_unregister:
+    for (i = 0; i < cgu->clocks.clk_num; i++) {
+        if (!cgu->clocks.clks[i])
+            continue;
+    if (cgu->clock_info[i].type & CGU_CLK_EXT)
+        clk_put(cgu->clocks.clks[i]);
+    else
+        clk_unregister(cgu->clocks.clks[i]);
+    }
+    kfree(ctx->clocks.clks);
+    err_out_free:
+    kfree(ctx);
+    err_out:
+    return NULL;
 }
 
 void __init ingenic_clk_of_add_provider(struct device_node *np,

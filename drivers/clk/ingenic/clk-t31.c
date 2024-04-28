@@ -12,6 +12,7 @@
 #include <dt-bindings/clock/ingenic-t31.h>
 
 #include <jz_proc.h>
+#include "cgu.h"
 #include "clk.h"
 
 #define CLK_FLG_ENABLE BIT(1)
@@ -252,7 +253,7 @@ static const struct file_operations clocks_proc_fops ={
 	.release = single_release,
 };
 
-/* Register t31 clocks. */
+
 static void __init t31_clk_init(struct device_node *np)
 {
 
@@ -265,7 +266,6 @@ static void __init t31_clk_init(struct device_node *np)
             printk("failed to map registers!\n");
 			panic("%s: failed to map registers\n", __func__);
 	}
-
 
 	ctx = ingenic_clk_init(np, reg_base, NR_CLKS);
 	if (!ctx)
