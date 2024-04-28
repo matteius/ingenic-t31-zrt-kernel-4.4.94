@@ -71,34 +71,37 @@ static void cgu_divider_disable(struct clk_cgu_divider *cgu_div)
     writel(val, cgu_div->div.reg);
 }
 
-static inline struct clk_cgu_divider *to_clk_cgu_divider(struct clk_divider *div)
+static inline struct clk_cgu_divider *to_clk_cgu_divider(struct clk_hw *hw)
 {
+    struct clk_divider *div = container_of(hw, struct clk_divider, hw);
     return container_of(div, struct clk_cgu_divider, div);
 }
 
-static unsigned long clk_cgu_divider_recalc_rate(struct clk_divider *div,
+static unsigned long clk_cgu_divider_recalc_rate(struct clk_hw *hw,
                                                  unsigned long parent_rate)
 {
-    return clk_divider_recalc_rate(div, parent_rate);
+    struct clk_cgu_divider *cgu_div = to_clk_cgu_divider(hw);
+    return clk_divider_recalc_rate(&cgu_div->div, parent_rate);
 }
 
-static long clk_cgu_divider_round_rate(struct clk_divider *div, unsigned long rate,
+static long clk_cgu_divider_round_rate(struct clk_hw *hw, unsigned long rate,
                                        unsigned long *prate)
 {
-    return clk_divider_round_rate(div, rate, prate);
+    struct clk_cgu_divider *cgu_div = to_clk_cgu_divider(hw);
+    return clk_divider_round_rate(&cgu_div->div, rate, prate);
 }
 
-static int clk_cgu_divider_set_rate(struct clk_divider *div, unsigned long rate,
+static int clk_cgu_divider_set_rate(struct clk_hw *hw, unsigned long rate,
                                     unsigned long parent_rate)
 {
-    struct clk_cgu_divider *cgu_div = to_clk_cgu_divider(div);
+    struct clk_cgu_divider *cgu_div = to_clk_cgu_divider(hw);
     int ret;
     unsigned long flags = 0;
 
     if (cgu_div->lock)
         spin_lock_irqsave(cgu_div->lock, flags);
 
-    ret = clk_divider_set_rate(div, rate, parent_rate);
+    ret = clk_divider_set_rate(&cgu_div->div, rate, parent_rate);
 
     cgu_divider_enable(cgu_div);
 
@@ -108,9 +111,9 @@ static int clk_cgu_divider_set_rate(struct clk_divider *div, unsigned long rate,
     return ret;
 }
 
-static void clk_cgu_divider_disable(struct clk_divider *div)
+static void clk_cgu_divider_disable(struct clk_hw *hw)
 {
-    struct clk_cgu_divider *cgu_div = to_clk_cgu_divider(div);
+    struct clk_cgu_divider *cgu_div = to_clk_cgu_divider(hw);
     unsigned long flags = 0;
 
     if (cgu_div->lock)
@@ -122,9 +125,9 @@ static void clk_cgu_divider_disable(struct clk_divider *div)
         spin_unlock_irqrestore(cgu_div->lock, flags);
 }
 
-static int clk_cgu_divider_enable(struct clk_divider *div)
+static int clk_cgu_divider_enable(struct clk_hw *hw)
 {
-    struct clk_cgu_divider *cgu_div = to_clk_cgu_divider(div);
+    struct clk_cgu_divider *cgu_div = to_clk_cgu_divider(hw);
     unsigned long flags = 0;
 
     if (cgu_div->lock)
@@ -166,7 +169,7 @@ struct clk *clk_register_cgu_divider_table(struct ingenic_clk_provider *ctx,
     cgu_div->busy_shift = div_clk->busy_shift;
     cgu_div->en_shift = div_clk->en_shift;
     cgu_div->stop_shift = div_clk->stop_shift;
-    cgu_div->lock = ctx->lock;
+    cgu_div->lock = &ctx->lock;
 
     cgu_div->div.reg = ctx->reg_base + div_clk->offset;
     cgu_div->div.shift = div_clk->shift;

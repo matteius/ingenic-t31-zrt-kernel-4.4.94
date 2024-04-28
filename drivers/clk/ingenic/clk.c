@@ -4,7 +4,7 @@
 #include <linux/clk-provider.h>
 #include <linux/of_address.h>
 #include <linux/syscore_ops.h>
-
+#include <dt-bindings/clock/ingenic-t31.h>
 #include "clk.h"
 
 static LIST_HEAD(clock_reg_cache_list);
@@ -100,18 +100,6 @@ void ingenic_clk_register_fixed_factor(struct ingenic_clk_provider *p,
     }
 }
 
-void ingenic_clk_register_pll(struct ingenic_clk_provider *p,
-                              struct ingenic_pll_clock *clks,
-                              unsigned int num)
-{
-    struct clk *clk;
-    unsigned int i;
-
-    for (i = 0; i < num; i++) {
-        clk = ingenic_clk_register_pll(p, &clks[i], p->reg_base);
-        p->clk_data.clks[clks[i].id] = clk;
-    }
-}
 
 void ingenic_clk_register_mux(struct ingenic_clk_provider *p,
                               struct ingenic_mux_clock *clks,

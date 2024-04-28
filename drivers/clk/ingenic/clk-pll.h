@@ -1,6 +1,7 @@
 #ifndef __INGENIC_CLK_PLLV_H__
 #define __INGENIC_CLK_PLLV_H__
 
+#include "clk.h"
 
 extern const struct clk_ops ingenic_pll_ro_ops;
 
@@ -20,6 +21,12 @@ struct ingenic_pll_rate_table {
 	unsigned int od1;
 	unsigned int od0;
 };
+
+// Function declaration
+struct clk *ingenic_clk_register_pll(struct ingenic_clk_provider *ctx,
+                                     struct ingenic_pll_clock *pll_clk,
+                                     void __iomem *base);
+
 
 #define PLL_DESC(_regoff, _m, _m_w, _n, _n_w, _od1, _od1_w, _od0, _od0_w, _on, _en, _bs)	\
 {				\

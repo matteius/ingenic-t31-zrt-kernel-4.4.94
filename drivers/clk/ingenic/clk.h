@@ -365,10 +365,6 @@ void ingenic_clk_register_fixed_factor(struct ingenic_clk_provider *p,
                                        struct ingenic_fixed_rate_clock *clks,
                                        unsigned int num);
 
-void ingenic_clk_register_pll(struct ingenic_clk_provider *p,
-                              struct ingenic_pll_clock *clks,
-                              unsigned int num);
-
 void ingenic_clk_register_mux(struct ingenic_clk_provider *p,
                               struct ingenic_mux_clock *clks,
                               unsigned int num);
