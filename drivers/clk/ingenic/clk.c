@@ -67,7 +67,7 @@ struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
 	for (i = 0; i < nr_clks; ++i)
 		clk_table[i] = ERR_PTR(-ENOENT);
 
-	ctx->reg_base = base;
+	ctx->base = base;
 	ctx->clocks.clks = clk_table;
 	ctx->clocks.clk_num = nr_clks;
 	spin_lock_init(&ctx->lock);
@@ -236,12 +236,12 @@ void __init ingenic_clk_register_mux(struct ingenic_clk_provider *ctx,
 		if(list->table) {
 			clk = clk_register_mux_table(NULL, list->name, list->parent_names,
 					list->num_parents, list->flags,
-					ctx->reg_base + list->offset,
+					ctx->base + list->offset,
 					list->shift, BIT(list->width) - 1, list->mux_flags, list->table, &ctx->lock);
 		} else {
 			clk = clk_register_mux(NULL, list->name, list->parent_names,
 					list->num_parents, list->flags,
-					ctx->reg_base + list->offset,
+					ctx->base + list->offset,
 					list->shift, list->width, list->mux_flags, &ctx->lock);
 
 		}
@@ -276,14 +276,14 @@ void __init ingenic_clk_register_cgu_div(struct ingenic_clk_provider *ctx,
 		if (list->table)
 			clk = clk_register_cgu_divider_table(NULL, list->name,
 				list->parent_name, list->flags,
-				ctx->reg_base + list->offset,
+				ctx->base + list->offset,
 				list->shift, list->width,
 				list->busy_shift, list->en_shift, list->stop_shift,
 				list->div_flags, list->table, &ctx->lock);
 		else
 			clk = clk_register_cgu_divider(NULL, list->name,
 				list->parent_name, list->flags,
-				ctx->reg_base + list->offset,
+				ctx->base + list->offset,
 				list->shift, list->width,
 				list->busy_shift, list->en_shift, list->stop_shift,
 				list->div_flags, &ctx->lock);
@@ -318,20 +318,20 @@ void __init ingenic_clk_register_bus_div(struct ingenic_clk_provider *ctx,
 		if (list->table)
 			clk = clk_register_bus_divider_table(NULL, list->name,
 				list->parent_name, list->flags,
-				ctx->reg_base + list->cfg_offset,
+				ctx->base + list->cfg_offset,
 				list->div_shift1, list->div_width1,
 				list->div_shift2, list->div_width2,
-				ctx->reg_base + list->busy_offset,
+				ctx->base + list->busy_offset,
 				list->busy_shift, list->ce_shift,
 				list->div_flags, list->div_flags_2,
 				list->table, &ctx->lock);
 		else
 			clk = clk_register_bus_divider(NULL, list->name,
 				list->parent_name, list->flags,
-				ctx->reg_base + list->cfg_offset,
+				ctx->base + list->cfg_offset,
 				list->div_shift1, list->div_width1,
 				list->div_shift2, list->div_width2,
-				ctx->reg_base + list->busy_offset,
+				ctx->base + list->busy_offset,
 				list->busy_shift, list->ce_shift,
 				list->div_flags, list->div_flags_2,
 				&ctx->lock);
@@ -364,7 +364,7 @@ void __init ingenic_clk_register_fra_div(struct ingenic_clk_provider *ctx,
 	for (idx = 0; idx < nr_clk; idx++, list++) {
 		clk = clk_register_fractional_divider(NULL,
 				list->name, list->parent_name, list->flags,
-				ctx->reg_base + list->offset,
+				ctx->base + list->offset,
 				list->mshift, list->mwidth, list->nshift, list->nwidth,
 				list->div_flags, &ctx->lock);
 
@@ -399,7 +399,7 @@ void __init ingenic_clk_register_gate(struct ingenic_clk_provider *ctx,
 	for (idx = 0; idx < nr_clk; idx++, list++) {
 
 		clk = clk_register_gate(NULL, list->name, list->parent_name, list->flags,
-				        ctx->reg_base + list->offset, list->bit_idx,
+				        ctx->base + list->offset, list->bit_idx,
 					list->gate_flags, &ctx->lock);
 
 		if (IS_ERR(clk)) {
@@ -432,7 +432,7 @@ void __init ingenic_power_register_gate(struct ingenic_clk_provider *ctx,
 	for (idx = 0; idx < nr_clk; idx++, list++) {
 
 		clk = power_register_gate(NULL, list->name, list->parent_name, list->flags,
-				        ctx->reg_base + list->offset, list->ctrl_bit, list->wait_bit,
+				        ctx->base + list->offset, list->ctrl_bit, list->wait_bit,
 					list->gate_flags, list->power_flags, &ctx->lock);
 
 		if (IS_ERR(clk)) {
@@ -498,7 +498,7 @@ static int ingenic_clk_suspend(void)
 	struct ingenic_clock_reg_cache *reg_cache;
 
 	list_for_each_entry(reg_cache, &clock_reg_cache_list, node)
-		ingenic_clk_save(reg_cache->reg_base, reg_cache->rdump,
+		ingenic_clk_save(reg_cache->base, reg_cache->rdump,
 				reg_cache->rd_num);
 	return 0;
 }
@@ -508,7 +508,7 @@ static void ingenic_clk_resume(void)
 	struct ingenic_clock_reg_cache *reg_cache;
 
 	list_for_each_entry(reg_cache, &clock_reg_cache_list, node)
-		ingenic_clk_restore(reg_cache->reg_base, reg_cache->rdump,
+		ingenic_clk_restore(reg_cache->base, reg_cache->rdump,
 				reg_cache->rd_num);
 }
 
@@ -517,7 +517,7 @@ static struct syscore_ops ingenic_clk_syscore_ops = {
 	.resume = ingenic_clk_resume,
 };
 
-static void ingenic_clk_sleep_init(void __iomem *reg_base,
+static void ingenic_clk_sleep_init(void __iomem *base,
 		const unsigned long *rdump,
 		unsigned long nr_rdump)
 {
@@ -535,13 +535,13 @@ static void ingenic_clk_sleep_init(void __iomem *reg_base,
 	if (list_empty(&clock_reg_cache_list))
 		register_syscore_ops(&ingenic_clk_syscore_ops);
 
-	reg_cache->reg_base = reg_base;
+	reg_cache->base = base;
 	reg_cache->rd_num = nr_rdump;
 	list_add_tail(&reg_cache->node, &clock_reg_cache_list);
 }
 
 #else
-static void ingenic_clk_sleep_init(void __iomem *reg_base,
+static void ingenic_clk_sleep_init(void __iomem *base,
 		const unsigned long *rdump,
 		unsigned long nr_rdump) {}
 #endif
