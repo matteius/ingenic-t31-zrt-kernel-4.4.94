@@ -13,6 +13,7 @@
 
 #include <jz_proc.h>
 #include "clk.h"
+#include "cgu.h"
 
 #define CLK_FLG_ENABLE BIT(1)
 static struct ingenic_clk_provider *ctx;
@@ -58,186 +59,405 @@ static struct ingenic_pll_hwdesc vpll_hwdesc = \
 	PLL_DESC(CPM_CPVPCR, 20, 12, 14, 6, 11, 3, 8, 3, 3, 0, 2);
 
 
+static const u8 apll_od_encoding[] = { 1, 2, 3, 4, 6, 8 };
+static const u8 mpll_od_encoding[] = { 1, 2, 3, 4, 6, 8 };
+static const u8 vpll_od_encoding[] = { 1, 2, 3, 4, 6, 8 };
 
-static struct ingenic_pll_clock t31_pll_clks[] __initdata = {
-	PLL(CLK_PLL_APLL, "apll", "ext", &apll_hwdesc, t31_pll_rate_table),
-	PLL(CLK_PLL_MPLL, "mpll", "ext", &mpll_hwdesc, t31_pll_rate_table),
-	PLL(CLK_PLL_VPLL, "vpll", "ext", &vpll_hwdesc, t31_pll_rate_table),
+static const struct ingenic_cgu_clk_info t31_clk_info[] = {
+        [CLK_EXT] = { "ext", CGU_CLK_EXT },
+        [CLK_RTC_EXT] = { "rtc_ext", CGU_CLK_EXT },
+
+        /* PLL clocks */
+        [CLK_PLL_APLL] = {
+                .name = "apll", .type = CGU_CLK_PLL, .parents = { CLK_EXT, -1 },
+                .pll = {
+                        .reg = CPM_CPAPCR,
+                        .m_shift = 20, .m_bits = 12, .m_offset = 0,
+                        .n_shift = 14, .n_bits = 6, .n_offset = 0,
+                        .od_shift = 11, .od_bits = 3, .od_max = 8, .od_encoding = apll_od_encoding,
+                        .enable_bit = 8, .stable_bit = 3,
+                },
+        },
+        [CLK_PLL_MPLL] = {
+                .name = "mpll", .type = CGU_CLK_PLL, .parents = { CLK_EXT, -1 },
+                .pll = {
+                        .reg = CPM_CPMPCR,
+                        .m_shift = 20, .m_bits = 12, .m_offset = 0,
+                        .n_shift = 14, .n_bits = 6, .n_offset = 0,
+                        .od_shift = 11, .od_bits = 3, .od_max = 8, .od_encoding = mpll_od_encoding,
+                        .enable_bit = 8, .stable_bit = 3,
+                },
+        },
+        [CLK_PLL_VPLL] = {
+                .name = "vpll", .type = CGU_CLK_PLL, .parents = { CLK_EXT, -1 },
+                .pll = {
+                        .reg = CPM_CPVPCR,
+                        .m_shift = 20, .m_bits = 12, .m_offset = 0,
+                        .n_shift = 14, .n_bits = 6, .n_offset = 0,
+                        .od_shift = 11, .od_bits = 3, .od_max = 8, .od_encoding = vpll_od_encoding,
+                        .enable_bit = 8, .stable_bit = 3,
+                },
+        },
+
+        /* Mux clocks */
+        [CLK_MUX_SCLKA] = {
+                .name = "sclka", .type = CGU_CLK_MUX, .parents = { -1, CLK_EXT, CLK_PLL_APLL },
+                .mux = { .reg = CPM_CPCCR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_CPU_L2C] = {
+                .name = "mux_cpu_l2c", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_CPCCR, .shift = 28, .bits = 2 },
+        },
+        [CLK_MUX_AHB0] = {
+                .name = "mux_ahb0", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_CPCCR, .shift = 26, .bits = 2 },
+        },
+        [CLK_MUX_AHB2] = {
+                .name = "mux_ahb2", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_CPCCR, .shift = 24, .bits = 2 },
+        },
+        [CLK_MUX_DDR] = {
+                .name = "mux_ddr", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_DDRCDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_EL150] = {
+                .name = "mux_el150", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_EL150CDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_RSA] = {
+                .name = "mux_rsa", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_RSACDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_MACPHY] = {
+                .name = "mux_macphy", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_MACCDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_LCD] = {
+                .name = "mux_lcd", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_LPCDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_MSC0] = {
+                .name = "mux_msc0", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_MSC0CDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_MSC1] = {
+                .name = "mux_msc1", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_MSC1CDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_SSI] = {
+                .name = "mux_ssi", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_SSICDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_I2ST] = {
+                .name = "mux_i2st", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_I2STCDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_ISP] = {
+                .name = "mux_isp", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_ISPCDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_I2SR] = {
+                .name = "mux_i2sr", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_I2SRCDR, .shift = 30, .bits = 2 },
+        },
+        [CLK_MUX_CIM] = {
+                .name = "mux_cim", .type = CGU_CLK_MUX, .parents = { -1, CLK_MUX_SCLKA, CLK_PLL_MPLL },
+                .mux = { .reg = CPM_CIMCDR, .shift = 30, .bits = 2 },
+        },
+
+
+/* Bus dividers */
+        [CLK_DIV_CPU] = {
+                .name = "div_cpu", .type = CGU_CLK_DIV, .parents = { CLK_MUX_CPU_L2C, -1 },
+                .div = { .reg = CPM_CPCCR, .shift = 0, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_L2C] = {
+                .name = "div_l2c", .type = CGU_CLK_DIV, .parents = { CLK_MUX_CPU_L2C, -1 },
+                .div = { .reg = CPM_CPCCR, .shift = 4, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_AHB0] = {
+                .name = "div_ahb0", .type = CGU_CLK_DIV, .parents = { CLK_MUX_AHB0, -1 },
+                .div = { .reg = CPM_CPCCR, .shift = 8, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_AHB2] = {
+                .name = "div_ahb2", .type = CGU_CLK_DIV, .parents = { CLK_MUX_AHB2, -1 },
+                .div = { .reg = CPM_CPCCR, .shift = 12, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_APB] = {
+                .name = "div_apb", .type = CGU_CLK_DIV, .parents = { CLK_MUX_AHB2, -1 },
+                .div = { .reg = CPM_CPCCR, .shift = 16, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_CPU_L2C_X1] = {
+                .name = "div_cpu_l2c_x1", .type = CGU_CLK_DIV, .parents = { CLK_MUX_CPU_L2C, -1 },
+                .div = { .reg = CPM_CPCCR, .shift = 0, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_CPU_L2C_X2] = {
+                .name = "div_cpu_l2c_x2", .type = CGU_CLK_DIV, .parents = { CLK_MUX_CPU_L2C, -1 },
+                .div = { .reg = CPM_CPCCR, .shift = 0, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+
+
+/* Regular dividers */
+        [CLK_DIV_DDR] = {
+                .name = "div_ddr", .type = CGU_CLK_DIV, .parents = { CLK_MUX_DDR, -1 },
+                .div = { .reg = CPM_DDRCDR, .shift = 4, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_MACPHY] = {
+                .name = "div_macphy", .type = CGU_CLK_DIV, .parents = { CLK_MUX_MACPHY, -1 },
+                .div = { .reg = CPM_MACCDR, .shift = 8, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_LCD] = {
+                .name = "div_lcd", .type = CGU_CLK_DIV, .parents = { CLK_MUX_LCD, -1 },
+                .div = { .reg = CPM_LPCDR, .shift = 8, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_MSC0] = {
+                .name = "div_msc0", .type = CGU_CLK_DIV, .parents = { CLK_MUX_MSC0, -1 },
+                .div = { .reg = CPM_MSC0CDR, .shift = 8, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_MSC1] = {
+                .name = "div_msc1", .type = CGU_CLK_DIV, .parents = { CLK_MUX_MSC1, -1 },
+                .div = { .reg = CPM_MSC1CDR, .shift = 8, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_SFC] = {
+                .name = "div_sfc", .type = CGU_CLK_DIV, .parents = { CLK_MUX_SSI, -1 },
+                .div = { .reg = CPM_SSICDR, .shift = 8, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_SSI] = {
+                .name = "div_ssi", .type = CGU_CLK_DIV, .parents = { CLK_MUX_SSI, -1 },
+                .div = { .reg = CPM_SSICDR, .shift = 8, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_CIM] = {
+                .name = "div_cim", .type = CGU_CLK_DIV, .parents = { CLK_MUX_CIM, -1 },
+                .div = { .reg = CPM_CIMCDR, .shift = 8, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_ISP] = {
+                .name = "div_isp", .type = CGU_CLK_DIV, .parents = { CLK_MUX_ISP, -1 },
+                .div = { .reg = CPM_ISPCDR, .shift = 4, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_RSA] = {
+                .name = "div_rsa", .type = CGU_CLK_DIV, .parents = { CLK_MUX_RSA, -1 },
+                .div = { .reg = CPM_RSACDR, .shift = 4, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_EL150] = {
+                .name = "div_el150", .type = CGU_CLK_DIV, .parents = { CLK_MUX_EL150, -1 },
+                .div = { .reg = CPM_EL150CDR, .shift = 4, .bits = 4, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+
+
+/* Fractional dividers */
+        [CLK_DIV_I2ST] = {
+                .name = "div_i2st", .type = CGU_CLK_DIV, .parents = { CLK_MUX_I2ST, -1 },
+                .div = { .reg = CPM_I2STCDR, .shift = 20, .bits = 9, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+        [CLK_DIV_I2SR] = {
+                .name = "div_i2sr", .type = CGU_CLK_DIV, .parents = { CLK_MUX_I2SR, -1 },
+                .div = { .reg = CPM_I2SRCDR, .shift = 20, .bits = 9, .ce_bit = -1, .busy_bit = -1, .stop_bit = -1 },
+        },
+
+        /* Gates */
+        [CLK_GATE_DDR] = {
+                .name = "gate_ddr", .type = CGU_CLK_GATE, .parents = { CLK_DIV_DDR, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 31 },
+        },
+        [CLK_GATE_TCU] = {
+                .name = "gate_tcu", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 30 },
+        },
+        [CLK_GATE_DES] = {
+                .name = "gate_des", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 28 },
+        },
+        [CLK_GATE_RSA] = {
+                .name = "gate_rsa", .type = CGU_CLK_GATE, .parents = { CLK_DIV_RSA, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 27 },
+        },
+        [CLK_GATE_RISCV] = {
+                .name = "gate_riscv", .type = CGU_CLK_GATE, .parents = { CLK_DIV_CPU, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 26 },
+        },
+        [CLK_GATE_MIPI_CSI] = {
+                .name = "gate_csi", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB0, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 25 },
+        },
+        [CLK_GATE_LCD] = {
+                .name = "gate_lcd", .type = CGU_CLK_GATE, .parents = { CLK_DIV_LCD, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 24 },
+        },
+        [CLK_GATE_ISP] = {
+                .name = "gate_isp", .type = CGU_CLK_GATE, .parents = { CLK_DIV_ISP, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 23 },
+        },
+        [CLK_GATE_PDMA] = {
+                .name = "gate_pdma", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB2, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 21 },
+        },
+        [CLK_GATE_SFC] = {
+                .name = "gate_sfc", .type = CGU_CLK_GATE, .parents = { CLK_DIV_SFC, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 20 },
+        },
+        [CLK_GATE_SSI1] = {
+                .name = "gate_ssi1", .type = CGU_CLK_GATE, .parents = { CLK_DIV_SSI, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 19 },
+        },
+        [CLK_GATE_HASH] = {
+                .name = "gate_hash", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB2, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 18 },
+        },
+        [CLK_GATE_SLV] = {
+                .name = "gate_slv", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 17 },
+        },
+        [CLK_GATE_UART2] = {
+                .name = "gate_uart2", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 16 },
+        },
+        [CLK_GATE_UART1] = {
+                .name = "gate_uart1", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 15 },
+        },
+        [CLK_GATE_UART0] = {
+                .name = "gate_uart0", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 14 },
+        },
+        [CLK_GATE_SADC] = {
+                .name = "gate_sadc", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 13 },
+        },
+        [CLK_GATE_DMIC] = {
+                .name = "gate_dmic", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 12 },
+        },
+        [CLK_GATE_AIC] = {
+                .name = "gate_aic", .type = CGU_CLK_GATE, .parents = { CLK_DIV_I2ST, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 11 },
+        },
+        [CLK_GATE_SMB1] = {
+                .name = "gate_i2c1", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 8 },
+        },
+        [CLK_GATE_SMB0] = {
+                .name = "gate_i2c0", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 7 },
+        },
+        [CLK_GATE_SSI0] = {
+                .name = "gate_ssi0", .type = CGU_CLK_GATE, .parents = { CLK_DIV_SSI, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 6 },
+        },
+        [CLK_GATE_MSC1] = {
+                .name = "gate_msc1", .type = CGU_CLK_GATE, .parents = { CLK_DIV_MSC1, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 5 },
+        },
+        [CLK_GATE_MSC0] = {
+                .name = "gate_msc0", .type = CGU_CLK_GATE, .parents = { CLK_DIV_MSC0, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 4 },
+        },
+        [CLK_GATE_OTG] = {
+                .name = "gate_otg", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB2, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 3 },
+        },
+        [CLK_GATE_EFUSE] = {
+                .name = "gate_efuse", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB2, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 1 },
+        },
+        [CLK_GATE_NEMC] = {
+                .name = "gate_nemc", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB2, -1 },
+                .gate = { .reg = CPM_CLKGR, .bit = 0 },
+        },
+        [CLK_GATE_CPU] = {
+                .name = "gate_cpu", .type = CGU_CLK_GATE, .parents = { CLK_DIV_CPU, -1 },
+                .gate = { .reg = CPM_CLKGR1, .bit = 15 },
+        },
+        [CLK_GATE_APB0] = {
+                .name = "gate_apb0", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB0, -1 },
+                .gate = { .reg = CPM_CLKGR1, .bit = 14 },
+        },
+        [CLK_GATE_OST] = {
+                .name = "gate_ost", .type = CGU_CLK_GATE, .parents = { CLK_EXT, -1 },
+                .gate = { .reg = CPM_CLKGR1, .bit = 11 },
+        },
+        [CLK_GATE_AHB0] = {
+                .name = "gate_ahb0", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB0, -1 },
+                .gate = { .reg = CPM_CLKGR1, .bit = 10 },
+        },
+        [CLK_GATE_AHB1] = {
+                .name = "gate_ahb1", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB2, -1 },
+                .gate = { .reg = CPM_CLKGR1, .bit = 6 },
+        },
+        [CLK_GATE_AES] = {
+                .name = "gate_aes", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB2, -1 },
+                .gate = { .reg = CPM_CLKGR1, .bit = 5 },
+        },
+        [CLK_GATE_GMAC] = {
+                .name = "gate_gmac", .type = CGU_CLK_GATE, .parents = { CLK_DIV_MACPHY, -1 },
+                .gate = { .reg = CPM_CLKGR1, .bit = 4 },
+        },
+        [CLK_GATE_IPU] = {
+                .name = "gate_ipu", .type = CGU_CLK_GATE, .parents = { CLK_DIV_AHB0, -1 },
+                .gate = { .reg = CPM_CLKGR1, .bit = 2 },
+        },
+        [CLK_GATE_DTRNG] = {
+                .name = "gate_dtrng", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_CLKGR1, .bit = 1 },
+        },
+        [CLK_GATE_EL150] = {
+                .name = "gate_el150", .type = CGU_CLK_GATE, .parents = { CLK_DIV_EL150, -1 },
+                .gate = { .reg = CPM_CLKGR1, .bit = 0 },
+        },
+        [CLK_CE_I2ST] = {
+                .name = "ce_i2st", .type = CGU_CLK_GATE, .parents = { CLK_DIV_I2ST, -1 },
+                .gate = { .reg = CPM_I2STCDR, .bit = 29 },
+        },
+        [CLK_CE_I2SR] = {
+                .name = "ce_i2sr", .type = CGU_CLK_GATE, .parents = { CLK_DIV_I2SR, -1 },
+                .gate = { .reg = CPM_I2SRCDR, .bit = 29 },
+        },
+        [CLK_GATE_USBPHY] = {
+                .name = "gate_usbphy", .type = CGU_CLK_GATE, .parents = { CLK_DIV_APB, -1 },
+                .gate = { .reg = CPM_OPCR, .bit = 23 },
+        },
+
 };
 
 
-/*******************************************************************************
- *      MUX
- ********************************************************************************/
-PNAME(mux_table_0)	= {"stop",	    "ext",		"apll"};
-PNAME(mux_table_1)	= {"stop",	    "sclka",	"mpll"};
-PNAME(mux_table_2)	= {"sclka",	    "mpll",		"vpll"};
-PNAME(mux_table_3)	= {"sclka", 	"mpll",     "ext"};
-PNAME(mux_table_4)	= {"sclka", 	"vpll",		"ext"};
-PNAME(mux_table_5)	= {"mux_ahb2",	"ext"};
-
-static unsigned int ingenic_mux_table[] = {0, 1, 2, 3};
-
-
-static struct ingenic_mux_clock t31_mux_clks[] __initdata = {
-	MUX(CLK_MUX_SCLKA,	    "sclka",		ingenic_mux_table, mux_table_0, CPM_CPCCR,	    30, 2, 0),
-	MUX(CLK_MUX_CPU_L2C,	"mux_cpu_l2c",	ingenic_mux_table, mux_table_1, CPM_CPCCR,	    28, 2, 0),
-	MUX(CLK_MUX_AHB0,	    "mux_ahb0",		ingenic_mux_table, mux_table_1, CPM_CPCCR,	    26, 2, 0),
-	MUX(CLK_MUX_AHB2,	    "mux_ahb2",		ingenic_mux_table, mux_table_1, CPM_CPCCR,	    24, 2, 0),
-
-	MUX(CLK_MUX_DDR,	    "mux_ddr",		ingenic_mux_table, mux_table_1, CPM_DDRCDR,	    30, 2, 0),
-	MUX(CLK_MUX_EL150,	    "mux_el150",	ingenic_mux_table, mux_table_2, CPM_EL150CDR,   30, 2, 0),
-	MUX(CLK_MUX_RSA,	    "mux_rsa",		ingenic_mux_table, mux_table_2, CPM_RSACDR,	    30, 2, 0),
-	MUX(CLK_MUX_MACPHY,	    "mux_macphy",	ingenic_mux_table, mux_table_2, CPM_MACCDR,	    30, 2, 0),
-	MUX(CLK_MUX_LCD,	    "mux_lcd",		ingenic_mux_table, mux_table_2, CPM_LPCDR,	    30, 2, 0),
-	MUX(CLK_MUX_MSC0,	    "mux_msc0",		ingenic_mux_table, mux_table_2, CPM_MSC0CDR,	30, 2, 0),
-	MUX(CLK_MUX_MSC1,	    "mux_msc1",		ingenic_mux_table, mux_table_2, CPM_MSC0CDR,	30, 2, 0),
-	MUX(CLK_MUX_SSI,	    "mux_ssi",		ingenic_mux_table, mux_table_2, CPM_SSICDR,	    30, 2, 0),
-	MUX(CLK_MUX_I2ST,	    "mux_i2st",		ingenic_mux_table, mux_table_2, CPM_I2STCDR,    30, 2, 0),
-	MUX(CLK_MUX_ISP,	    "mux_isp",		ingenic_mux_table, mux_table_2, CPM_ISPCDR,	    30, 2, 0),
-	MUX(CLK_MUX_I2SR,	    "mux_i2sr",		ingenic_mux_table, mux_table_2, CPM_I2STCDR,    30, 2, 0),
-	MUX(CLK_MUX_CIM,	    "mux_cim",		ingenic_mux_table, mux_table_2, CPM_CIMCDR,	    30, 2, 0),
-
+static struct ingenic_fixed_rate_clock t31_fixed_rate_clks[] __initdata = {
+        { .name = "ext", .parent_name = NULL, .flags = CLK_IS_ROOT, .fixed_rate = 24000000 },
+        { .name = "rtc_ext", .parent_name = NULL, .flags = CLK_IS_ROOT, .fixed_rate = 32768 },
 };
 
-/*******************************************************************************
- *      DIV BUS
- ********************************************************************************/
+static struct ingenic_cgu *cgu;
 
-static struct ingenic_bus_clock t31_bus_div_clks[] __initdata = {
-	BUS_DIV(CLK_DIV_CPU,		"div_cpu",		    "mux_cpu_l2c",		CPM_CPCCR,	0,  4, 0, 0, CPM_CPCSR, 0, 22, BUS_DIV_SELF),
-	BUS_DIV(CLK_DIV_L2C,		"div_l2c",		    "mux_cpu_l2c",		CPM_CPCCR,	4,  4, 0, 0, CPM_CPCSR, 0, 22, BUS_DIV_SELF),
-	BUS_DIV(CLK_DIV_AHB0,		"div_ahb0",		    "mux_ahb0",		    CPM_CPCCR,	8,  4, 0, 0, CPM_CPCSR, 1, 21, BUS_DIV_SELF),
-	BUS_DIV(CLK_DIV_AHB2,		"div_ahb2",		    "mux_ahb2",		    CPM_CPCCR,	12, 4, 0, 0, CPM_CPCSR, 2, 20, BUS_DIV_SELF),
-	BUS_DIV(CLK_DIV_APB,		"div_apb",		    "mux_ahb2",		    CPM_CPCCR,	16, 4, 0, 0, CPM_CPCSR, 2, 20, BUS_DIV_SELF),
-	BUS_DIV(CLK_DIV_CPU_L2C_X1,	"div_cpu_l2c_x1",	"mux_cpu_l2c",		CPM_CPCCR,	0,  4, 4, 4, CPM_CPCSR, 0, 22, BUS_DIV_ONE),
-	BUS_DIV(CLK_DIV_CPU_L2C_X2,	"div_cpu_l2c_x2",	"mux_cpu_l2c",		CPM_CPCCR,	0,  4, 4, 4, CPM_CPCSR, 0, 22, BUS_DIV_TWO),
-};
-
-
-/*******************************************************************************
- *      DIV
- ********************************************************************************/
-
-static struct clk_div_table t31_clk_div_table[256] = {};
-
-static struct ingenic_div_clock t31_div_clks[] __initdata = {
-	DIV(CLK_DIV_DDR,		"div_ddr",		"mux_ddr",		CPM_DDRCDR,	    4,  0, NULL),
-	DIV(CLK_DIV_MACPHY,		"div_macphy",	"mux_macphy",	CPM_MACCDR,	    8,  0, NULL),
-	DIV(CLK_DIV_LCD,		"div_lcd",		"mux_lcd",		CPM_LPCDR,	    8,  0, NULL),
-	DIV(CLK_DIV_MSC0,		"div_msc0",		"mux_msc0",		CPM_MSC0CDR,	8,  0, t31_clk_div_table),
-	DIV(CLK_DIV_MSC1,		"div_msc1",		"mux_msc1",		CPM_MSC1CDR,	8,  0, t31_clk_div_table),
-	DIV(CLK_DIV_SFC,		"div_sfc",		"mux_ssi",		CPM_SSICDR,	    8,  0, NULL),
-	DIV(CLK_DIV_SSI,		"div_ssi",		"mux_ssi",		CPM_SSICDR,	    8,  0, NULL),
-	DIV(CLK_DIV_CIM,		"div_cim",		"mux_cim",		CPM_CIMCDR,	    8,  0, NULL),
-	DIV(CLK_DIV_ISP,		"div_isp",		"mux_isp",		CPM_ISPCDR,	    4,  0, NULL),
-	DIV(CLK_DIV_RSA,		"div_rsa",		"mux_rsa",		CPM_RSACDR,	    4,  0, NULL),
-	DIV(CLK_DIV_EL150,		"div_el150",	"mux_el150",	CPM_EL150CDR,   4,  0, NULL),
-
-};
-
-/*******************************************************************************
- *      FRACTIONAL-DIVIDER
- ********************************************************************************/
-
-static struct ingenic_fra_div_clock t31_fdiv_clks[] __initdata = {
-	FRA_DIV(CLK_DIV_I2ST,	"div_i2st",	"mux_i2st",	CPM_I2STCDR,	20, 9, 0, 20),
-	FRA_DIV(CLK_DIV_I2SR,	"div_i2sr",	"mux_i2sr",	CPM_I2SRCDR,	20, 9, 0, 20),
-};
-
-/*******************************************************************************
- *      GATE
- ********************************************************************************/
-static struct ingenic_gate_clock t31_gate_clks[] __initdata = {
-
-	GATE(CLK_GATE_DDR,	    "gate_ddr",		    "div_ddr",	    CPM_CLKGR,  31, CLK_IGNORE_UNUSED,	CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_TCU,	    "gate_tcu",		    "div_apb",	    CPM_CLKGR,  30, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_DES,	    "gate_des",		    "div_apb",	    CPM_CLKGR,  28, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_RSA,	    "gate_rsa",		    "div_rsa",	    CPM_CLKGR,  27, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_RISCV,    "gate_riscv",		"div_riscv",	CPM_CLKGR,  26, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_MIPI_CSI, "gate_csi",		    "div_ahb0",	    CPM_CLKGR,  25, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_LCD,	    "gate_lcd",		    "div_lcd",	    CPM_CLKGR,  24, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_ISP,	    "gate_isp",		    "div_isp",	    CPM_CLKGR,  23, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_PDMA,	    "gate_pdma",		"div_ahb2",	    CPM_CLKGR,  21, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_SFC,	    "gate_sfc",		    "div_sfc",	    CPM_CLKGR,  20, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_SSI1,	    "gate_ssi1",		"div_ssi",	    CPM_CLKGR,  19, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_HASH,	    "gate_hash",		"div_ahb2",	    CPM_CLKGR,  18, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_SLV,	    "gate_slv",		    "div_apb",	    CPM_CLKGR,  17, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_UART2,	"gate_uart2",		"div_apb",	    CPM_CLKGR,  16, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_UART1,	"gate_uart1",		"div_apb",	    CPM_CLKGR,  15, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_UART0,	"gate_uart0",		"div_apb",	    CPM_CLKGR,  14, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_SADC,	    "gate_sadc",		"div_apb",	    CPM_CLKGR,  13, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_DMIC,	    "gate_dmic",		"mux_apb",	    CPM_CLKGR,  12, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_AIC,	    "gate_aic",		    "div_i2st",	    CPM_CLKGR,  11, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_SMB1,	    "gate_i2c1",		"div_apb",	    CPM_CLKGR,  8,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_SMB0,	    "gate_i2c0",		"div_apb",	    CPM_CLKGR,  7,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_SSI0,	    "gate_ssi0",		"div_ssi",	    CPM_CLKGR,  6,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_MSC1,	    "gate_msc1",		"div_msc1",	    CPM_CLKGR,  5,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_MSC0,	    "gate_msc0",		"div_msc0",	    CPM_CLKGR,  4,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_OTG,	    "gate_otg",		    "div_ahb2",	    CPM_CLKGR,  3,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_EFUSE,	"gate_efuse",		"div_ahb2",	    CPM_CLKGR,  1,  0,			CLK_GATE_HIWORD_MASK),
-	GATE(CLK_GATE_NEMC,	    "gate_nemc",		"div_ahb2",	    CPM_CLKGR,  0,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_CPU,	    "gate_cpu",		    "div_cpu",	    CPM_CLKGR1, 15, 0,  		CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_APB0,	    "gate_apb0",		"div_ahb0",	    CPM_CLKGR1, 14, CLK_IGNORE_UNUSED,	CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_OST,	    "gate_ost",		    "ext",		    CPM_CLKGR1, 11, CLK_IGNORE_UNUSED, 	CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_AHB0,	    "gate_ahb0",		"div_ahb0",	    CPM_CLKGR1, 10, CLK_IGNORE_UNUSED,	CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_AHB1,	    "gate_ahb1",		"div_ahb2",	    CPM_CLKGR1, 6,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_AES,	    "gate_aes",		    "div_ahb2",	    CPM_CLKGR1, 5,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_GMAC,	    "gate_gmac",		"div_macphy",	CPM_CLKGR1, 4,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_IPU,      "gate_ipu",         "div_ahb0",     CPM_CLKGR1, 2,  0,          CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_DTRNG,	"gate_dtrng",		"div_apb",	    CPM_CLKGR1, 1,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_EL150,	"gate_el150",		"div_el150",    CPM_CLKGR1, 0,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_CE_I2ST,	    "ce_i2st",		    "div_i2st",	    CPM_I2STCDR, 29, 0, 0),
-	GATE(CLK_CE_I2SR,	    "ce_i2sr",		    "div_i2sr",	    CPM_I2SRCDR, 29, 0, 0),
-	GATE(CLK_GATE_USBPHY,   "gate_usbphy",      "div_apb",      CPM_OPCR,   23, 0,          CLK_GATE_SET_TO_DISABLE)
-};
-
-static void clk_div_table_generate(void)
+static inline u32 cgu_read(struct ingenic_cgu *cgu, unsigned reg)
 {
-	int i;
-	for (i = 0; i < ARRAY_SIZE(t31_clk_div_table); i++) {
-		t31_clk_div_table[i].val = i;
-		t31_clk_div_table[i].div = (i + 1) * 4;
-	}
-
+    return readl(cgu->base + reg);
 }
-
-static const struct of_device_id ext_clk_match[] __initconst = {
-	        { .compatible = "ingenic,fixed-clock", .data = (void *)0, },
-			{},
-};
 
 static int clocks_show(struct seq_file *m, void *v)
 {
-	int i = 0;
-	struct clk_onecell_data * clk_data = NULL;
-	struct clk *clk = NULL;
+    int i;
+    struct clk *clk;
 
-	if(m->private != NULL) {
-		seq_printf(m, "CLKGR\t: %08x\n", cpm_inl(CPM_CLKGR));
-		seq_printf(m, "CLKGR1\t: %08x\n", cpm_inl(CPM_CLKGR1));
-		seq_printf(m, "LCR1\t: %08x\n", cpm_inl(CPM_LCR));
-	} else {
-		seq_printf(m, " ID  NAME              FRE          sta     count   parent\n");
-		clk_data = &ctx->clk_data;
-		for(i = 0; i < clk_data->clk_num; i++) {
-			clk = clk_data->clks[i];
-			if (clk != ERR_PTR(-ENOENT)) {
-				if (__clk_get_name(clk) == NULL) {
-					seq_printf(m, "--------------------------------------------------------\n");
-				} else {
-					unsigned int mhz = _get_rate(__clk_get_name(clk)) / 1000;
-					seq_printf(m, "%3d %-15s %4d.%03dMHz %7sable   %d %10s\n", i, __clk_get_name(clk)
-								, mhz/1000, mhz%1000
-								, __clk_get_flags(clk) & CLK_FLG_ENABLE? "en": "dis"
-								, __clk_get_enable_count(clk)
-								, clk_get_parent(clk)? __clk_get_name(clk_get_parent(clk)): "root");
-				}
-			}
-		}
-	}
+    if (m->private != NULL) {
+        /* Print register values */
+        seq_printf(m, "CLKGR\t: %08x\n", cgu_read(cgu, CPM_CLKGR));
+        seq_printf(m, "CLKGR1\t: %08x\n", cgu_read(cgu, CPM_CLKGR1));
+        seq_printf(m, "LCR1\t: %08x\n", cgu_read(cgu, CPM_LCR));
+    } else {
+        seq_printf(m, " ID  NAME              FRE          sta     count   parent\n");
+        for (i = 0; i < cgu->clocks.clk_num; i++) {
+            clk = cgu->clocks.clks[i];
+            if (!IS_ERR(clk)) {
+                unsigned int rate = clk_get_rate(clk) / 1000;
+                seq_printf(m, "%3d %-15s %4d.%03dMHz %7sable   %d %10s\n",
+                           i, __clk_get_name(clk),
+                           rate / 1000, rate % 1000,
+                           __clk_is_enabled(clk) ? "en" : "dis",
+                           __clk_get_enable_count(clk),
+                           clk_get_parent(clk) ? __clk_get_name(clk_get_parent(clk)) : "root");
+            }
+        }
+    }
 
-	return 0;
+    return 0;
 }
 
 static int clocks_open(struct inode *inode, struct file *file)
@@ -255,67 +475,22 @@ static const struct file_operations clocks_proc_fops ={
 /* Register t31 clocks. */
 static void __init t31_clk_init(struct device_node *np)
 {
+    cgu = ingenic_cgu_new(t31_clk_info, ARRAY_SIZE(t31_clk_info), np);
+    if (!cgu) {
+        pr_err("%s: failed to initialize CGU\n", __func__);
+        return;
+    }
 
-	void __iomem *reg_base;
+    if (ingenic_cgu_register_clocks(cgu)) {
+        pr_err("%s: failed to register clocks\n", __func__);
+        return;
+    }
 
-	printk("t31 Clock Power Management Unit init!\n");
-	if (np) {
-		reg_base = of_iomap(np, 0);
-		if (!reg_base)
-            printk("failed to map registers!\n");
-			panic("%s: failed to map registers\n", __func__);
-	}
-
-
-	ctx = ingenic_clk_init(np, reg_base, NR_CLKS);
-	if (!ctx)
-        printk("unable to allocate context!\n");
-		panic("%s: unable to allocate context.\n", __func__);
-
-	/* Register Ext Clocks From DT */
-	ingenic_clk_of_register_fixed_ext(ctx, t31_fixed_rate_ext_clks,
-			                        ARRAY_SIZE(t31_fixed_rate_ext_clks), ext_clk_match);
-
-	/* Register PLLs. */
-	ingenic_clk_register_pll(ctx, t31_pll_clks,
-				ARRAY_SIZE(t31_pll_clks), reg_base);
-
-
-	/* Register Muxs */
-	ingenic_clk_register_mux(ctx, t31_mux_clks, ARRAY_SIZE(t31_mux_clks));
-
-	/* Register Bus Divs */
-	ingenic_clk_register_bus_div(ctx, t31_bus_div_clks, ARRAY_SIZE(t31_bus_div_clks));
-
-	/* Register Divs */
-	clk_div_table_generate();
-	ingenic_clk_register_cgu_div(ctx, t31_div_clks, ARRAY_SIZE(t31_div_clks));
-
-	/* Register Fractional Divs */
-	ingenic_clk_register_fra_div(ctx, t31_fdiv_clks, ARRAY_SIZE(t31_fdiv_clks));
-
-	/* Register Gates */
-	ingenic_clk_register_gate(ctx, t31_gate_clks, ARRAY_SIZE(t31_gate_clks));
-
-	/* Register Powers */
-//	ingenic_power_register_gate(ctx, t31_gate_power, ARRAY_SIZE(t31_gate_power));
-
-	ingenic_clk_of_add_provider(np, ctx);
-
-
-	//ingenic_clk_of_dump(ctx);
-
-
-	pr_info("=========== t31 clocks: =============\n"
-		"\tapll     = %lu , mpll     = %lu\n"
-		"\tcpu_clk  = %lu , l2c_clk  = %lu\n"
-		"\tahb0_clk = %lu , ahb2_clk = %lu\n"
-		"\tapb_clk  = %lu , ext_clk  = %lu, ddr_clk  = %lu\n\n",
-		_get_rate("apll"),	_get_rate("mpll"),
-		_get_rate("div_cpu"), _get_rate("div_l2c"),
-		_get_rate("div_ahb0"), _get_rate("div_ahb2"),
-		_get_rate("div_apb"), _get_rate("ext"), _get_rate("div_ddr"));
-
+    /* Print clock rates or perform other operations */
+    pr_info("apll = %lu, mpll = %lu, cpu_clk = %lu, ...\n",
+            clk_get_rate(cgu->clocks.clks[CLK_PLL_APLL]),
+            clk_get_rate(cgu->clocks.clks[CLK_PLL_MPLL]),
+            clk_get_rate(cgu->clocks.clks[CLK_DIV_CPU]));
 }
 
 CLK_OF_DECLARE(t31_clk, "ingenic,t31-clocks", t31_clk_init);
