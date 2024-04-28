@@ -253,14 +253,12 @@ static const struct file_operations clocks_proc_fops ={
 };
 
 /* Register t31 clocks. */
-static void __init t31_clk_init(struct device_node *np, void __iomem *base)
+static void __init t31_clk_init(struct device_node *np)
 {
+
 	void __iomem *reg_base;
 
 	printk("t31 Clock Power Management Unit init!\n");
-
-	reg_base = base;
-
 	if (np) {
 		reg_base = of_iomap(np, 0);
 		if (!reg_base)
