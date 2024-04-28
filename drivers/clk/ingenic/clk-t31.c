@@ -211,7 +211,7 @@ static const struct of_device_id ext_clk_match[] __initconst = {
 static int clocks_show(struct seq_file *m, void *v)
 {
 	int i = 0;
-	struct clk_onecell_data * clk_data = NULL;
+	struct clk_onecell_data * clocks = NULL;
 	struct clk *clk = NULL;
 
 	if(m->private != NULL) {
@@ -220,9 +220,9 @@ static int clocks_show(struct seq_file *m, void *v)
 		seq_printf(m, "LCR1\t: %08x\n", cpm_inl(CPM_LCR));
 	} else {
 		seq_printf(m, " ID  NAME              FRE          sta     count   parent\n");
-		clk_data = &ctx->clk_data;
-		for(i = 0; i < clk_data->clk_num; i++) {
-			clk = clk_data->clks[i];
+		clocks = &ctx->clocks;
+		for(i = 0; i < clocks->clk_num; i++) {
+			clk = clocks->clks[i];
 			if (clk != ERR_PTR(-ENOENT)) {
 				if (__clk_get_name(clk) == NULL) {
 					seq_printf(m, "--------------------------------------------------------\n");
@@ -257,17 +257,17 @@ static const struct file_operations clocks_proc_fops ={
 static void __init t31_clk_init(struct device_node *np)
 {
 
-	void __iomem *reg_base;
+	void __iomem *base;
 
 	printk("t31 Clock Power Management Unit init!\n");
 	if (np) {
-		reg_base = of_iomap(np, 0);
-		if (!reg_base)
+		base = of_iomap(np, 0);
+		if (!base)
             printk("failed to map registers!\n");
 			panic("%s: failed to map registers\n", __func__);
 	}
 
-	ctx = ingenic_clk_init(np, reg_base, NR_CLKS);
+	ctx = ingenic_clk_init(np, base, NR_CLKS);
 	if (!ctx)
         printk("unable to allocate context!\n");
 		panic("%s: unable to allocate context.\n", __func__);
@@ -278,7 +278,7 @@ static void __init t31_clk_init(struct device_node *np)
 
 	/* Register PLLs. */
 	ingenic_clk_register_pll(ctx, t31_pll_clks,
-				ARRAY_SIZE(t31_pll_clks), reg_base);
+				ARRAY_SIZE(t31_pll_clks), base);
 
 
 	/* Register Muxs */
