@@ -14,7 +14,7 @@ struct clk_cgu_divider {
     spinlock_t *lock;
 };
 
-static int clk_cgu_wait(void __iomem *reg, u8 shift)
+int clk_cgu_wait(void __iomem *reg, u8 shift)
 {
 unsigned int timeout = 0xfffff;
 
@@ -27,7 +27,7 @@ return 0;
 }
 }
 
-static int cgu_divider_enable(struct clk_cgu_divider *cgu_div)
+int cgu_divider_enable(struct clk_cgu_divider *cgu_div)
 {
     int ret;
     unsigned int val;
@@ -53,7 +53,7 @@ static int cgu_divider_enable(struct clk_cgu_divider *cgu_div)
     return ret;
 }
 
-static void cgu_divider_disable(struct clk_cgu_divider *cgu_div)
+void cgu_divider_disable(struct clk_cgu_divider *cgu_div)
 {
     unsigned int val;
     int ce, stop;
@@ -141,7 +141,7 @@ static int clk_cgu_divider_enable(struct clk_hw *hw)
     return 0;
 }
 
-static struct clk_ops clk_cgu_divider_ops = {
+static const struct clk_ops clk_cgu_divider_ops = {
         .recalc_rate = clk_cgu_divider_recalc_rate,
         .round_rate = clk_cgu_divider_round_rate,
         .set_rate = clk_cgu_divider_set_rate,
@@ -179,7 +179,7 @@ struct clk *clk_register_cgu_divider_table(struct ingenic_clk_provider *ctx,
 
     cgu_div->div.hw.init = &init;
 
-    clk = clk_register(NULL, &cgu_div->div.hw);
+    clk = clk_register(&cgu_div->div.hw);
     if (IS_ERR(clk))
         kfree(cgu_div);
 
