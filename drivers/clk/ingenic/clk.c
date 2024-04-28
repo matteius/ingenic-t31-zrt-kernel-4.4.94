@@ -42,59 +42,95 @@ struct ingenic_clk_reg_dump *ingenic_clk_alloc_reg_dump(
 	return rd;
 }
 
-
 static int _ingenic_register_clock(struct ingenic_clk_provider *ctx, unsigned idx)
 {
-    struct clk_init_data clk_init;
     struct clk *clk;
-    const char *parent_names[4];
-    unsigned int i;
+    int err = -EINVAL;
 
-    clk_init.name = ctx->clock_info[idx].name;
-    clk_init.flags = 0;
-    clk_init.parent_names = parent_names;
-
-    if (ctx->clock_info[idx].type & CGU_CLK_MUX) {
-        clk_init.num_parents = 0;
-
-        for (i = 0; i < ARRAY_SIZE(ctx->clock_info[idx].parents); i++) {
-            if (ctx->clock_info[idx].parents[i] == -1)
-                continue;
-
-            parent_names[clk_init.num_parents] =
-                    ctx->clock_info[ctx->clock_info[idx].parents[i]].name;
-            clk_init.num_parents++;
-        }
-
-        BUG_ON(!clk_init.num_parents);
-        BUG_ON(clk_init.num_parents > ARRAY_SIZE(parent_names));
-
-        clk_init.ops = &ingenic_clk_mux_ops;
-    } else {
-        BUG_ON(ctx->clock_info[idx].parents[0] == -1);
-
-        clk_init.num_parents = 1;
-        parent_names[0] = ctx->clock_info[ctx->clock_info[idx].parents[0]].name;
-
-        if (ctx->clock_info[idx].type & CGU_CLK_GATE)
-            clk_init.ops = &ingenic_clk_gate_ops;
-        else if (ctx->clock_info[idx].type & CGU_CLK_PLL)
-            clk_init.ops = &ingenic_clk_pll_ops;
-        else
-            clk_init.ops = &ingenic_clk_ops;
+    if (idx >= ctx->clocks.clk_num) {
+        pr_err("%s: invalid clock index %u\n", __func__, idx);
+        goto out;
     }
 
-    clk = clk_register(NULL, &clk_init);
+    // Determine the clock type based on the index
+    switch (idx) {
+        case CLK_EXT:
+        case CLK_RTC_EXT:
+            // Register fixed-rate clocks
+            ingenic_clk_register_fixed_rate(ctx, &t31_fixed_rate_ext_clks[idx], 1);
+            break;
+
+        case CLK_PLL_APLL:
+        case CLK_PLL_MPLL:
+        case CLK_PLL_VPLL:
+            // Register PLL clocks
+            ingenic_clk_register_pll(ctx, &t31_pll_clks[idx - CLK_PLL_APLL], 1, ctx->base);
+            break;
+
+        case CLK_MUX_SCLKA:
+        case CLK_MUX_CPU_L2C:
+        case CLK_MUX_AHB0:
+        case CLK_MUX_AHB2:
+            // Register MUX clocks
+            ingenic_clk_register_mux(ctx, &t31_mux_clks[idx - CLK_MUX_SCLKA], 1);
+            break;
+
+        case CLK_DIV_CPU:
+        case CLK_DIV_L2C:
+        case CLK_DIV_AHB0:
+        case CLK_DIV_AHB2:
+        case CLK_DIV_APB:
+        case CLK_DIV_CPU_L2C_X1:
+        case CLK_DIV_CPU_L2C_X2:
+            // Register bus divider clocks
+            ingenic_clk_register_bus_div(ctx, &t31_bus_div_clks[idx - CLK_DIV_CPU], 1);
+            break;
+
+        case CLK_DIV_DDR:
+        case CLK_DIV_MACPHY:
+        case CLK_DIV_LCD:
+        case CLK_DIV_MSC0:
+        case CLK_DIV_MSC1:
+        case CLK_DIV_SFC:
+        case CLK_DIV_SSI:
+        case CLK_DIV_CIM:
+        case CLK_DIV_ISP:
+        case CLK_DIV_RSA:
+        case CLK_DIV_EL150:
+            // Register divider clocks
+            ingenic_clk_register_cgu_div(ctx, &t31_div_clks[idx - CLK_DIV_DDR], 1);
+            break;
+
+        case CLK_DIV_I2ST:
+        case CLK_DIV_I2SR:
+            // Register fractional divider clocks
+            ingenic_clk_register_fra_div(ctx, &t31_fdiv_clks[idx - CLK_DIV_I2ST], 1);
+            break;
+
+        case CLK_GATE_DDR:
+        case CLK_GATE_TCU:
+        case CLK_GATE_DES:
+            // Register gate clocks
+            ingenic_clk_register_gate(ctx, &t31_gate_clks[idx - CLK_GATE_DDR], 1);
+            break;
+
+        default:
+            pr_err("%s: unsupported clock type for index %u\n", __func__, idx);
+            goto out;
+    }
+
+    clk = ctx->clocks.clks[idx];
     if (IS_ERR(clk)) {
-        pr_err("%s: failed to register clock '%s': %ld\n",
-               __func__, clk_init.name, PTR_ERR(clk));
-        return PTR_ERR(clk);
+        pr_err("%s: failed to register clock with index %u\n", __func__, idx);
+        err = PTR_ERR(clk);
+        goto out;
     }
 
-    ctx->clocks.clks[idx] = clk;
-    return 0;
-}
+    err = 0;
 
+    out:
+    return err;
+}
 
 /* setup the essentials required to support clock lookup using ccf */
 struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
@@ -132,7 +168,7 @@ struct ingenic_clk_provider *__init ingenic_clk_init(struct device_node *np,
     }
 
     for (i = 0; i < ctx->clocks.clk_num; i++) {
-        err = _ingenic_register_clock(ctx, i);
+        err = _ingenic_register_clock(ctx, i); // This is the method you are to implement
         if (err)
             goto err_out_unregister;
     }
