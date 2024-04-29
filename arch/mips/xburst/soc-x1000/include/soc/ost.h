@@ -40,6 +40,6 @@
 #define ost_readl(reg)		readl_relaxed(reg)
 #define ost_writel(reg, val)	writel_relaxed(val, reg)
 
-static DECLARE_COMPLETION(clk_initialized);
+extern struct completion clk_initialized;
 
 #endif

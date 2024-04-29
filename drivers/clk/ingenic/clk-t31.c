@@ -258,6 +258,8 @@ static const struct file_operations clocks_proc_fops ={
 static void __init t31_clk_init(struct device_node *np)
 {
     printk("t31 Clock Power Management Unit init!\n");
+    // Initialize completion structure
+    init_completion(&clk_initialized);
 
     struct ingenic_clk_provider *ctx;
 
