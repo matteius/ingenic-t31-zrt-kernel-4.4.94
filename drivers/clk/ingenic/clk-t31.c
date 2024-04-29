@@ -255,22 +255,25 @@ static const struct file_operations clocks_proc_fops ={
 /* Register t31 clocks. */
 static void __init t31_clk_init(struct device_node *np)
 {
+    printk("t31 Clock Power Management Unit init!\n");
 
-	void __iomem *reg_base;
+    struct ingenic_clk_provider *ctx;
 
-	printk("t31 Clock Power Management Unit init!\n");
-	if (np) {
-		reg_base = of_iomap(np, 0);
-		if (!reg_base)
-            printk("failed to map registers!\n");
-			panic("%s: failed to map registers\n", __func__);
-	}
+    ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+    if (!ctx)
+        goto err_out;
 
+    ctx->reg_base = of_iomap(np, 0);
+    if (!ctx->reg_base) {
+        pr_err("%s: failed to map CGU registers\n", __func__);
+        goto err_out_free;
+    }
 
-	ctx = ingenic_clk_init(np, reg_base, NR_CLKS);
-	if (!ctx)
-        printk("unable to allocate context!\n");
-		panic("%s: unable to allocate context.\n", __func__);
+    ctx->np = np;
+    // ctx->clock_info = clock_info;
+    //ctx->clocks.clk_num = num_clocks;
+
+    spin_lock_init(&ctx->lock);
 
 	/* Register Ext Clocks From DT */
 	ingenic_clk_of_register_fixed_ext(ctx, t31_fixed_rate_ext_clks,
@@ -278,7 +281,7 @@ static void __init t31_clk_init(struct device_node *np)
 
 	/* Register PLLs. */
 	ingenic_clk_register_pll(ctx, t31_pll_clks,
-				ARRAY_SIZE(t31_pll_clks), reg_base);
+				ARRAY_SIZE(t31_pll_clks), ctx->reg_base);
 
 
 	/* Register Muxs */
@@ -316,6 +319,9 @@ static void __init t31_clk_init(struct device_node *np)
 		_get_rate("div_ahb0"), _get_rate("div_ahb2"),
 		_get_rate("div_apb"), _get_rate("ext"), _get_rate("div_ddr"));
 
+
+    err_out_free:
+    kfree(cgu);
 }
 
 CLK_OF_DECLARE(t31_clk, "ingenic,t31-clocks", t31_clk_init);
