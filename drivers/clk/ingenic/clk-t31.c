@@ -253,7 +253,7 @@ static const struct file_operations clocks_proc_fops ={
 };
 
 /* Register t31 clocks. */
-static void __init t31_clk_init(void)
+static int __init t31_clk_init(void)
 {
     printk("t31 Clock Power Management Unit init!\n");
     struct device_node *np;
@@ -261,7 +261,7 @@ static void __init t31_clk_init(void)
     np = of_find_compatible_node(NULL, NULL, "ingenic,t31-clocks");
     if (!np) {
         pr_err("Failed to find compatible node for t31 clocks\n");
-        return;
+        return -ENODEV;
     }
 
     struct ingenic_clk_provider *ctx;
@@ -336,10 +336,12 @@ static void __init t31_clk_init(void)
 		_get_rate("div_ahb0"), _get_rate("div_ahb2"),
 		_get_rate("div_apb"), _get_rate("ext"), _get_rate("div_ddr"));
 
+    return 0;
 
     err_out_free:
     kfree(ctx);
     err_out:
+    return -ENODEV;
 }
 
 arch_initcall(t31_clk_init);
