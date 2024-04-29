@@ -284,17 +284,15 @@ static void __init ingenic_ost_init(struct device_node *np)
 		return;
 	}
 
-    ext_clk = clk_get_sys(NULL, "ext");
-    if (IS_ERR_OR_NULL(ext_clk)) {
-        pr_warn("Warning Ingenic Ost: Can not get extern clock, falling back to device tree value\n");
-        if (of_property_read_u32(np, "clock-frequency", &ext_rate)) {
-            pr_err("No clock-frequency property found in device tree\n");
-            return;
-        }
-    } else {
-        ext_rate = clk_get_rate(ext_clk);
-        clk_put(ext_clk);
-    }
+	ext_clk = clk_get_sys(NULL, "ext");
+	if (IS_ERR_OR_NULL(ext_clk)) {
+		pr_warn("Warning Ingenic Ost: Can not get extern clock, Please check clk driver !!\n\n\t\n");
+		ext_rate = 24000000;
+	} else {
+
+		ext_rate = clk_get_rate(ext_clk);
+		clk_put(ext_clk);
+	}
 
 	tmr->iobase = iobase;
 	evt->iobase = iobase;
