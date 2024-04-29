@@ -307,7 +307,7 @@ static void __init t31_clk_init(struct device_node *np)
 	ingenic_clk_register_fra_div(ctx, t31_fdiv_clks, ARRAY_SIZE(t31_fdiv_clks));
 
 	/* Register Gates */
-    printk("ingenic_clk_register_gate\n")
+    printk("ingenic_clk_register_gate\n");
 	ingenic_clk_register_gate(ctx, t31_gate_clks, ARRAY_SIZE(t31_gate_clks));
 
 	/* Register Powers */
