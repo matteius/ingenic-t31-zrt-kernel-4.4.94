@@ -261,11 +261,13 @@ static void __init t31_clk_init(struct device_node *np)
 
     ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
     if (!ctx)
+        printk("%s: failed to allocate memory for CGU\n", __func__);
         goto err_out;
 
+    printk("t31_clk_init: ctx = %p\n", ctx);
     ctx->reg_base = of_iomap(np, 0);
     if (!ctx->reg_base) {
-        pr_err("%s: failed to map CGU registers\n", __func__);
+        printk("%s: failed to map CGU registers\n", __func__);
         goto err_out_free;
     }
 
@@ -273,31 +275,39 @@ static void __init t31_clk_init(struct device_node *np)
     // ctx->clock_info = clock_info;
     //ctx->clocks.clk_num = num_clocks;
 
+    printk("spin_lock_init\n");
     spin_lock_init(&ctx->lock);
 
 	/* Register Ext Clocks From DT */
+    printk("ingenic_clk_of_register_fixed_ext\n");
 	ingenic_clk_of_register_fixed_ext(ctx, t31_fixed_rate_ext_clks,
 			                        ARRAY_SIZE(t31_fixed_rate_ext_clks), ext_clk_match);
 
 	/* Register PLLs. */
+    printk("ingenic_clk_register_pll\n");
 	ingenic_clk_register_pll(ctx, t31_pll_clks,
 				ARRAY_SIZE(t31_pll_clks), ctx->reg_base);
 
 
 	/* Register Muxs */
+    printk("ingenic_clk_register_mux\n");
 	ingenic_clk_register_mux(ctx, t31_mux_clks, ARRAY_SIZE(t31_mux_clks));
 
 	/* Register Bus Divs */
+    printk("ingenic_clk_register_bus_div\n")
 	ingenic_clk_register_bus_div(ctx, t31_bus_div_clks, ARRAY_SIZE(t31_bus_div_clks));
 
 	/* Register Divs */
+    printk("ingenic_clk_register_cgu_div\n");
 	clk_div_table_generate();
 	ingenic_clk_register_cgu_div(ctx, t31_div_clks, ARRAY_SIZE(t31_div_clks));
 
 	/* Register Fractional Divs */
+    printk("ingenic_clk_register_fra_div\n");
 	ingenic_clk_register_fra_div(ctx, t31_fdiv_clks, ARRAY_SIZE(t31_fdiv_clks));
 
 	/* Register Gates */
+    printk("ingenic_clk_register_gate\n")
 	ingenic_clk_register_gate(ctx, t31_gate_clks, ARRAY_SIZE(t31_gate_clks));
 
 	/* Register Powers */
