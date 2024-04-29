@@ -294,7 +294,7 @@ static void __init t31_clk_init(struct device_node *np)
 	ingenic_clk_register_mux(ctx, t31_mux_clks, ARRAY_SIZE(t31_mux_clks));
 
 	/* Register Bus Divs */
-    printk("ingenic_clk_register_bus_div\n")
+    printk("ingenic_clk_register_bus_div\n");
 	ingenic_clk_register_bus_div(ctx, t31_bus_div_clks, ARRAY_SIZE(t31_bus_div_clks));
 
 	/* Register Divs */
