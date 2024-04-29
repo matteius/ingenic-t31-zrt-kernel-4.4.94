@@ -28,6 +28,8 @@
 #include <linux/of_irq.h>
 #include <linux/delay.h>
 #include <soc/ost.h>
+#include <linux/completion.h>
+#include <clocksource/mips_clock.h>
 
 #define CLKSOURCE_DIV   (16)
 #define CLKEVENT_DIV    (16)

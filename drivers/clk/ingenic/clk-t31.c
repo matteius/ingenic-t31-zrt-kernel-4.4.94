@@ -10,8 +10,8 @@
 #include <soc/cpm.h>
 #include <soc/base.h>
 #include <dt-bindings/clock/ingenic-t31.h>
-#include <soc/ost.h>
-
+#include <linux/completion.h>
+#include <clocksource/mips_clock.h>
 
 #include <jz_proc.h>
 #include "clk.h"
@@ -253,6 +253,8 @@ static const struct file_operations clocks_proc_fops ={
 	.llseek = seq_lseek,
 	.release = single_release,
 };
+
+struct completion clk_initialized;
 
 /* Register t31 clocks. */
 static void __init t31_clk_init(struct device_node *np)
