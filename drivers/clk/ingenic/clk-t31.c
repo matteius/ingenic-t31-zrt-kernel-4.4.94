@@ -22,8 +22,8 @@ static struct ingenic_clk_provider *ctx;
  *      FIXED CLK
  ********************************************************************************/
 static struct ingenic_fixed_rate_clock t31_fixed_rate_ext_clks[] __initdata = {
-	FRATE(CLK_EXT, "ext", NULL, CLK_IS_ROOT, 24000000),
-	FRATE(CLK_RTC_EXT, "rtc_ext", NULL, CLK_IS_ROOT, 32768),
+        FRATE(CLK_EXT, "ext", NULL, CLK_IGNORE_UNUSED, 24000000),
+        FRATE(CLK_RTC_EXT, "rtc_ext", NULL, CLK_IGNORE_UNUSED, 32768),
 };
 
 
