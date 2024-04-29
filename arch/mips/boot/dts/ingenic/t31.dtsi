@@ -60,14 +60,6 @@
 		interrupt-names ="intc";
 	};
 
-	core_ost: core-ost@0x12000000 {
-		compatible = "ingenic,t31-ost";
-		reg = <0x12000000 0x30>;
-		interrupt-parent = <&cpuintc>;
-		interrupt-names = "sys_ost";
-		interrupts = <CORE_SYS_OST_IRQ>;
-	};
-
 	extclk: extclk {
 		compatible = "ingenic,fixed-clock";
 		clock-output-names ="ext";
@@ -89,6 +81,14 @@
 		clock-names = "ext", "rtc_ext";
 		#clock-cells = <1>;
 		little-endian;
+	};
+
+	core_ost: core-ost@0x12000000 {
+		compatible = "ingenic,t31-ost";
+		reg = <0x12000000 0x30>;
+		interrupt-parent = <&cpuintc>;
+		interrupt-names = "sys_ost";
+		interrupts = <CORE_SYS_OST_IRQ>;
 	};
 
 	apb {
