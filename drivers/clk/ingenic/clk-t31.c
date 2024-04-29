@@ -355,7 +355,7 @@ static int __init t31_clk_init_dt(void)
 
     return 0;
 }
-device_initcall(t31_clk_init_dt);
+CLK_OF_DECLARE(t31_clk, "ingenic,t31-clocks", t31_clk_init);
 
 static int __init init_clk_proc(void)
 {
