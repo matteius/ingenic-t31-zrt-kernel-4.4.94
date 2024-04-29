@@ -302,6 +302,11 @@ static void __init ingenic_ost_init(struct device_node *np)
 	ingenic_clockevent_init(evt, ext_rate);
 }
 
+CLOCKSOURCE_OF_DECLARE(x1000_ost_init, "ingenic,x1000-ost", ingenic_ost_init);
+CLOCKSOURCE_OF_DECLARE(x1800_ost_init, "ingenic,x1800-ost", ingenic_ost_init);
+CLOCKSOURCE_OF_DECLARE(t31_ost_init, "ingenic,t31-ost", ingenic_ost_init);
+CLOCKSOURCE_OF_DECLARE(t40_ost_init, "ingenic,t40-ost", ingenic_ost_init);
+
 static const struct of_device_id ingenic_ost_of_match[] = {
         { .compatible = "ingenic,x1000-ost", },
         { .compatible = "ingenic,x1800-ost", },
@@ -324,4 +329,3 @@ static int __init ingenic_ost_init_dt(void)
 
     return 0;
 }
-device_initcall(ingenic_ost_init_dt);
