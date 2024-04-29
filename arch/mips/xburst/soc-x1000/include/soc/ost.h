@@ -6,6 +6,7 @@
 
 #ifndef __OST_H__
 #define __OST_H__
+#include <linux/completion.h>
 
 #define OST_TCCR    (0x00)   /* OS Timer Clock Control Register*/
 #define OST_TER     (0x04)   /* OS Timer Counter Enable Register */
@@ -38,4 +39,7 @@
 
 #define ost_readl(reg)		readl_relaxed(reg)
 #define ost_writel(reg, val)	writel_relaxed(val, reg)
+
+static DECLARE_COMPLETION(clk_initialized);
+
 #endif
