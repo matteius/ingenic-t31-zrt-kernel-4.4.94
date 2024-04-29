@@ -263,8 +263,8 @@ static void __init ingenic_clockevent_init(struct ingenic_timerevent *evt_dev, u
 
 static void __init ingenic_ost_init(struct device_node *np)
 {
-
 	printk("[%s][%d]====== ingenic_ost_init ====== \n", __func__, __LINE__);
+    mdelay(2000);
 	struct ingenic_timerevent *evt = &ingenic_clockevent;
 	struct tmr_src *tmr = &tmr_src ;
 	struct clk *ext_clk = NULL;
