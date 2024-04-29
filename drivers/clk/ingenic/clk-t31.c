@@ -322,7 +322,7 @@ static void __init t31_clk_init(struct device_node *np)
 
     err_out_free:
     kfree(ctx);
-    err_out;
+    err_out:
 }
 
 CLK_OF_DECLARE(t31_clk, "ingenic,t31-clocks", t31_clk_init);
