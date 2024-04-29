@@ -355,7 +355,7 @@ static int __init t31_clk_init_dt(void)
 
     return 0;
 }
-arch_initcall(t31_clk_init_dt);
+device_initcall(t31_clk_init_dt);
 
 static int __init init_clk_proc(void)
 {
