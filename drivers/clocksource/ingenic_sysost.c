@@ -27,6 +27,7 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/delay.h>
+#include <linux/of_platform.h>
 #include <soc/ost.h>
 
 #define CLKSOURCE_DIV   (16)
@@ -284,7 +285,12 @@ static void __init ingenic_ost_init(struct device_node *np)
 		return;
 	}
 
-	ext_clk = clk_get(NULL, "ext");
+    struct device *dev = of_find_device_by_node(np);
+    if (!dev) {
+        pr_err("Failed to find device associated with the device node\n");
+        return;
+    }
+	ext_clk = clk_get(dev, "ext");
 	if (IS_ERR_OR_NULL(ext_clk)) {
 		pr_warn("Warning Ingenic Ost: Can not get extern clock, Please check clk driver !!\n\n\t\n");
 		ext_rate = 24000000;
