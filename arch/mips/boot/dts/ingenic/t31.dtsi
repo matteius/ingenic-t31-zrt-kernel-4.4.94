@@ -92,8 +92,6 @@
 		interrupt-parent = <&cpuintc>;
 		interrupt-names = "sys_ost";
 		interrupts = <CORE_SYS_OST_IRQ>;
-		clocks = <&ext>;
-		clock-names = "ext";
 	};
 
 	apb {
