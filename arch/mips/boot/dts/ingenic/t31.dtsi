@@ -68,7 +68,7 @@
 		interrupts = <CORE_SYS_OST_IRQ>;
 	};
 
-	extclk: extclk {
+	ext: ext {
 		compatible = "ingenic,fixed-clock";
 		clock-output-names ="ext";
 		#clock-cells = <0>;
@@ -76,7 +76,7 @@
 		status = "okay";
 	};
 
-	rtcclk: rtcclk {
+	rtc_ext: rtc_ext {
 		compatible = "ingenic,fixed-clock";
 		clock-output-names ="rtc_ext";
 		#clock-cells = <0>;
@@ -87,7 +87,7 @@
 	clock: clock-controller@0x10000000 {
 		compatible = "ingenic,t31-clocks";
 		reg = <0x10000000 0x100>;
-		clocks = <&extclk>, <&rtcclk>;
+		clocks = <&ext>, <&rtc_ext>;
 		clock-names = "ext", "rtc_ext";
 		#clock-cells = <1>;
 		little-endian;
