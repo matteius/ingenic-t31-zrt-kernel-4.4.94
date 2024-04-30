@@ -287,7 +287,7 @@ static void __init ingenic_ost_init(struct device_node *np)
 
 
     pr_err("Ingenic OST init: Device node full name: %s\n", of_node_full_name(np));
-    ext_clk = of_clk_get_by_name(np, "ext");
+    ext_clk = of_clk_get_by_name(np, 0);
     if (IS_ERR_OR_NULL(ext_clk)) {
         if (PTR_ERR(ext_clk) == -ENOENT) {
             pr_err("Error: Clock 'ext' not found in device tree\n");
