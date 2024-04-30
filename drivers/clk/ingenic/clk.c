@@ -151,8 +151,9 @@ void __init ingenic_clk_register_fixed_rate(struct ingenic_clk_provider *ctx,
 	unsigned int idx, ret;
 
 	for (idx = 0; idx < nr_clk; idx++, list++) {
-		clk = clk_register_fixed_rate(NULL, list->name,
-			list->parent_name, list->flags, list->fixed_rate);
+        struct device *dev = of_find_device_by_node(ctx->np);
+        clk = clk_register_fixed_rate(dev, list->name,
+                                      list->parent_name, list->flags, list->fixed_rate);
 		if (IS_ERR(clk)) {
 			pr_err("%s: failed to register clock %s\n", __func__,
 				list->name);
