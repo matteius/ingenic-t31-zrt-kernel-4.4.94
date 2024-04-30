@@ -152,6 +152,11 @@ void __init ingenic_clk_register_fixed_rate(struct ingenic_clk_provider *ctx,
 
 	for (idx = 0; idx < nr_clk; idx++, list++) {
         struct platform_device *dev = of_find_device_by_node(ctx->np);
+        printk("dev: %s\n", dev->name);
+        printk("list->name: %s\n", list->name);
+        printk("list->parent_name: %s\n", list->parent_name);
+        printk("list->flags: %d\n", list->flags);
+        printk("list->fixed_rate: %d\n", list->fixed_rate);
         clk = clk_register_fixed_rate((struct device *)dev, list->name,
                                       list->parent_name, list->flags, list->fixed_rate);
 		if (IS_ERR(clk)) {
@@ -445,7 +450,7 @@ void __init ingenic_clk_of_register_fixed_ext(struct ingenic_clk_provider *ctx,
 		fixed_rate_clk[index].fixed_rate = freq;
 		fixed_rate_clk[index].name = match->name;
 		fixed_rate_clk[index].parent_name = NULL;
-		fixed_rate_clk[index].flags = 0;
+		fixed_rate_clk[index].flags = 1;
 		index++;
 	}
 	ingenic_clk_register_fixed_rate(ctx, fixed_rate_clk, nr_fixed_rate_clk);
