@@ -332,8 +332,6 @@ static void __init t31_clk_init(struct device_node *np)
     err_out_free:
     kfree(ctx);
     err_out:
-    // Signal that clocks are initialized
-    complete(&clk_initialized);
     return;
 }
 
