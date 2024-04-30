@@ -525,7 +525,7 @@ static void __init ingenic_ost_init(struct device_node *np)
 			printk("parse cpu-ost-iomap, ost number define in dt is too large!\n");
 			break;
 		}
-        }
+    }
 
 	ext_clk = clk_get(NULL, "ext");
 	if (IS_ERR_OR_NULL(ext_clk)) {
