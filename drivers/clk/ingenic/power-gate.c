@@ -152,9 +152,13 @@ struct clk *power_register_gate(struct device *dev, const char *name,
 	struct clk_init_data init;
 
 	/* allocate the gate */
+    printk("power_register_gate\n");
 	gate = kzalloc(sizeof(*gate), GFP_KERNEL);
-	if (!gate)
-		return ERR_PTR(-ENOMEM);
+	if (!gate) {
+        printk("power_register_gate: gate is NULL\n");
+        return ERR_PTR(-ENOMEM);
+    }
+
 
 	init.name = name;
 	init.ops = &power_gate_ops;
