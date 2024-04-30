@@ -171,9 +171,9 @@ void __init ingenic_clk_register_fixed_rate(struct ingenic_clk_provider *ctx,
             pr_err("%s: failed to register clock lookup for %s",
                    __func__, list->name);
         }
-
         clk_enable(clk);
 	}
+    ingenic_clk_of_add_provider(ctx->np, ctx);
 }
 
 /* register a list of fixed factor clocks */

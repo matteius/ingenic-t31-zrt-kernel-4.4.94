@@ -277,8 +277,6 @@ static void __init t31_clk_init(struct device_node *np)
     }
 
     ctx->np = np;
-    // ctx->clock_info = clock_info;
-    //ctx->clocks.clk_num = num_clocks;
 
     printk("spin_lock_init\n");
     spin_lock_init(&ctx->lock);
