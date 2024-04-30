@@ -434,8 +434,13 @@ void __init ingenic_clk_of_register_fixed_ext(struct ingenic_clk_provider *ctx,
 	u32 index = 0;
 
 	for_each_matching_node_and_match(clk_np, clk_matches, &match) {
-		if (of_property_read_u32(clk_np, "clock-frequency", &freq))
-			continue;
+        printk("clk_np: %s\n", clk_np->name)
+		if (of_property_read_u32(clk_np, "clock-frequency", &freq)) {
+            printk("clock-frequency not found\n")
+            continue;
+        }
+
+        printk("freq: %d\n", freq)
 		fixed_rate_clk[index].fixed_rate = freq;
 		fixed_rate_clk[index].name = match->name;
 		fixed_rate_clk[index].parent_name = NULL;

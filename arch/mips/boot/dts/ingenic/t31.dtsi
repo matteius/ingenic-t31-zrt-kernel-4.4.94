@@ -70,7 +70,7 @@
 
 	ext: ext {
 		compatible = "ingenic,fixed-clock";
-		clock-output-names ="ext";
+		clock-output-names = "ext";
 		#clock-cells = <0>;
 		clock-frequency  = <24000000>;
 		status = "okay";
@@ -78,7 +78,7 @@
 
 	rtc_ext: rtc_ext {
 		compatible = "ingenic,fixed-clock";
-		clock-output-names ="rtc_ext";
+		clock-output-names = "rtc_ext";
 		#clock-cells = <0>;
 		clock-frequency = <32768>;
 		status = "okay";
