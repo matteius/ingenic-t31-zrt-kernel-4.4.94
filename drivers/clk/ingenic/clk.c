@@ -167,9 +167,12 @@ void __init ingenic_clk_register_fixed_rate(struct ingenic_clk_provider *ctx,
 		ingenic_clk_add_lookup(ctx, clk, list->id);
 
 		ret = clk_register_clkdev(clk, list->name, NULL);
-		if (ret)
-			pr_err("%s: failed to register clock lookup for %s",
-				__func__, list->name);
+		if (ret) {
+            pr_err("%s: failed to register clock lookup for %s",
+                   __func__, list->name);
+        }
+
+        clk_prepare_enable(clk);
 	}
 }
 
