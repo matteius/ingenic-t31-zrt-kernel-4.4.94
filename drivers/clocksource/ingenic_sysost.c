@@ -285,17 +285,12 @@ static void __init ingenic_ost_init(struct device_node *np)
 		return;
 	}
 
-    struct device *dev = (struct device *)of_find_device_by_node(np);
-    if (!dev) {
-        pr_err("Failed to find device associated with the device node\n");
-        return;
-    }
-	ext_clk = clk_get((struct device *)dev, "ext");
+
+	ext_clk = clk_get_by_name(np, "ext");
 	if (IS_ERR_OR_NULL(ext_clk)) {
 		pr_warn("Warning Ingenic Ost: Can not get extern clock, Please check clk driver !!\n\n\t\n");
 		ext_rate = 24000000;
 	} else {
-
 		ext_rate = clk_get_rate(ext_clk);
 		clk_put(ext_clk);
 	}
