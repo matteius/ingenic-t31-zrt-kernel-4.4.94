@@ -172,7 +172,7 @@ void __init ingenic_clk_register_fixed_rate(struct ingenic_clk_provider *ctx,
                    __func__, list->name);
         }
 
-        clk_prepare_enable(clk);
+        clk_enable(clk);
 	}
 }
 
