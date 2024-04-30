@@ -285,7 +285,7 @@ static void __init ingenic_ost_init(struct device_node *np)
 		return;
 	}
 
-    struct device *dev = of_find_device_by_node(np);
+    struct device *dev = (struct device *)of_find_device_by_node(np);
     if (!dev) {
         pr_err("Failed to find device associated with the device node\n");
         return;
