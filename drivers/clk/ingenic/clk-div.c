@@ -194,7 +194,7 @@ struct clk *_register_cgu_divider(struct device *dev, const char *name,
 	//cgu_div->div.lock = lock;
 	cgu_div->div.lock = NULL;	/* keep common block unlocked. add lock in this file */
 	cgu_div->div.table = table;
-	cgu_div->div.flags = clk_divider_flags;
+	cgu_div->div.flags = 1;
 	cgu_div->div_ops = &clk_divider_ops;
 
 

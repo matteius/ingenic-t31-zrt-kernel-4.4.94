@@ -140,37 +140,45 @@ void __iomem *busy_reg, u8 busy_shift,
 int ce_shift, u8 clk_divider_flags,
 const struct clk_div_table *table, spinlock_t *lock)
 {
-struct clk_bus_divider *div;
-struct clk_init_data init = {};
-struct clk *clk;
+	struct clk_bus_divider *bus_div;
+	struct clk *clk;
+	struct clk_init_data init;
 
-div = kzalloc(sizeof(*div), GFP_KERNEL);
-if (!div) {
-return ERR_PTR(-ENOMEM);
-}
+	bus_div = kzalloc(sizeof(*bus_div), GFP_KERNEL);
+	if (!bus_div)
+		return ERR_PTR(-ENOMEM);
 
-// Set up initial clock data
-init.name = name;
-init.ops = &clk_bus_divider_ops;
-init.flags = flags;
-init.parent_names = &parent_name;
-init.num_parents = 1;
+	init.name = name;
+	init.ops = &clk_bus_divider_ops;
+	init.flags = flags | CLK_IS_BASIC;
+	init.parent_names = (parent_name ? &parent_name: NULL);
+	init.num_parents = (parent_name ? 1 : 0);
 
-div->div.reg = reg;
-div->div.shift = shift1;
-div->div.width = width1;
-div->div.table = table;
-div->div.flags = clk_divider_flags;
+	bus_div->busy_reg = busy_reg;
+	bus_div->busy_shift = busy_shift;
+	bus_div->ce_shift = ce_shift;
+	bus_div->lock = lock;
 
-div->div.hw.init = &init;
-div->busy_reg = busy_reg;
-div->busy_shift = busy_shift;
-div->ce_shift = ce_shift;
-div->lock = lock;
+	bus_div->div.reg = reg;
+	bus_div->div.shift = shift1;
+	bus_div->div.width = width1;
+	bus_div->shift1 = shift1;
+	bus_div->width1 = width1;
+	bus_div->shift2 = shift2;
+	bus_div->width2 = width2;
+	//bus_div->div.lock = lock;
+	bus_div->div.lock = NULL;	/* keep common block unlocked. add lock in this file */
+	bus_div->div.table = table;
+	bus_div->div.flags = clk_divider_flags ;
+	bus_div->div_ops = &clk_divider_ops;
+	bus_div->div_flags = div_flags ;
 
-clk = clk_register(dev, &div->div.hw);
+
+	bus_div->div.hw.init = &init;
+
+	clk = clk_register(dev, &bus_div->div.hw);
 if (IS_ERR(clk)) {
-kfree(div);
+kfree(bus_div);
 return clk;
 }
 

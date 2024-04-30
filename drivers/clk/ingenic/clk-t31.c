@@ -259,7 +259,10 @@ static void __init t31_clk_init(struct device_node *np)
 
     struct ingenic_clk_provider *ctx;
 
+
+	printk("Calling kzalloc");
     ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+	printk("kzalloc returned");
     if (!ctx)
         printk("%s: failed to allocate memory for CGU\n", __func__);
     goto err_out;
