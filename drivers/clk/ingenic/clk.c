@@ -440,19 +440,17 @@ void __init ingenic_clk_of_register_fixed_ext(struct ingenic_clk_provider *ctx,
     unsigned int idx;
 
     for (idx = 0; idx < nr_fixed_rate_clk; idx++) {
-        struct clk_fixed_rate *fixed;
+        printk("fixed_rate_clk[idx].name: %s\n", fixed_rate_clk[idx].name);
+        printk("fixed_rate_clk[idx].parent_name: %s\n", fixed_rate_clk[idx].parent_name);
+        printk("fixed_rate_clk[idx].flags: %d\n", fixed_rate_clk[idx].flags);
+        printk("fixed_rate_clk[idx].fixed_rate: %d\n", fixed_rate_clk[idx].fixed_rate);
+        clk = clk_register_fixed_rate(NULL, fixed_rate_clk[idx].name,
+                                      fixed_rate_clk[idx].parent_name, fixed_rate_clk[idx].flags,
+                                      fixed_rate_clk[idx].fixed_rate);
 
-        fixed = kzalloc(sizeof(*fixed), GFP_KERNEL);
-        if (!fixed)
-            return;
-
-        fixed->fixed_rate = fixed_rate_clk[idx].fixed_rate;
-
-        clk = clk_register(NULL, &fixed->hw);
         if (IS_ERR(clk)) {
             pr_err("%s: failed to register clock %s\n", __func__,
                    fixed_rate_clk[idx].name);
-            kfree(fixed);
             continue;
         }
 
