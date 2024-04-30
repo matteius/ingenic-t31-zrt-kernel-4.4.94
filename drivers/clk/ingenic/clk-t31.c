@@ -332,6 +332,8 @@ static void __init t31_clk_init(struct device_node *np)
             _get_rate("div_ahb0"), _get_rate("div_ahb2"),
             _get_rate("div_apb"), _get_rate("ext"), _get_rate("div_ddr"));
 
+    return;
+
     err_out_free:
     kfree(ctx);
     err_out:
