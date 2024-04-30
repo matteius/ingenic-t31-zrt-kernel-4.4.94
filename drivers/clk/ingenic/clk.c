@@ -437,6 +437,9 @@ void __init ingenic_clk_of_register_fixed_ext(struct ingenic_clk_provider *ctx,
 		if (of_property_read_u32(clk_np, "clock-frequency", &freq))
 			continue;
 		fixed_rate_clk[index].fixed_rate = freq;
+		fixed_rate_clk[index].name = match->name;
+		fixed_rate_clk[index].parent_name = NULL;
+		fixed_rate_clk[index].flags = 0;
 		index++;
 	}
 	ingenic_clk_register_fixed_rate(ctx, fixed_rate_clk, nr_fixed_rate_clk);

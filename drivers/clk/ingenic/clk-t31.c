@@ -253,72 +253,90 @@ static const struct file_operations clocks_proc_fops ={
 };
 
 /* Register t31 clocks. */
-static void __init t31_clk_init(struct device_node *np, void __iomem *base)
+static void __init t31_clk_init(struct device_node *np)
 {
-	void __iomem *reg_base;
+    printk("t31 Clock Power Management Unit init!\n");
 
-	printk("t31 Clock Power Management Unit init!\n");
+    struct ingenic_clk_provider *ctx;
 
-	reg_base = base;
+    ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+    if (!ctx)
+        printk("%s: failed to allocate memory for CGU\n", __func__);
+    goto err_out;
 
-	if (np) {
-		reg_base = of_iomap(np, 0);
-		if (!reg_base)
-            printk("failed to map registers!\n");
-			panic("%s: failed to map registers\n", __func__);
-	}
+    printk("t31_clk_init: ctx = %p\n", ctx);
+    ctx->reg_base = of_iomap(np, 0);
+    if (!ctx->reg_base) {
+        printk("%s: failed to map CGU registers\n", __func__);
+        goto err_out_free;
+    }
+
+    ctx->np = np;
+    // ctx->clock_info = clock_info;
+    //ctx->clocks.clk_num = num_clocks;
+
+    printk("spin_lock_init\n");
+    spin_lock_init(&ctx->lock);
+
+    /* Register Ext Clocks From DT */
+    printk("ingenic_clk_of_register_fixed_ext\n");
+    ingenic_clk_of_register_fixed_ext(ctx, t31_fixed_rate_ext_clks,
+                                      ARRAY_SIZE(t31_fixed_rate_ext_clks), ext_clk_match);
+
+    /* Register PLLs. */
+    printk("ingenic_clk_register_pll\n");
+    ingenic_clk_register_pll(ctx, t31_pll_clks,
+                             ARRAY_SIZE(t31_pll_clks), ctx->reg_base);
 
 
-	ctx = ingenic_clk_init(np, reg_base, NR_CLKS);
-	if (!ctx)
-        printk("unable to allocate context!\n");
-		panic("%s: unable to allocate context.\n", __func__);
+    /* Register Muxs */
+    printk("ingenic_clk_register_mux\n");
+    ingenic_clk_register_mux(ctx, t31_mux_clks, ARRAY_SIZE(t31_mux_clks));
 
-	/* Register Ext Clocks From DT */
-	ingenic_clk_of_register_fixed_ext(ctx, t31_fixed_rate_ext_clks,
-			                        ARRAY_SIZE(t31_fixed_rate_ext_clks), ext_clk_match);
+    /* Register Bus Divs */
+    printk("ingenic_clk_register_bus_div\n");
+    ingenic_clk_register_bus_div(ctx, t31_bus_div_clks, ARRAY_SIZE(t31_bus_div_clks));
 
-	/* Register PLLs. */
-	ingenic_clk_register_pll(ctx, t31_pll_clks,
-				ARRAY_SIZE(t31_pll_clks), reg_base);
+    /* Register Divs */
+    printk("ingenic_clk_register_cgu_div\n");
+    clk_div_table_generate();
+    ingenic_clk_register_cgu_div(ctx, t31_div_clks, ARRAY_SIZE(t31_div_clks));
 
+    /* Register Fractional Divs */
+    printk("ingenic_clk_register_fra_div\n");
+    ingenic_clk_register_fra_div(ctx, t31_fdiv_clks, ARRAY_SIZE(t31_fdiv_clks));
 
-	/* Register Muxs */
-	ingenic_clk_register_mux(ctx, t31_mux_clks, ARRAY_SIZE(t31_mux_clks));
+    /* Register Gates */
+    printk("ingenic_clk_register_gate\n");
+    ingenic_clk_register_gate(ctx, t31_gate_clks, ARRAY_SIZE(t31_gate_clks));
 
-	/* Register Bus Divs */
-	ingenic_clk_register_bus_div(ctx, t31_bus_div_clks, ARRAY_SIZE(t31_bus_div_clks));
-
-	/* Register Divs */
-	clk_div_table_generate();
-	ingenic_clk_register_cgu_div(ctx, t31_div_clks, ARRAY_SIZE(t31_div_clks));
-
-	/* Register Fractional Divs */
-	ingenic_clk_register_fra_div(ctx, t31_fdiv_clks, ARRAY_SIZE(t31_fdiv_clks));
-
-	/* Register Gates */
-	ingenic_clk_register_gate(ctx, t31_gate_clks, ARRAY_SIZE(t31_gate_clks));
-
-	/* Register Powers */
+    /* Register Powers */
 //	ingenic_power_register_gate(ctx, t31_gate_power, ARRAY_SIZE(t31_gate_power));
 
-	ingenic_clk_of_add_provider(np, ctx);
+    ingenic_clk_of_add_provider(np, ctx);
 
 
-	//ingenic_clk_of_dump(ctx);
+    //ingenic_clk_of_dump(ctx);
 
 
-	pr_info("=========== t31 clocks: =============\n"
-		"\tapll     = %lu , mpll     = %lu\n"
-		"\tcpu_clk  = %lu , l2c_clk  = %lu\n"
-		"\tahb0_clk = %lu , ahb2_clk = %lu\n"
-		"\tapb_clk  = %lu , ext_clk  = %lu, ddr_clk  = %lu\n\n",
-		_get_rate("apll"),	_get_rate("mpll"),
-		_get_rate("div_cpu"), _get_rate("div_l2c"),
-		_get_rate("div_ahb0"), _get_rate("div_ahb2"),
-		_get_rate("div_apb"), _get_rate("ext"), _get_rate("div_ddr"));
+    pr_info("=========== t31 clocks: =============\n"
+            "\tapll     = %lu , mpll     = %lu\n"
+            "\tcpu_clk  = %lu , l2c_clk  = %lu\n"
+            "\tahb0_clk = %lu , ahb2_clk = %lu\n"
+            "\tapb_clk  = %lu , ext_clk  = %lu, ddr_clk  = %lu\n\n",
+            _get_rate("apll"),	_get_rate("mpll"),
+            _get_rate("div_cpu"), _get_rate("div_l2c"),
+            _get_rate("div_ahb0"), _get_rate("div_ahb2"),
+            _get_rate("div_apb"), _get_rate("ext"), _get_rate("div_ddr"));
 
+    err_out_free:
+    kfree(ctx);
+    err_out:
+    // Signal that clocks are initialized
+    complete(&clk_initialized);
+    return;
 }
+
 
 CLK_OF_DECLARE(t31_clk, "ingenic,t31-clocks", t31_clk_init);
 
