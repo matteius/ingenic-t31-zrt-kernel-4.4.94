@@ -152,7 +152,6 @@ void __init ingenic_clk_register_fixed_rate(struct ingenic_clk_provider *ctx,
 
 	for (idx = 0; idx < nr_clk; idx++, list++) {
         struct platform_device *dev = of_find_device_by_node(ctx->np);
-        printk("dev: %s\n", dev->name);
         printk("list->name: %s\n", list->name);
         printk("list->parent_name: %s\n", list->parent_name);
         printk("list->flags: %d\n", list->flags);
