@@ -94,6 +94,37 @@
 		interrupts = <CORE_SYS_OST_IRQ>;
 	};
 
+	uart0: serial@0x10030000 {
+		compatible = "ingenic,8250-uart";
+		reg = <0x10030000 0x1000>;
+		reg-shift = <2>;
+		interrupt-parent = <&core_intc>;
+		interrupts = <IRQ_UART0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart0_pc>;
+		status = "disabled";
+	};
+	uart1: serial@0x10031000 {
+		compatible = "ingenic,8250-uart";
+		reg = <0x10031000 0x1000>;
+		reg-shift = <2>;
+		interrupt-parent = <&core_intc>;
+		interrupts = <IRQ_UART1>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart1_pb>;
+		status = "disabled";
+	};
+	uart2: serial@0x10032000 {
+		compatible = "ingenic,8250-uart";
+		reg = <0x10032000 0x1000>;
+		reg-shift = <2>;
+		interrupt-parent = <&core_intc>;
+		interrupts = <IRQ_UART2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart2_pc>;
+		status = "disabled";
+	};
+
 	apb {
 		compatible = "simple-bus";
 		#address-cells = <1>;
@@ -268,37 +299,7 @@
 
 			status = "disabled";
 		};
-
-		uart0: serial@0x10030000 {
-			compatible = "ingenic,8250-uart";
-			reg = <0x10030000 0x1000>;
-			reg-shift = <2>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_UART0>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&uart0_pc>;
-			status = "disabled";
-		};
-		uart1: serial@0x10031000 {
-			compatible = "ingenic,8250-uart";
-			reg = <0x10031000 0x1000>;
-			reg-shift = <2>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_UART1>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&uart1_pb>;
-			status = "disabled";
-		};
-		uart2: serial@0x10032000 {
-			compatible = "ingenic,8250-uart";
-			reg = <0x10032000 0x1000>;
-			reg-shift = <2>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_UART2>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&uart2_pc>;
-			status = "disabled";
-		};
+		
 
 		i2c0: i2c@0x10050000 {
 			compatible = "ingenic,t31-i2c";
