@@ -28,6 +28,7 @@
 #include <linux/of.h>
 #include <linux/delay.h>
 #include <linux/sched.h>
+#include <linux/uaccess.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/delay.h>
