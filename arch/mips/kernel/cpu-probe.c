@@ -1833,6 +1833,8 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 	}
 }
 
+static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
+{
 	decode_configs(c);
 	/* JZRISC does not implement the CP0 counter. */
 	/* INGENIC RISC does not implement the CP0 counter. */
@@ -1840,6 +1842,7 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 	BUG_ON(!__builtin_constant_p(cpu_has_counter) || cpu_has_counter);
 
 	switch (c->processor_id & PRID_IMP_PROCESSOR_ID_MSK) {
+	case PRID_IMP_JZRISC:
 	case PRID_IMP_XBURST:
 	{
 		unsigned int config7;
@@ -2011,7 +2014,6 @@ void cpu_probe(void)
 	case PRID_COMP_INGENIC_D0:
 	case PRID_COMP_INGENIC_D1:
 	case PRID_COMP_INGENIC_E1:
-	case PRID_COMP_INGENIC_13:
 		cpu_probe_ingenic(c, cpu);
 		break;
 	case PRID_COMP_NETLOGIC:
