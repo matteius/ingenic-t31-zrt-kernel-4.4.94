@@ -1837,42 +1837,14 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 {
 	decode_configs(c);
 	/* JZRISC does not implement the CP0 counter. */
-	/* INGENIC RISC does not implement the CP0 counter. */
 	c->options &= ~MIPS_CPU_COUNTER;
 	BUG_ON(!__builtin_constant_p(cpu_has_counter) || cpu_has_counter);
-
-	switch (c->processor_id & PRID_IMP_PROCESSOR_ID_MSK) {
+	switch (c->processor_id & PRID_IMP_MASK) {
 	case PRID_IMP_JZRISC:
-	case PRID_IMP_XBURST:
-	{
-		unsigned int config7;
 		c->cputype = CPU_JZRISC;
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
-		__cpu_name[cpu] = "Xburst";
-		/*
-		 * When CPU enters the long cycle, it will reduce the CPU speed to save power.
-		 * Set cp0 config7 bit 4 to disable this feature
-		 * This feature will cause bogoMips and loops_per_jiffy calculate in error
-		 */
-		config7 = read_c0_config7();
-		config7 |= (1 << 4);
-		write_c0_config7(config7);
-
-		config1 = read_c0_config1();
-#ifdef CONFIG_XBURST_MXUV2
-		if(soc_support_mxuv2()) {
-			c->ases |= MIPS_ASE_XBURSTMXUV2;
-		} else
-#endif
-		//c->ases |= MIPS_ASE_XBURSTMXU;
-	}
+		__cpu_name[cpu] = "Ingenic JZRISC";
 		break;
-	case PRID_IMP_XBURST2:
-	{
-		c->cputype = CPU_JZRISC;
-		__cpu_name[cpu] = "Ingenic XBurst@II";
-		break;
-	}
 	default:
 		panic("Unknown Ingenic Processor ID!");
 		break;
