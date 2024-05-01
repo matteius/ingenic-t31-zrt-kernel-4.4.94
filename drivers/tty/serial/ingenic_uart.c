@@ -51,6 +51,7 @@
 
 #include "ingenic_uart.h"
 
+#define ASYNCB_CTS_FLOW		26 /* Do CTS flow control */
 #define ASYNC_CTS_FLOW		(1U << ASYNCB_CTS_FLOW) // still used here
 
 #define PORT_NR 10
