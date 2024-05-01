@@ -21,7 +21,6 @@
 #include <platform/simcall.h>
 
 #define SIMDISK_MAJOR 240
-#define SECTOR_SHIFT 9
 #define SIMDISK_MINORS 1
 #define MAX_SIMDISK_COUNT 10
 
@@ -86,6 +85,7 @@ static void simdisk_transfer(struct simdisk *dev, unsigned long sector,
 		unsigned long io;
 
 		simc_lseek(dev->fd, offset, SEEK_SET);
+		READ_ONCE(*buffer);
 		if (write)
 			io = simc_write(dev->fd, buffer, nbytes);
 		else

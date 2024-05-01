@@ -10,6 +10,7 @@
 #include <linux/wait.h>
 #include <linux/hash.h>
 #include <linux/kthread.h>
+#include <linux/poll.h>
 
 void __init_waitqueue_head(wait_queue_head_t *q, const char *name, struct lock_class_key *key)
 {
@@ -156,6 +157,13 @@ void __wake_up_sync(wait_queue_head_t *q, unsigned int mode, int nr_exclusive)
 }
 EXPORT_SYMBOL_GPL(__wake_up_sync);	/* For internal use only */
 
+void __wake_up_pollfree(wait_queue_head_t *wq_head)
+{
+	__wake_up(wq_head, TASK_NORMAL, 0, (void *)(POLLHUP | POLLFREE));
+	/* POLLFREE must have cleared the queue. */
+	WARN_ON_ONCE(waitqueue_active(wq_head));
+}
+
 /*
  * Note: we use "set_current_state()" _after_ the wait-queue add,
  * because we need a memory barrier there on SMP, so that any
@@ -196,27 +204,48 @@ prepare_to_wait_exclusive(wait_queue_head_t *q, wait_queue_t *wait, int state)
 }
 EXPORT_SYMBOL(prepare_to_wait_exclusive);
 
+void init_wait_entry(wait_queue_t *wait, int flags)
+{
+	wait->flags = flags;
+	wait->private = current;
+	wait->func = autoremove_wake_function;
+	INIT_LIST_HEAD(&wait->task_list);
+}
+EXPORT_SYMBOL(init_wait_entry);
+
 long prepare_to_wait_event(wait_queue_head_t *q, wait_queue_t *wait, int state)
 {
 	unsigned long flags;
-
-	if (signal_pending_state(state, current))
-		return -ERESTARTSYS;
-
-	wait->private = current;
-	wait->func = autoremove_wake_function;
+	long ret = 0;
 
 	spin_lock_irqsave(&q->lock, flags);
-	if (list_empty(&wait->task_list)) {
-		if (wait->flags & WQ_FLAG_EXCLUSIVE)
-			__add_wait_queue_tail(q, wait);
-		else
-			__add_wait_queue(q, wait);
+	if (unlikely(signal_pending_state(state, current))) {
+		/*
+		 * Exclusive waiter must not fail if it was selected by wakeup,
+		 * it should "consume" the condition we were waiting for.
+		 *
+		 * The caller will recheck the condition and return success if
+		 * we were already woken up, we can not miss the event because
+		 * wakeup locks/unlocks the same q->lock.
+		 *
+		 * But we need to ensure that set-condition + wakeup after that
+		 * can't see us, it should wake up another exclusive waiter if
+		 * we fail.
+		 */
+		list_del_init(&wait->task_list);
+		ret = -ERESTARTSYS;
+	} else {
+		if (list_empty(&wait->task_list)) {
+			if (wait->flags & WQ_FLAG_EXCLUSIVE)
+				__add_wait_queue_tail(q, wait);
+			else
+				__add_wait_queue(q, wait);
+		}
+		set_current_state(state);
 	}
-	set_current_state(state);
 	spin_unlock_irqrestore(&q->lock, flags);
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(prepare_to_wait_event);
 
@@ -254,39 +283,6 @@ void finish_wait(wait_queue_head_t *q, wait_queue_t *wait)
 	}
 }
 EXPORT_SYMBOL(finish_wait);
-
-/**
- * abort_exclusive_wait - abort exclusive waiting in a queue
- * @q: waitqueue waited on
- * @wait: wait descriptor
- * @mode: runstate of the waiter to be woken
- * @key: key to identify a wait bit queue or %NULL
- *
- * Sets current thread back to running state and removes
- * the wait descriptor from the given waitqueue if still
- * queued.
- *
- * Wakes up the next waiter if the caller is concurrently
- * woken up through the queue.
- *
- * This prevents waiter starvation where an exclusive waiter
- * aborts and is woken up concurrently and no one wakes up
- * the next waiter.
- */
-void abort_exclusive_wait(wait_queue_head_t *q, wait_queue_t *wait,
-			unsigned int mode, void *key)
-{
-	unsigned long flags;
-
-	__set_current_state(TASK_RUNNING);
-	spin_lock_irqsave(&q->lock, flags);
-	if (!list_empty(&wait->task_list))
-		list_del_init(&wait->task_list);
-	else if (waitqueue_active(q))
-		__wake_up_locked_key(q, mode, key);
-	spin_unlock_irqrestore(&q->lock, flags);
-}
-EXPORT_SYMBOL(abort_exclusive_wait);
 
 int autoremove_wake_function(wait_queue_t *wait, unsigned mode, int sync, void *key)
 {
@@ -425,20 +421,29 @@ int __sched
 __wait_on_bit_lock(wait_queue_head_t *wq, struct wait_bit_queue *q,
 			wait_bit_action_f *action, unsigned mode)
 {
-	do {
-		int ret;
+	int ret = 0;
 
+	for (;;) {
 		prepare_to_wait_exclusive(wq, &q->wait, mode);
-		if (!test_bit(q->key.bit_nr, q->key.flags))
-			continue;
-		ret = action(&q->key, mode);
-		if (!ret)
-			continue;
-		abort_exclusive_wait(wq, &q->wait, mode, &q->key);
-		return ret;
-	} while (test_and_set_bit(q->key.bit_nr, q->key.flags));
-	finish_wait(wq, &q->wait);
-	return 0;
+		if (test_bit(q->key.bit_nr, q->key.flags)) {
+			ret = action(&q->key, mode);
+			/*
+			 * See the comment in prepare_to_wait_event().
+			 * finish_wait() does not necessarily takes wq->lock,
+			 * but test_and_set_bit() implies mb() which pairs with
+			 * smp_mb__after_atomic() before wake_up_page().
+			 */
+			if (ret)
+				finish_wait(wq, &q->wait);
+		}
+		if (!test_and_set_bit(q->key.bit_nr, q->key.flags)) {
+			if (!ret)
+				finish_wait(wq, &q->wait);
+			return 0;
+		} else if (ret) {
+			return ret;
+		}
+	}
 }
 EXPORT_SYMBOL(__wait_on_bit_lock);
 
@@ -482,16 +487,6 @@ void wake_up_bit(void *word, int bit)
 	__wake_up_bit(bit_waitqueue(word, bit), word, bit);
 }
 EXPORT_SYMBOL(wake_up_bit);
-
-wait_queue_head_t *bit_waitqueue(void *word, int bit)
-{
-	const int shift = BITS_PER_LONG == 32 ? 5 : 6;
-	const struct zone *zone = page_zone(virt_to_page(word));
-	unsigned long val = (unsigned long)word << shift | bit;
-
-	return &zone->wait_table[hash_long(val, zone->wait_table_bits)];
-}
-EXPORT_SYMBOL(bit_waitqueue);
 
 /*
  * Manipulate the atomic_t address to produce a better bit waitqueue table hash

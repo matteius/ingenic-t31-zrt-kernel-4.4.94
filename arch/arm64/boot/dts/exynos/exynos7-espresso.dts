@@ -12,6 +12,7 @@
 /dts-v1/;
 #include "exynos7.dtsi"
 #include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/clock/samsung,s2mps11.h>
 
 / {
 	model = "Samsung Exynos7 Espresso board based on EXYNOS7";
@@ -43,6 +44,8 @@
 
 &rtc {
 	status = "okay";
+	clocks = <&clock_ccore PCLK_RTC>, <&s2mps15_osc S2MPS11_CLK_AP>;
+	clock-names = "rtc", "rtc_src";
 };
 
 &watchdog {
@@ -61,7 +64,7 @@
 	s2mps15_pmic@66 {
 		compatible = "samsung,s2mps15-pmic";
 		reg = <0x66>;
-		interrupts = <2 IRQ_TYPE_NONE>;
+		interrupts = <2 IRQ_TYPE_LEVEL_LOW>;
 		interrupt-parent = <&gpa0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pmic_irq>;
@@ -128,6 +131,7 @@
 				regulator-min-microvolt = <700000>;
 				regulator-max-microvolt = <1150000>;
 				regulator-enable-ramp-delay = <125>;
+				regulator-always-on;
 			};
 
 			ldo8_reg: LDO8 {
@@ -249,7 +253,7 @@
 
 			buck2_reg: BUCK2 {
 				regulator-name = "vdd_atlas";
-				regulator-min-microvolt = <1200000>;
+				regulator-min-microvolt = <500000>;
 				regulator-max-microvolt = <1200000>;
 				regulator-always-on;
 				regulator-boot-on;

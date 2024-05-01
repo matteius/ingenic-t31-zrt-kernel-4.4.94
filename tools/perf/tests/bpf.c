@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/epoll.h>
 #include <util/util.h>
 #include <util/bpf-loader.h>
@@ -13,13 +14,13 @@
 
 #ifdef HAVE_LIBBPF_SUPPORT
 
-static int epoll_pwait_loop(void)
+static int epoll_wait_loop(void)
 {
 	int i;
 
 	/* Should fail NR_ITERS times */
 	for (i = 0; i < NR_ITERS; i++)
-		epoll_pwait(-(i + 1), NULL, 0, 0, NULL);
+		epoll_wait(-(i + 1), NULL, 0, 0);
 	return 0;
 }
 
@@ -61,7 +62,7 @@ static struct {
 		"[basic_bpf_test]",
 		"fix 'perf test LLVM' first",
 		"load bpf object failed",
-		&epoll_pwait_loop,
+		&epoll_wait_loop,
 		(NR_ITERS + 1) / 2,
 	},
 #ifdef HAVE_BPF_PROLOGUE
@@ -125,7 +126,7 @@ static int do_test(struct bpf_object *obj, int (*func)(void),
 	/* Instead of perf_evlist__new_default, don't add default events */
 	evlist = perf_evlist__new();
 	if (!evlist) {
-		pr_debug("No ehough memory to create evlist\n");
+		pr_debug("No enough memory to create evlist\n");
 		return TEST_FAIL;
 	}
 
@@ -138,19 +139,19 @@ static int do_test(struct bpf_object *obj, int (*func)(void),
 	perf_evlist__splice_list_tail(evlist, &parse_evlist.list);
 	evlist->nr_groups = parse_evlist.nr_groups;
 
-	perf_evlist__config(evlist, &opts);
+	perf_evlist__config(evlist, &opts, NULL);
 
 	err = perf_evlist__open(evlist);
 	if (err < 0) {
 		pr_debug("perf_evlist__open: %s\n",
-			 strerror_r(errno, sbuf, sizeof(sbuf)));
+			 str_error_r(errno, sbuf, sizeof(sbuf)));
 		goto out_delete_evlist;
 	}
 
 	err = perf_evlist__mmap(evlist, opts.mmap_pages, false);
 	if (err < 0) {
 		pr_debug("perf_evlist__mmap: %s\n",
-			 strerror_r(errno, sbuf, sizeof(sbuf)));
+			 str_error_r(errno, sbuf, sizeof(sbuf)));
 		goto out_delete_evlist;
 	}
 
@@ -231,6 +232,7 @@ static int __test__bpf(int idx)
 			      bpf_testcase_table[idx].target_func,
 			      bpf_testcase_table[idx].expect_result);
 out:
+	free(obj_buf);
 	bpf__clear();
 	return ret;
 }

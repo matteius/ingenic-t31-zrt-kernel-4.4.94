@@ -22,7 +22,8 @@ config KVM
 	depends on HAVE_KVM
 	depends on HIGH_RES_TIMERS
 	# for TASKSTATS/TASK_DELAY_ACCT:
-	depends on NET
+	depends on NET && MULTIUSER
+	depends on X86_LOCAL_APIC
 	select PREEMPT_NOTIFIERS
 	select MMU_NOTIFIER
 	select ANON_INODES
@@ -32,7 +33,6 @@ config KVM
 	select HAVE_KVM_IRQ_BYPASS
 	select HAVE_KVM_IRQ_ROUTING
 	select HAVE_KVM_EVENTFD
-	select KVM_APIC_ARCHITECTURE
 	select KVM_ASYNC_PF
 	select USER_RETURN_NOTIFIER
 	select KVM_MMIO

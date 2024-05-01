@@ -11,7 +11,6 @@
  */
 #include <linux/bpf.h>
 #include <linux/err.h>
-#include <linux/vmalloc.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/filter.h>
@@ -21,8 +20,10 @@ static void bpf_array_free_percpu(struct bpf_array *array)
 {
 	int i;
 
-	for (i = 0; i < array->map.max_entries; i++)
+	for (i = 0; i < array->map.max_entries; i++) {
 		free_percpu(array->pptrs[i]);
+		cond_resched();
+	}
 }
 
 static int bpf_array_alloc_percpu(struct bpf_array *array)
@@ -38,6 +39,7 @@ static int bpf_array_alloc_percpu(struct bpf_array *array)
 			return -ENOMEM;
 		}
 		array->pptrs[i] = ptr;
+		cond_resched();
 	}
 
 	return 0;
@@ -47,9 +49,11 @@ static int bpf_array_alloc_percpu(struct bpf_array *array)
 static struct bpf_map *array_map_alloc(union bpf_attr *attr)
 {
 	bool percpu = attr->map_type == BPF_MAP_TYPE_PERCPU_ARRAY;
+	u32 elem_size, index_mask, max_entries;
+	bool unpriv = !capable(CAP_SYS_ADMIN);
+	u64 cost, array_size, mask64;
 	struct bpf_array *array;
-	u64 array_size;
-	u32 elem_size;
+	int ret;
 
 	/* check sanity of attributes */
 	if (attr->max_entries == 0 || attr->key_size != 4 ||
@@ -64,44 +68,70 @@ static struct bpf_map *array_map_alloc(union bpf_attr *attr)
 
 	elem_size = round_up(attr->value_size, 8);
 
+	max_entries = attr->max_entries;
+
+	/* On 32 bit archs roundup_pow_of_two() with max_entries that has
+	 * upper most bit set in u32 space is undefined behavior due to
+	 * resulting 1U << 32, so do it manually here in u64 space.
+	 */
+	mask64 = fls_long(max_entries - 1);
+	mask64 = 1ULL << mask64;
+	mask64 -= 1;
+
+	index_mask = mask64;
+	if (unpriv) {
+		/* round up array size to nearest power of 2,
+		 * since cpu will speculate within index_mask limits
+		 */
+		max_entries = index_mask + 1;
+		/* Check for overflows. */
+		if (max_entries < attr->max_entries)
+			return ERR_PTR(-E2BIG);
+	}
+
 	array_size = sizeof(*array);
 	if (percpu)
-		array_size += (u64) attr->max_entries * sizeof(void *);
+		array_size += (u64) max_entries * sizeof(void *);
 	else
-		array_size += (u64) attr->max_entries * elem_size;
+		array_size += (u64) max_entries * elem_size;
 
 	/* make sure there is no u32 overflow later in round_up() */
-	if (array_size >= U32_MAX - PAGE_SIZE)
+	cost = array_size;
+	if (cost >= U32_MAX - PAGE_SIZE)
 		return ERR_PTR(-ENOMEM);
-
-
-	/* allocate all map elements and zero-initialize them */
-	array = kzalloc(array_size, GFP_USER | __GFP_NOWARN);
-	if (!array) {
-		array = vzalloc(array_size);
-		if (!array)
+	if (percpu) {
+		cost += (u64)attr->max_entries * elem_size * num_possible_cpus();
+		if (cost >= U32_MAX - PAGE_SIZE)
 			return ERR_PTR(-ENOMEM);
 	}
+	cost = round_up(cost, PAGE_SIZE) >> PAGE_SHIFT;
+
+	ret = bpf_map_precharge_memlock(cost);
+	if (ret < 0)
+		return ERR_PTR(ret);
+
+	/* allocate all map elements and zero-initialize them */
+	array = bpf_map_area_alloc(array_size);
+	if (!array)
+		return ERR_PTR(-ENOMEM);
+	array->index_mask = index_mask;
+	array->map.unpriv_array = unpriv;
 
 	/* copy mandatory map attributes */
 	array->map.map_type = attr->map_type;
 	array->map.key_size = attr->key_size;
 	array->map.value_size = attr->value_size;
 	array->map.max_entries = attr->max_entries;
+	array->map.map_flags = attr->map_flags;
+	array->map.pages = cost;
 	array->elem_size = elem_size;
 
-	if (!percpu)
-		goto out;
-
-	array_size += (u64) attr->max_entries * elem_size * num_possible_cpus();
-
-	if (array_size >= U32_MAX - PAGE_SIZE ||
-	    elem_size > PCPU_MIN_UNIT_SIZE || bpf_array_alloc_percpu(array)) {
-		kvfree(array);
+	if (percpu &&
+	    (elem_size > PCPU_MIN_UNIT_SIZE ||
+	     bpf_array_alloc_percpu(array))) {
+		bpf_map_area_free(array);
 		return ERR_PTR(-ENOMEM);
 	}
-out:
-	array->map.pages = round_up(array_size, PAGE_SIZE) >> PAGE_SHIFT;
 
 	return &array->map;
 }
@@ -115,7 +145,7 @@ static void *array_map_lookup_elem(struct bpf_map *map, void *key)
 	if (unlikely(index >= array->map.max_entries))
 		return NULL;
 
-	return array->value + array->elem_size * index;
+	return array->value + array->elem_size * (index & array->index_mask);
 }
 
 /* Called from eBPF program */
@@ -127,7 +157,7 @@ static void *percpu_array_map_lookup_elem(struct bpf_map *map, void *key)
 	if (unlikely(index >= array->map.max_entries))
 		return NULL;
 
-	return this_cpu_ptr(array->pptrs[index]);
+	return this_cpu_ptr(array->pptrs[index & array->index_mask]);
 }
 
 int bpf_percpu_array_copy(struct bpf_map *map, void *key, void *value)
@@ -147,7 +177,7 @@ int bpf_percpu_array_copy(struct bpf_map *map, void *key, void *value)
 	 */
 	size = round_up(map->value_size, 8);
 	rcu_read_lock();
-	pptr = array->pptrs[index];
+	pptr = array->pptrs[index & array->index_mask];
 	for_each_possible_cpu(cpu) {
 		bpf_long_memcpy(value + off, per_cpu_ptr(pptr, cpu), size);
 		off += size;
@@ -160,7 +190,7 @@ int bpf_percpu_array_copy(struct bpf_map *map, void *key, void *value)
 static int array_map_get_next_key(struct bpf_map *map, void *key, void *next_key)
 {
 	struct bpf_array *array = container_of(map, struct bpf_array, map);
-	u32 index = *(u32 *)key;
+	u32 index = key ? *(u32 *)key : U32_MAX;
 	u32 *next = (u32 *)next_key;
 
 	if (index >= array->map.max_entries) {
@@ -195,10 +225,11 @@ static int array_map_update_elem(struct bpf_map *map, void *key, void *value,
 		return -EEXIST;
 
 	if (array->map.map_type == BPF_MAP_TYPE_PERCPU_ARRAY)
-		memcpy(this_cpu_ptr(array->pptrs[index]),
+		memcpy(this_cpu_ptr(array->pptrs[index & array->index_mask]),
 		       value, map->value_size);
 	else
-		memcpy(array->value + array->elem_size * index,
+		memcpy(array->value +
+		       array->elem_size * (index & array->index_mask),
 		       value, map->value_size);
 	return 0;
 }
@@ -232,7 +263,7 @@ int bpf_percpu_array_update(struct bpf_map *map, void *key, void *value,
 	 */
 	size = round_up(map->value_size, 8);
 	rcu_read_lock();
-	pptr = array->pptrs[index];
+	pptr = array->pptrs[index & array->index_mask];
 	for_each_possible_cpu(cpu) {
 		bpf_long_memcpy(per_cpu_ptr(pptr, cpu), value + off, size);
 		off += size;
@@ -262,7 +293,7 @@ static void array_map_free(struct bpf_map *map)
 	if (array->map.map_type == BPF_MAP_TYPE_PERCPU_ARRAY)
 		bpf_array_free_percpu(array);
 
-	kvfree(array);
+	bpf_map_area_free(array);
 }
 
 static const struct bpf_map_ops array_ops = {
@@ -319,7 +350,8 @@ static void fd_array_map_free(struct bpf_map *map)
 	/* make sure it's empty */
 	for (i = 0; i < array->map.max_entries; i++)
 		BUG_ON(array->ptrs[i] != NULL);
-	kvfree(array);
+
+	bpf_map_area_free(array);
 }
 
 static void *fd_array_map_lookup_elem(struct bpf_map *map, void *key)
@@ -328,8 +360,8 @@ static void *fd_array_map_lookup_elem(struct bpf_map *map, void *key)
 }
 
 /* only called from syscall */
-static int fd_array_map_update_elem(struct bpf_map *map, void *key,
-				    void *value, u64 map_flags)
+int bpf_fd_array_map_update_elem(struct bpf_map *map, struct file *map_file,
+				 void *key, void *value, u64 map_flags)
 {
 	struct bpf_array *array = container_of(map, struct bpf_array, map);
 	void *new_ptr, *old_ptr;
@@ -342,7 +374,7 @@ static int fd_array_map_update_elem(struct bpf_map *map, void *key,
 		return -E2BIG;
 
 	ufd = *(u32 *)value;
-	new_ptr = map->ops->map_fd_get_ptr(map, ufd);
+	new_ptr = map->ops->map_fd_get_ptr(map, map_file, ufd);
 	if (IS_ERR(new_ptr))
 		return PTR_ERR(new_ptr);
 
@@ -371,10 +403,12 @@ static int fd_array_map_delete_elem(struct bpf_map *map, void *key)
 	}
 }
 
-static void *prog_fd_array_get_ptr(struct bpf_map *map, int fd)
+static void *prog_fd_array_get_ptr(struct bpf_map *map,
+				   struct file *map_file, int fd)
 {
 	struct bpf_array *array = container_of(map, struct bpf_array, map);
 	struct bpf_prog *prog = bpf_prog_get(fd);
+
 	if (IS_ERR(prog))
 		return prog;
 
@@ -382,14 +416,13 @@ static void *prog_fd_array_get_ptr(struct bpf_map *map, int fd)
 		bpf_prog_put(prog);
 		return ERR_PTR(-EINVAL);
 	}
+
 	return prog;
 }
 
 static void prog_fd_array_put_ptr(void *ptr)
 {
-	struct bpf_prog *prog = ptr;
-
-	bpf_prog_put_rcu(prog);
+	bpf_prog_put(ptr);
 }
 
 /* decrement refcnt of all bpf_progs that are stored in this map */
@@ -407,7 +440,6 @@ static const struct bpf_map_ops prog_array_ops = {
 	.map_free = fd_array_map_free,
 	.map_get_next_key = array_map_get_next_key,
 	.map_lookup_elem = fd_array_map_lookup_elem,
-	.map_update_elem = fd_array_map_update_elem,
 	.map_delete_elem = fd_array_map_delete_elem,
 	.map_fd_get_ptr = prog_fd_array_get_ptr,
 	.map_fd_put_ptr = prog_fd_array_put_ptr,
@@ -425,59 +457,105 @@ static int __init register_prog_array_map(void)
 }
 late_initcall(register_prog_array_map);
 
-static void perf_event_array_map_free(struct bpf_map *map)
+static struct bpf_event_entry *bpf_event_entry_gen(struct file *perf_file,
+						   struct file *map_file)
 {
-	bpf_fd_array_map_clear(map);
-	fd_array_map_free(map);
+	struct bpf_event_entry *ee;
+
+	ee = kzalloc(sizeof(*ee), GFP_ATOMIC);
+	if (ee) {
+		ee->event = perf_file->private_data;
+		ee->perf_file = perf_file;
+		ee->map_file = map_file;
+	}
+
+	return ee;
 }
 
-static void *perf_event_fd_array_get_ptr(struct bpf_map *map, int fd)
+static void __bpf_event_entry_free(struct rcu_head *rcu)
 {
-	struct perf_event *event;
+	struct bpf_event_entry *ee;
+
+	ee = container_of(rcu, struct bpf_event_entry, rcu);
+	fput(ee->perf_file);
+	kfree(ee);
+}
+
+static void bpf_event_entry_free_rcu(struct bpf_event_entry *ee)
+{
+	call_rcu(&ee->rcu, __bpf_event_entry_free);
+}
+
+static void *perf_event_fd_array_get_ptr(struct bpf_map *map,
+					 struct file *map_file, int fd)
+{
 	const struct perf_event_attr *attr;
-	struct file *file;
+	struct bpf_event_entry *ee;
+	struct perf_event *event;
+	struct file *perf_file;
 
-	file = perf_event_get(fd);
-	if (IS_ERR(file))
-		return file;
+	perf_file = perf_event_get(fd);
+	if (IS_ERR(perf_file))
+		return perf_file;
 
-	event = file->private_data;
+	event = perf_file->private_data;
+	ee = ERR_PTR(-EINVAL);
 
 	attr = perf_event_attrs(event);
-	if (IS_ERR(attr))
-		goto err;
+	if (IS_ERR(attr) || attr->inherit)
+		goto err_out;
 
-	if (attr->inherit)
-		goto err;
+	switch (attr->type) {
+	case PERF_TYPE_SOFTWARE:
+		if (attr->config != PERF_COUNT_SW_BPF_OUTPUT)
+			goto err_out;
+		/* fall-through */
+	case PERF_TYPE_RAW:
+	case PERF_TYPE_HARDWARE:
+		ee = bpf_event_entry_gen(perf_file, map_file);
+		if (ee)
+			return ee;
+		ee = ERR_PTR(-ENOMEM);
+		/* fall-through */
+	default:
+		break;
+	}
 
-	if (attr->type == PERF_TYPE_RAW)
-		return file;
-
-	if (attr->type == PERF_TYPE_HARDWARE)
-		return file;
-
-	if (attr->type == PERF_TYPE_SOFTWARE &&
-	    attr->config == PERF_COUNT_SW_BPF_OUTPUT)
-		return file;
-err:
-	fput(file);
-	return ERR_PTR(-EINVAL);
+err_out:
+	fput(perf_file);
+	return ee;
 }
 
 static void perf_event_fd_array_put_ptr(void *ptr)
 {
-	fput((struct file *)ptr);
+	bpf_event_entry_free_rcu(ptr);
+}
+
+static void perf_event_fd_array_release(struct bpf_map *map,
+					struct file *map_file)
+{
+	struct bpf_array *array = container_of(map, struct bpf_array, map);
+	struct bpf_event_entry *ee;
+	int i;
+
+	rcu_read_lock();
+	for (i = 0; i < array->map.max_entries; i++) {
+		ee = READ_ONCE(array->ptrs[i]);
+		if (ee && ee->map_file == map_file)
+			fd_array_map_delete_elem(map, &i);
+	}
+	rcu_read_unlock();
 }
 
 static const struct bpf_map_ops perf_event_array_ops = {
 	.map_alloc = fd_array_map_alloc,
-	.map_free = perf_event_array_map_free,
+	.map_free = fd_array_map_free,
 	.map_get_next_key = array_map_get_next_key,
 	.map_lookup_elem = fd_array_map_lookup_elem,
-	.map_update_elem = fd_array_map_update_elem,
 	.map_delete_elem = fd_array_map_delete_elem,
 	.map_fd_get_ptr = perf_event_fd_array_get_ptr,
 	.map_fd_put_ptr = perf_event_fd_array_put_ptr,
+	.map_release = perf_event_fd_array_release,
 };
 
 static struct bpf_map_type_list perf_event_array_type __read_mostly = {
@@ -491,3 +569,46 @@ static int __init register_perf_event_array_map(void)
 	return 0;
 }
 late_initcall(register_perf_event_array_map);
+
+#ifdef CONFIG_CGROUPS
+static void *cgroup_fd_array_get_ptr(struct bpf_map *map,
+				     struct file *map_file /* not used */,
+				     int fd)
+{
+	return cgroup_get_from_fd(fd);
+}
+
+static void cgroup_fd_array_put_ptr(void *ptr)
+{
+	/* cgroup_put free cgrp after a rcu grace period */
+	cgroup_put(ptr);
+}
+
+static void cgroup_fd_array_free(struct bpf_map *map)
+{
+	bpf_fd_array_map_clear(map);
+	fd_array_map_free(map);
+}
+
+static const struct bpf_map_ops cgroup_array_ops = {
+	.map_alloc = fd_array_map_alloc,
+	.map_free = cgroup_fd_array_free,
+	.map_get_next_key = array_map_get_next_key,
+	.map_lookup_elem = fd_array_map_lookup_elem,
+	.map_delete_elem = fd_array_map_delete_elem,
+	.map_fd_get_ptr = cgroup_fd_array_get_ptr,
+	.map_fd_put_ptr = cgroup_fd_array_put_ptr,
+};
+
+static struct bpf_map_type_list cgroup_array_type __read_mostly = {
+	.ops = &cgroup_array_ops,
+	.type = BPF_MAP_TYPE_CGROUP_ARRAY,
+};
+
+static int __init register_cgroup_array_map(void)
+{
+	bpf_register_map_type(&cgroup_array_type);
+	return 0;
+}
+late_initcall(register_cgroup_array_map);
+#endif

@@ -13,6 +13,7 @@
 #ifndef __ASSEMBLY__
 
 #define clear_page(paddr)		memset((paddr), 0, PAGE_SIZE)
+#define copy_user_page(to, from, vaddr, pg)	copy_page(to, from)
 #define copy_page(to, from)		memcpy((to), (from), PAGE_SIZE)
 
 struct vm_area_struct;
@@ -31,7 +32,11 @@ void clear_user_page(void *to, unsigned long u_vaddr, struct page *page);
  * These are used to make use of C type-checking..
  */
 typedef struct {
+#ifdef CONFIG_ARC_HAS_PAE40
+	unsigned long long pte;
+#else
 	unsigned long pte;
+#endif
 } pte_t;
 typedef struct {
 	unsigned long pgd;
@@ -101,7 +106,7 @@ typedef pte_t * pgtable_t;
 #define virt_addr_valid(kaddr)  pfn_valid(virt_to_pfn(kaddr))
 
 /* Default Permissions for stack/heaps pages (Non Executable) */
-#define VM_DATA_DEFAULT_FLAGS   (VM_READ | VM_WRITE | VM_MAYREAD | VM_MAYWRITE)
+#define VM_DATA_DEFAULT_FLAGS   (VM_READ | VM_WRITE | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC)
 
 #define WANT_PAGE_VIRTUAL   1
 

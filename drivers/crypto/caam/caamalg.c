@@ -75,7 +75,7 @@
 #define DESC_AEAD_BASE			(4 * CAAM_CMD_SZ)
 #define DESC_AEAD_ENC_LEN		(DESC_AEAD_BASE + 11 * CAAM_CMD_SZ)
 #define DESC_AEAD_DEC_LEN		(DESC_AEAD_BASE + 15 * CAAM_CMD_SZ)
-#define DESC_AEAD_GIVENC_LEN		(DESC_AEAD_ENC_LEN + 9 * CAAM_CMD_SZ)
+#define DESC_AEAD_GIVENC_LEN		(DESC_AEAD_ENC_LEN + 10 * CAAM_CMD_SZ)
 
 /* Note: Nonce is counted in enckeylen */
 #define DESC_AEAD_CTR_RFC3686_LEN	(4 * CAAM_CMD_SZ)
@@ -111,6 +111,42 @@
 #else
 #define debug(format, arg...)
 #endif
+
+#ifdef DEBUG
+#include <linux/highmem.h>
+
+static void dbg_dump_sg(const char *level, const char *prefix_str,
+			int prefix_type, int rowsize, int groupsize,
+			struct scatterlist *sg, size_t tlen, bool ascii,
+			bool may_sleep)
+{
+	struct scatterlist *it;
+	void *it_page;
+	size_t len;
+	void *buf;
+
+	for (it = sg; it != NULL && tlen > 0 ; it = sg_next(sg)) {
+		/*
+		 * make sure the scatterlist's page
+		 * has a valid virtual memory mapping
+		 */
+		it_page = kmap_atomic(sg_page(it));
+		if (unlikely(!it_page)) {
+			printk(KERN_ERR "dbg_dump_sg: kmap failed\n");
+			return;
+		}
+
+		buf = it_page + it->offset;
+		len = min_t(size_t, tlen, it->length);
+		print_hex_dump(level, prefix_str, prefix_type, rowsize,
+			       groupsize, buf, len, ascii);
+		tlen -= len;
+
+		kunmap_atomic(it_page);
+	}
+}
+#endif
+
 static struct list_head alg_list;
 
 struct caam_alg_entry {
@@ -227,8 +263,9 @@ static void append_key_aead(u32 *desc, struct caam_ctx *ctx,
 	if (is_rfc3686) {
 		nonce = (u32 *)((void *)ctx->key + ctx->split_key_pad_len +
 			       enckeylen);
-		append_load_imm_u32(desc, *nonce, LDST_CLASS_IND_CCB |
-				    LDST_SRCDST_BYTE_OUTFIFO | LDST_IMM);
+		append_load_as_imm(desc, nonce, CTR_RFC3686_NONCE_SIZE,
+				   LDST_CLASS_IND_CCB |
+				   LDST_SRCDST_BYTE_OUTFIFO | LDST_IMM);
 		append_move(desc,
 			    MOVE_SRC_OUTFIFO |
 			    MOVE_DEST_CLASS1CTX |
@@ -437,9 +474,13 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 	u32 geniv, moveiv;
 	u32 ctx1_iv_off = 0;
 	u32 *desc;
+	u32 *wait_cmd;
 	const bool ctr_mode = ((ctx->class1_alg_type & OP_ALG_AAI_MASK) ==
 			       OP_ALG_AAI_CTR_MOD128);
 	const bool is_rfc3686 = alg->caam.rfc3686;
+
+	if (!ctx->authsize)
+		return 0;
 
 	/* NULL encryption / decryption */
 	if (!ctx->enckeylen)
@@ -497,11 +538,10 @@ static int aead_set_sh_desc(struct crypto_aead *aead)
 
 	/* Load Counter into CONTEXT1 reg */
 	if (is_rfc3686)
-		append_load_imm_u32(desc, be32_to_cpu(1), LDST_IMM |
-				    LDST_CLASS_1_CCB |
-				    LDST_SRCDST_BYTE_CONTEXT |
-				    ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
-				     LDST_OFFSET_SHIFT));
+		append_load_imm_be32(desc, 1, LDST_IMM | LDST_CLASS_1_CCB |
+				     LDST_SRCDST_BYTE_CONTEXT |
+				     ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
+				      LDST_OFFSET_SHIFT));
 
 	/* Class 1 operation */
 	append_operation(desc, ctx->class1_alg_type |
@@ -553,7 +593,10 @@ skip_enc:
 
 	/* Read and write assoclen bytes */
 	append_math_add(desc, VARSEQINLEN, ZERO, REG3, CAAM_CMD_SZ);
-	append_math_add(desc, VARSEQOUTLEN, ZERO, REG3, CAAM_CMD_SZ);
+	if (alg->caam.geniv)
+		append_math_add_imm_u32(desc, VARSEQOUTLEN, REG3, IMM, ivsize);
+	else
+		append_math_add(desc, VARSEQOUTLEN, ZERO, REG3, CAAM_CMD_SZ);
 
 	/* Skip assoc data */
 	append_seq_fifo_store(desc, 0, FIFOST_TYPE_SKIP | FIFOLDST_VLF);
@@ -562,13 +605,20 @@ skip_enc:
 	append_seq_fifo_load(desc, 0, FIFOLD_CLASS_CLASS2 | FIFOLD_TYPE_MSG |
 			     KEY_VLF);
 
+	if (alg->caam.geniv) {
+		append_seq_load(desc, ivsize, LDST_CLASS_1_CCB |
+				LDST_SRCDST_BYTE_CONTEXT |
+				(ctx1_iv_off << LDST_OFFSET_SHIFT));
+		append_move(desc, MOVE_SRC_CLASS1CTX | MOVE_DEST_CLASS2INFIFO |
+			    (ctx1_iv_off << MOVE_OFFSET_SHIFT) | ivsize);
+	}
+
 	/* Load Counter into CONTEXT1 reg */
 	if (is_rfc3686)
-		append_load_imm_u32(desc, be32_to_cpu(1), LDST_IMM |
-				    LDST_CLASS_1_CCB |
-				    LDST_SRCDST_BYTE_CONTEXT |
-				    ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
-				     LDST_OFFSET_SHIFT));
+		append_load_imm_be32(desc, 1, LDST_IMM | LDST_CLASS_1_CCB |
+				     LDST_SRCDST_BYTE_CONTEXT |
+				     ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
+				      LDST_OFFSET_SHIFT));
 
 	/* Choose operation */
 	if (ctr_mode)
@@ -614,7 +664,7 @@ skip_enc:
 		keys_fit_inline = true;
 
 	/* aead_givencrypt shared descriptor */
-	desc = ctx->sh_desc_givenc;
+	desc = ctx->sh_desc_enc;
 
 	/* Note: Context registers are saved. */
 	init_sh_desc_key_aead(desc, ctx, keys_fit_inline, is_rfc3686);
@@ -645,12 +695,12 @@ copy_iv:
 	append_operation(desc, ctx->class2_alg_type |
 			 OP_ALG_AS_INITFINAL | OP_ALG_ENCRYPT);
 
-	/* ivsize + cryptlen = seqoutlen - authsize */
-	append_math_sub_imm_u32(desc, REG3, SEQOUTLEN, IMM, ctx->authsize);
-
 	/* Read and write assoclen bytes */
 	append_math_add(desc, VARSEQINLEN, ZERO, REG3, CAAM_CMD_SZ);
 	append_math_add(desc, VARSEQOUTLEN, ZERO, REG3, CAAM_CMD_SZ);
+
+	/* ivsize + cryptlen = seqoutlen - authsize */
+	append_math_sub_imm_u32(desc, REG3, SEQOUTLEN, IMM, ctx->authsize);
 
 	/* Skip assoc data */
 	append_seq_fifo_store(desc, 0, FIFOST_TYPE_SKIP | FIFOLDST_VLF);
@@ -669,11 +719,10 @@ copy_iv:
 
 	/* Load Counter into CONTEXT1 reg */
 	if (is_rfc3686)
-		append_load_imm_u32(desc, be32_to_cpu(1), LDST_IMM |
-				    LDST_CLASS_1_CCB |
-				    LDST_SRCDST_BYTE_CONTEXT |
-				    ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
-				     LDST_OFFSET_SHIFT));
+		append_load_imm_be32(desc, 1, LDST_IMM | LDST_CLASS_1_CCB |
+				     LDST_SRCDST_BYTE_CONTEXT |
+				     ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
+				      LDST_OFFSET_SHIFT));
 
 	/* Class 1 operation */
 	append_operation(desc, ctx->class1_alg_type |
@@ -688,7 +737,17 @@ copy_iv:
 
 	/* Will read cryptlen */
 	append_math_add(desc, VARSEQINLEN, SEQINLEN, REG0, CAAM_CMD_SZ);
-	aead_append_src_dst(desc, FIFOLD_TYPE_MSG1OUT2);
+
+	/*
+	 * Wait for IV transfer (ofifo -> class2) to finish before starting
+	 * ciphertext transfer (ofifo -> external memory).
+	 */
+	wait_cmd = append_jump(desc, JUMP_JSL | JUMP_TEST_ALL | JUMP_COND_NIFP);
+	set_jump_tgt_here(desc, wait_cmd);
+
+	append_seq_fifo_load(desc, 0, FIFOLD_CLASS_BOTH | KEY_VLF |
+			     FIFOLD_TYPE_MSG1OUT2 | FIFOLD_TYPE_LASTBOTH);
+	append_seq_fifo_store(desc, 0, FIFOST_TYPE_MESSAGE_DATA | KEY_VLF);
 
 	/* Write ICV */
 	append_seq_store(desc, ctx->authsize, LDST_CLASS_2_CCB |
@@ -697,7 +756,7 @@ copy_iv:
 	ctx->sh_desc_enc_dma = dma_map_single(jrdev, desc,
 					      desc_bytes(desc),
 					      DMA_TO_DEVICE);
-	if (dma_mapping_error(jrdev, ctx->sh_desc_givenc_dma)) {
+	if (dma_mapping_error(jrdev, ctx->sh_desc_enc_dma)) {
 		dev_err(jrdev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
@@ -1464,7 +1523,7 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 	int ret = 0;
 	u32 *key_jump_cmd;
 	u32 *desc;
-	u32 *nonce;
+	u8 *nonce;
 	u32 geniv;
 	u32 ctx1_iv_off = 0;
 	const bool ctr_mode = ((ctx->class1_alg_type & OP_ALG_AAI_MASK) ==
@@ -1517,9 +1576,10 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 
 	/* Load nonce into CONTEXT1 reg */
 	if (is_rfc3686) {
-		nonce = (u32 *)(key + keylen);
-		append_load_imm_u32(desc, *nonce, LDST_CLASS_IND_CCB |
-				    LDST_SRCDST_BYTE_OUTFIFO | LDST_IMM);
+		nonce = (u8 *)key + keylen;
+		append_load_as_imm(desc, nonce, CTR_RFC3686_NONCE_SIZE,
+				   LDST_CLASS_IND_CCB |
+				   LDST_SRCDST_BYTE_OUTFIFO | LDST_IMM);
 		append_move(desc, MOVE_WAITCOMP |
 			    MOVE_SRC_OUTFIFO |
 			    MOVE_DEST_CLASS1CTX |
@@ -1535,11 +1595,10 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 
 	/* Load counter into CONTEXT1 reg */
 	if (is_rfc3686)
-		append_load_imm_u32(desc, be32_to_cpu(1), LDST_IMM |
-				    LDST_CLASS_1_CCB |
-				    LDST_SRCDST_BYTE_CONTEXT |
-				    ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
-				     LDST_OFFSET_SHIFT));
+		append_load_imm_be32(desc, 1, LDST_IMM | LDST_CLASS_1_CCB |
+				     LDST_SRCDST_BYTE_CONTEXT |
+				     ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
+				      LDST_OFFSET_SHIFT));
 
 	/* Load operation */
 	append_operation(desc, ctx->class1_alg_type |
@@ -1576,9 +1635,10 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 
 	/* Load nonce into CONTEXT1 reg */
 	if (is_rfc3686) {
-		nonce = (u32 *)(key + keylen);
-		append_load_imm_u32(desc, *nonce, LDST_CLASS_IND_CCB |
-				    LDST_SRCDST_BYTE_OUTFIFO | LDST_IMM);
+		nonce = (u8 *)key + keylen;
+		append_load_as_imm(desc, nonce, CTR_RFC3686_NONCE_SIZE,
+				   LDST_CLASS_IND_CCB |
+				   LDST_SRCDST_BYTE_OUTFIFO | LDST_IMM);
 		append_move(desc, MOVE_WAITCOMP |
 			    MOVE_SRC_OUTFIFO |
 			    MOVE_DEST_CLASS1CTX |
@@ -1594,11 +1654,10 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 
 	/* Load counter into CONTEXT1 reg */
 	if (is_rfc3686)
-		append_load_imm_u32(desc, be32_to_cpu(1), LDST_IMM |
-				    LDST_CLASS_1_CCB |
-				    LDST_SRCDST_BYTE_CONTEXT |
-				    ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
-				     LDST_OFFSET_SHIFT));
+		append_load_imm_be32(desc, 1, LDST_IMM | LDST_CLASS_1_CCB |
+				     LDST_SRCDST_BYTE_CONTEXT |
+				     ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
+				      LDST_OFFSET_SHIFT));
 
 	/* Choose operation */
 	if (ctr_mode)
@@ -1639,9 +1698,10 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 
 	/* Load Nonce into CONTEXT1 reg */
 	if (is_rfc3686) {
-		nonce = (u32 *)(key + keylen);
-		append_load_imm_u32(desc, *nonce, LDST_CLASS_IND_CCB |
-				    LDST_SRCDST_BYTE_OUTFIFO | LDST_IMM);
+		nonce = (u8 *)key + keylen;
+		append_load_as_imm(desc, nonce, CTR_RFC3686_NONCE_SIZE,
+				   LDST_CLASS_IND_CCB |
+				   LDST_SRCDST_BYTE_OUTFIFO | LDST_IMM);
 		append_move(desc, MOVE_WAITCOMP |
 			    MOVE_SRC_OUTFIFO |
 			    MOVE_DEST_CLASS1CTX |
@@ -1671,11 +1731,10 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *ablkcipher,
 
 	/* Load Counter into CONTEXT1 reg */
 	if (is_rfc3686)
-		append_load_imm_u32(desc, (u32)1, LDST_IMM |
-				    LDST_CLASS_1_CCB |
-				    LDST_SRCDST_BYTE_CONTEXT |
-				    ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
-				     LDST_OFFSET_SHIFT));
+		append_load_imm_be32(desc, 1, LDST_IMM | LDST_CLASS_1_CCB |
+				     LDST_SRCDST_BYTE_CONTEXT |
+				     ((ctx1_iv_off + CTR_RFC3686_IV_SIZE) <<
+				      LDST_OFFSET_SHIFT));
 
 	if (ctx1_iv_off)
 		append_jump(desc, JUMP_JSL | JUMP_TEST_ALL | JUMP_COND_NCP |
@@ -1964,10 +2023,11 @@ static void ablkcipher_encrypt_done(struct device *jrdev, u32 *desc, u32 err,
 {
 	struct ablkcipher_request *req = context;
 	struct ablkcipher_edesc *edesc;
-#ifdef DEBUG
 	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
+	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
 	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
 
+#ifdef DEBUG
 	dev_err(jrdev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
 #endif
 
@@ -1981,12 +2041,21 @@ static void ablkcipher_encrypt_done(struct device *jrdev, u32 *desc, u32 err,
 	print_hex_dump(KERN_ERR, "dstiv  @"__stringify(__LINE__)": ",
 		       DUMP_PREFIX_ADDRESS, 16, 4, req->info,
 		       edesc->src_nents > 1 ? 100 : ivsize, 1);
-	print_hex_dump(KERN_ERR, "dst    @"__stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, sg_virt(req->src),
-		       edesc->dst_nents > 1 ? 100 : req->nbytes, 1);
+	dbg_dump_sg(KERN_ERR, "dst    @"__stringify(__LINE__)": ",
+		    DUMP_PREFIX_ADDRESS, 16, 4, req->dst,
+		    edesc->dst_nents > 1 ? 100 : req->nbytes, 1, true);
 #endif
 
 	ablkcipher_unmap(jrdev, edesc, req);
+
+	/*
+	 * The crypto API expects us to set the IV (req->info) to the last
+	 * ciphertext block when running in CBC mode.
+	 */
+	if ((ctx->class1_alg_type & OP_ALG_AAI_MASK) == OP_ALG_AAI_CBC)
+		scatterwalk_map_and_copy(req->info, req->dst, req->nbytes -
+					 ivsize, ivsize, 0);
+
 	kfree(edesc);
 
 	ablkcipher_request_complete(req, err);
@@ -1997,10 +2066,11 @@ static void ablkcipher_decrypt_done(struct device *jrdev, u32 *desc, u32 err,
 {
 	struct ablkcipher_request *req = context;
 	struct ablkcipher_edesc *edesc;
-#ifdef DEBUG
 	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
+	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
 	int ivsize = crypto_ablkcipher_ivsize(ablkcipher);
 
+#ifdef DEBUG
 	dev_err(jrdev, "%s %d: err 0x%x\n", __func__, __LINE__, err);
 #endif
 
@@ -2013,12 +2083,21 @@ static void ablkcipher_decrypt_done(struct device *jrdev, u32 *desc, u32 err,
 	print_hex_dump(KERN_ERR, "dstiv  @"__stringify(__LINE__)": ",
 		       DUMP_PREFIX_ADDRESS, 16, 4, req->info,
 		       ivsize, 1);
-	print_hex_dump(KERN_ERR, "dst    @"__stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, sg_virt(req->src),
-		       edesc->dst_nents > 1 ? 100 : req->nbytes, 1);
+	dbg_dump_sg(KERN_ERR, "dst    @"__stringify(__LINE__)": ",
+		    DUMP_PREFIX_ADDRESS, 16, 4, req->dst,
+		    edesc->dst_nents > 1 ? 100 : req->nbytes, 1, true);
 #endif
 
 	ablkcipher_unmap(jrdev, edesc, req);
+
+	/*
+	 * The crypto API expects us to set the IV (req->info) to the last
+	 * ciphertext block when running in CBC mode.
+	 */
+	if ((ctx->class1_alg_type & OP_ALG_AAI_MASK) == OP_ALG_AAI_CBC)
+		scatterwalk_map_and_copy(req->info, req->src, req->nbytes -
+					 ivsize, ivsize, 0);
+
 	kfree(edesc);
 
 	ablkcipher_request_complete(req, err);
@@ -2065,6 +2144,7 @@ static void init_aead_job(struct aead_request *req,
 	if (unlikely(req->src != req->dst)) {
 		if (!edesc->dst_nents) {
 			dst_dma = sg_dma_address(req->dst);
+			out_options = 0;
 		} else {
 			dst_dma = edesc->sec4_sg_dma +
 				  sec4_sg_index *
@@ -2147,7 +2227,7 @@ static void init_authenc_job(struct aead_request *req,
 
 	init_aead_job(req, edesc, all_contig, encrypt);
 
-	if (ivsize && (is_rfc3686 || !(alg->caam.geniv && encrypt)))
+	if (ivsize && ((is_rfc3686 && encrypt) || !alg->caam.geniv))
 		append_load_as_imm(desc, req->iv, ivsize,
 				   LDST_CLASS_1_CCB |
 				   LDST_SRCDST_BYTE_CONTEXT |
@@ -2170,12 +2250,15 @@ static void init_ablkcipher_job(u32 *sh_desc, dma_addr_t ptr,
 	int len, sec4_sg_index = 0;
 
 #ifdef DEBUG
+	bool may_sleep = ((req->base.flags & (CRYPTO_TFM_REQ_MAY_BACKLOG |
+					      CRYPTO_TFM_REQ_MAY_SLEEP)) != 0);
 	print_hex_dump(KERN_ERR, "presciv@"__stringify(__LINE__)": ",
 		       DUMP_PREFIX_ADDRESS, 16, 4, req->info,
 		       ivsize, 1);
-	print_hex_dump(KERN_ERR, "src    @"__stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, sg_virt(req->src),
-		       edesc->src_nents ? 100 : req->nbytes, 1);
+	printk(KERN_ERR "asked=%d, nbytes%d\n", (int)edesc->src_nents ? 100 : req->nbytes, req->nbytes);
+	dbg_dump_sg(KERN_ERR, "src    @"__stringify(__LINE__)": ",
+		    DUMP_PREFIX_ADDRESS, 16, 4, req->src,
+		    edesc->src_nents ? 100 : req->nbytes, 1, may_sleep);
 #endif
 
 	len = desc_len(sh_desc);
@@ -2227,12 +2310,14 @@ static void init_ablkcipher_giv_job(u32 *sh_desc, dma_addr_t ptr,
 	int len, sec4_sg_index = 0;
 
 #ifdef DEBUG
+	bool may_sleep = ((req->base.flags & (CRYPTO_TFM_REQ_MAY_BACKLOG |
+					      CRYPTO_TFM_REQ_MAY_SLEEP)) != 0);
 	print_hex_dump(KERN_ERR, "presciv@" __stringify(__LINE__) ": ",
 		       DUMP_PREFIX_ADDRESS, 16, 4, req->info,
 		       ivsize, 1);
-	print_hex_dump(KERN_ERR, "src    @" __stringify(__LINE__) ": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, sg_virt(req->src),
-		       edesc->src_nents ? 100 : req->nbytes, 1);
+	dbg_dump_sg(KERN_ERR, "src    @" __stringify(__LINE__) ": ",
+		    DUMP_PREFIX_ADDRESS, 16, 4, req->src,
+		    edesc->src_nents ? 100 : req->nbytes, 1, may_sleep);
 #endif
 
 	len = desc_len(sh_desc);
@@ -2502,17 +2587,19 @@ static int aead_decrypt(struct aead_request *req)
 	u32 *desc;
 	int ret = 0;
 
+#ifdef DEBUG
+	bool may_sleep = ((req->base.flags & (CRYPTO_TFM_REQ_MAY_BACKLOG |
+					      CRYPTO_TFM_REQ_MAY_SLEEP)) != 0);
+	dbg_dump_sg(KERN_ERR, "dec src@"__stringify(__LINE__)": ",
+		    DUMP_PREFIX_ADDRESS, 16, 4, req->src,
+		    req->assoclen + req->cryptlen, 1, may_sleep);
+#endif
+
 	/* allocate extended descriptor */
 	edesc = aead_edesc_alloc(req, AUTHENC_DESC_JOB_IO_LEN,
 				 &all_contig, false);
 	if (IS_ERR(edesc))
 		return PTR_ERR(edesc);
-
-#ifdef DEBUG
-	print_hex_dump(KERN_ERR, "dec src@"__stringify(__LINE__)": ",
-		       DUMP_PREFIX_ADDRESS, 16, 4, sg_virt(req->src),
-		       req->assoclen + req->cryptlen, 1);
-#endif
 
 	/* Create and submit job descriptor*/
 	init_authenc_job(req, edesc, all_contig, false);
@@ -2534,20 +2621,6 @@ static int aead_decrypt(struct aead_request *req)
 	return ret;
 }
 
-static int aead_givdecrypt(struct aead_request *req)
-{
-	struct crypto_aead *aead = crypto_aead_reqtfm(req);
-	unsigned int ivsize = crypto_aead_ivsize(aead);
-
-	if (req->cryptlen < ivsize)
-		return -EINVAL;
-
-	req->cryptlen -= ivsize;
-	req->assoclen += ivsize;
-
-	return aead_decrypt(req);
-}
-
 /*
  * allocate and map the ablkcipher extended descriptor for ablkcipher
  */
@@ -2558,8 +2631,7 @@ static struct ablkcipher_edesc *ablkcipher_edesc_alloc(struct ablkcipher_request
 	struct crypto_ablkcipher *ablkcipher = crypto_ablkcipher_reqtfm(req);
 	struct caam_ctx *ctx = crypto_ablkcipher_ctx(ablkcipher);
 	struct device *jrdev = ctx->jrdev;
-	gfp_t flags = (req->base.flags & (CRYPTO_TFM_REQ_MAY_BACKLOG |
-					  CRYPTO_TFM_REQ_MAY_SLEEP)) ?
+	gfp_t flags = (req->base.flags & CRYPTO_TFM_REQ_MAY_SLEEP) ?
 		       GFP_KERNEL : GFP_ATOMIC;
 	int src_nents, dst_nents = 0, sec4_sg_bytes;
 	struct ablkcipher_edesc *edesc;
@@ -3207,7 +3279,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = AES_BLOCK_SIZE,
 			.maxauthsize = MD5_DIGEST_SIZE,
 		},
@@ -3253,7 +3325,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = AES_BLOCK_SIZE,
 			.maxauthsize = SHA1_DIGEST_SIZE,
 		},
@@ -3299,7 +3371,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = AES_BLOCK_SIZE,
 			.maxauthsize = SHA224_DIGEST_SIZE,
 		},
@@ -3345,7 +3417,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = AES_BLOCK_SIZE,
 			.maxauthsize = SHA256_DIGEST_SIZE,
 		},
@@ -3391,7 +3463,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = AES_BLOCK_SIZE,
 			.maxauthsize = SHA384_DIGEST_SIZE,
 		},
@@ -3437,7 +3509,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = AES_BLOCK_SIZE,
 			.maxauthsize = SHA512_DIGEST_SIZE,
 		},
@@ -3483,7 +3555,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES3_EDE_BLOCK_SIZE,
 			.maxauthsize = MD5_DIGEST_SIZE,
 		},
@@ -3531,7 +3603,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES3_EDE_BLOCK_SIZE,
 			.maxauthsize = SHA1_DIGEST_SIZE,
 		},
@@ -3579,7 +3651,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES3_EDE_BLOCK_SIZE,
 			.maxauthsize = SHA224_DIGEST_SIZE,
 		},
@@ -3627,7 +3699,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES3_EDE_BLOCK_SIZE,
 			.maxauthsize = SHA256_DIGEST_SIZE,
 		},
@@ -3675,7 +3747,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES3_EDE_BLOCK_SIZE,
 			.maxauthsize = SHA384_DIGEST_SIZE,
 		},
@@ -3723,7 +3795,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES3_EDE_BLOCK_SIZE,
 			.maxauthsize = SHA512_DIGEST_SIZE,
 		},
@@ -3769,7 +3841,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES_BLOCK_SIZE,
 			.maxauthsize = MD5_DIGEST_SIZE,
 		},
@@ -3815,7 +3887,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES_BLOCK_SIZE,
 			.maxauthsize = SHA1_DIGEST_SIZE,
 		},
@@ -3861,7 +3933,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES_BLOCK_SIZE,
 			.maxauthsize = SHA224_DIGEST_SIZE,
 		},
@@ -3907,7 +3979,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES_BLOCK_SIZE,
 			.maxauthsize = SHA256_DIGEST_SIZE,
 		},
@@ -3953,7 +4025,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES_BLOCK_SIZE,
 			.maxauthsize = SHA384_DIGEST_SIZE,
 		},
@@ -3999,7 +4071,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = DES_BLOCK_SIZE,
 			.maxauthsize = SHA512_DIGEST_SIZE,
 		},
@@ -4048,7 +4120,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = CTR_RFC3686_IV_SIZE,
 			.maxauthsize = MD5_DIGEST_SIZE,
 		},
@@ -4099,7 +4171,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = CTR_RFC3686_IV_SIZE,
 			.maxauthsize = SHA1_DIGEST_SIZE,
 		},
@@ -4150,7 +4222,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = CTR_RFC3686_IV_SIZE,
 			.maxauthsize = SHA224_DIGEST_SIZE,
 		},
@@ -4201,7 +4273,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = CTR_RFC3686_IV_SIZE,
 			.maxauthsize = SHA256_DIGEST_SIZE,
 		},
@@ -4252,7 +4324,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = CTR_RFC3686_IV_SIZE,
 			.maxauthsize = SHA384_DIGEST_SIZE,
 		},
@@ -4303,7 +4375,7 @@ static struct caam_aead_alg driver_aeads[] = {
 			.setkey = aead_setkey,
 			.setauthsize = aead_setauthsize,
 			.encrypt = aead_encrypt,
-			.decrypt = aead_givdecrypt,
+			.decrypt = aead_decrypt,
 			.ivsize = CTR_RFC3686_IV_SIZE,
 			.maxauthsize = SHA512_DIGEST_SIZE,
 		},
@@ -4540,6 +4612,15 @@ static int __init caam_algapi_init(void)
 
 		/* Skip AES algorithms if not supported by device */
 		if (!aes_inst && (alg_sel == OP_ALG_ALGSEL_AES))
+				continue;
+
+		/*
+		 * Check support for AES modes not available
+		 * on LP devices.
+		 */
+		if ((cha_vid & CHA_ID_LS_AES_MASK) == CHA_ID_LS_AES_LP)
+			if ((alg->class1_alg_type & OP_ALG_AAI_MASK) ==
+			     OP_ALG_AAI_XTS)
 				continue;
 
 		t_alg = caam_alg_alloc(alg);

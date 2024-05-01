@@ -114,10 +114,14 @@ struct ina2xx_chip_info {
 	struct mutex state_lock;
 	unsigned int shunt_resistor;
 	int avg;
-	s64 prev_ns; /* track buffer capture time, check for underruns */
 	int int_time_vbus; /* Bus voltage integration time uS */
 	int int_time_vshunt; /* Shunt voltage integration time uS */
 	bool allow_async_readout;
+	/* data buffer needs space for channel data and timestamp */
+	struct {
+		u16 chan[4];
+		u64 ts __aligned(8);
+	} scan;
 };
 
 static const struct ina2xx_config ina2xx_config[] = {
@@ -185,9 +189,9 @@ static int ina2xx_read_raw(struct iio_dev *indio_dev,
 	case IIO_CHAN_INFO_SCALE:
 		switch (chan->address) {
 		case INA2XX_SHUNT_VOLTAGE:
-			/* processed (mV) = raw*1000/shunt_div */
+			/* processed (mV) = raw/shunt_div */
 			*val2 = chip->config->shunt_div;
-			*val = 1000;
+			*val = 1;
 			return IIO_VAL_FRACTIONAL;
 
 		case INA2XX_BUS_VOLTAGE:
@@ -350,6 +354,23 @@ static ssize_t ina2xx_allow_async_readout_store(struct device *dev,
 	return len;
 }
 
+/*
+ * Set current LSB to 1mA, shunt is in uOhms
+ * (equation 13 in datasheet). We hardcode a Current_LSB
+ * of 1.0 x10-6. The only remaining parameter is RShunt.
+ * There is no need to expose the CALIBRATION register
+ * to the user for now. But we need to reset this register
+ * if the user updates RShunt after driver init, e.g upon
+ * reading an EEPROM/Probe-type value.
+ */
+static int ina2xx_set_calibration(struct ina2xx_chip_info *chip)
+{
+	u16 regval = DIV_ROUND_CLOSEST(chip->config->calibration_factor,
+				   chip->shunt_resistor);
+
+	return regmap_write(chip->regmap, INA2XX_CALIBRATION, regval);
+}
+
 static int set_shunt_resistor(struct ina2xx_chip_info *chip, unsigned int val)
 {
 	if (val <= 0 || val > chip->config->calibration_factor)
@@ -382,6 +403,11 @@ static ssize_t ina2xx_shunt_resistor_store(struct device *dev,
 		return ret;
 
 	ret = set_shunt_resistor(chip, val);
+	if (ret)
+		return ret;
+
+	/* Update the Calibration register */
+	ret = ina2xx_set_calibration(chip);
 	if (ret)
 		return ret;
 
@@ -438,12 +464,11 @@ static const struct iio_chan_spec ina2xx_channels[] = {
 static int ina2xx_work_buffer(struct iio_dev *indio_dev)
 {
 	struct ina2xx_chip_info *chip = iio_priv(indio_dev);
-	unsigned short data[8];
 	int bit, ret, i = 0;
 	s64 time_a, time_b;
 	unsigned int alert;
 
-	time_a = iio_get_time_ns();
+	time_a = iio_get_time_ns(indio_dev);
 
 	/*
 	 * Because the timer thread and the chip conversion clock
@@ -479,15 +504,12 @@ static int ina2xx_work_buffer(struct iio_dev *indio_dev)
 		if (ret < 0)
 			return ret;
 
-		data[i++] = val;
+		chip->scan.chan[i++] = val;
 	}
 
-	time_b = iio_get_time_ns();
+	time_b = iio_get_time_ns(indio_dev);
 
-	iio_push_to_buffers_with_timestamp(indio_dev,
-					   (unsigned int *)data, time_a);
-
-	chip->prev_ns = time_a;
+	iio_push_to_buffers_with_timestamp(indio_dev, &chip->scan, time_a);
 
 	return (unsigned long)(time_b - time_a) / 1000;
 };
@@ -531,8 +553,6 @@ static int ina2xx_buffer_enable(struct iio_dev *indio_dev)
 	dev_dbg(&indio_dev->dev, "Expected work period: %u us\n", sampling_us);
 	dev_dbg(&indio_dev->dev, "Async readout mode: %d\n",
 		chip->allow_async_readout);
-
-	chip->prev_ns = iio_get_time_ns();
 
 	chip->task = kthread_run(ina2xx_capture_thread, (void *)indio_dev,
 				 "%s:%d-%uus", indio_dev->name, indio_dev->id,
@@ -602,24 +622,11 @@ static const struct iio_info ina2xx_info = {
 /* Initialize the configuration and calibration registers. */
 static int ina2xx_init(struct ina2xx_chip_info *chip, unsigned int config)
 {
-	u16 regval;
-	int ret;
-
-	ret = regmap_write(chip->regmap, INA2XX_CONFIG, config);
+	int ret = regmap_write(chip->regmap, INA2XX_CONFIG, config);
 	if (ret)
 		return ret;
 
-	/*
-	 * Set current LSB to 1mA, shunt is in uOhms
-	 * (equation 13 in datasheet). We hardcode a Current_LSB
-	 * of 1.0 x10-6. The only remaining parameter is RShunt.
-	 * There is no need to expose the CALIBRATION register
-	 * to the user for now.
-	 */
-	regval = DIV_ROUND_CLOSEST(chip->config->calibration_factor,
-				   chip->shunt_resistor);
-
-	return regmap_write(chip->regmap, INA2XX_CALIBRATION, regval);
+	return ina2xx_set_calibration(chip);
 }
 
 static int ina2xx_probe(struct i2c_client *client,
@@ -682,6 +689,7 @@ static int ina2xx_probe(struct i2c_client *client,
 
 	indio_dev->modes = INDIO_DIRECT_MODE | INDIO_BUFFER_SOFTWARE;
 	indio_dev->dev.parent = &client->dev;
+	indio_dev->dev.of_node = client->dev.of_node;
 	indio_dev->channels = ina2xx_channels;
 	indio_dev->num_channels = ARRAY_SIZE(ina2xx_channels);
 	indio_dev->name = id->name;

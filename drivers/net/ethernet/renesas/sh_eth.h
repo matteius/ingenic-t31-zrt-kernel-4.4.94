@@ -339,7 +339,7 @@ enum FELIC_MODE_BIT {
 	ECMR_DPAD = 0x00200000, ECMR_RZPF = 0x00100000,
 	ECMR_ZPF = 0x00080000, ECMR_PFR = 0x00040000, ECMR_RXF = 0x00020000,
 	ECMR_TXF = 0x00010000, ECMR_MCT = 0x00002000, ECMR_PRCEF = 0x00001000,
-	ECMR_PMDE = 0x00000200, ECMR_RE = 0x00000040, ECMR_TE = 0x00000020,
+	ECMR_MPDE = 0x00000200, ECMR_RE = 0x00000040, ECMR_TE = 0x00000020,
 	ECMR_RTM = 0x00000010, ECMR_ILB = 0x00000008, ECMR_ELB = 0x00000004,
 	ECMR_DM = 0x00000002, ECMR_PRM = 0x00000001,
 };
@@ -394,7 +394,7 @@ enum RPADIR_BIT {
 #define DEFAULT_FDR_INIT	0x00000707
 
 /* ARSTR */
-enum ARSTR_BIT { ARSTR_ARSTR = 0x00000001, };
+enum ARSTR_BIT { ARSTR_ARST = 0x00000001, };
 
 /* TSU_FWEN0 */
 enum TSU_FWEN0_BIT {
@@ -518,7 +518,6 @@ struct sh_eth_private {
 	/* MII transceiver section. */
 	u32 phy_id;			/* PHY ID */
 	struct mii_bus *mii_bus;	/* MDIO bus control */
-	struct phy_device *phydev;	/* PHY device control */
 	int link;
 	phy_interface_t phy_interface;
 	int msg_enable;

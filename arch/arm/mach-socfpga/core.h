@@ -38,6 +38,8 @@ extern void socfpga_init_clocks(void);
 extern void socfpga_sysmgr_init(void);
 void socfpga_init_l2_ecc(void);
 void socfpga_init_ocram_ecc(void);
+void socfpga_init_arria10_l2_ecc(void);
+void socfpga_init_arria10_ocram_ecc(void);
 
 extern void __iomem *sys_manager_base_addr;
 extern void __iomem *rst_manager_base_addr;
@@ -46,7 +48,7 @@ extern void __iomem *sdr_ctl_base_addr;
 u32 socfpga_sdram_self_refresh(u32 sdr_base);
 extern unsigned int socfpga_sdram_self_refresh_sz;
 
-extern char secondary_trampoline, secondary_trampoline_end;
+extern char secondary_trampoline[], secondary_trampoline_end[];
 
 extern unsigned long socfpga_cpu1start_addr;
 

@@ -253,6 +253,14 @@ static const char *meson_uart_type(struct uart_port *port)
 	return (port->type == PORT_MESON) ? "meson_uart" : NULL;
 }
 
+/*
+ * This function is called only from probe() using a temporary io mapping
+ * in order to perform a reset before setting up the device. Since the
+ * temporarily mapped region was successfully requested, there can be no
+ * console on this port at this time. Hence it is not necessary for this
+ * function to acquire the port->lock. (Since there is no console on this
+ * port at this time, the port->lock is not initialized yet.)
+ */
 static void meson_uart_reset(struct uart_port *port)
 {
 	u32 val;
@@ -267,8 +275,11 @@ static void meson_uart_reset(struct uart_port *port)
 
 static int meson_uart_startup(struct uart_port *port)
 {
+	unsigned long flags;
 	u32 val;
 	int ret = 0;
+
+	spin_lock_irqsave(&port->lock, flags);
 
 	val = readl(port->membase + AML_UART_CONTROL);
 	val |= AML_UART_CLR_ERR;
@@ -284,6 +295,8 @@ static int meson_uart_startup(struct uart_port *port)
 
 	val = (AML_UART_RECV_IRQ(1) | AML_UART_XMIT_IRQ(port->fifosize / 2));
 	writel(val, port->membase + AML_UART_MISC);
+
+	spin_unlock_irqrestore(&port->lock, flags);
 
 	ret = request_irq(port->irq, meson_uart_interrupt, 0,
 			  meson_uart_type(port), port);
@@ -481,17 +494,12 @@ static void meson_console_putchar(struct uart_port *port, int ch)
 	writel(ch, port->membase + AML_UART_WFIFO);
 }
 
-static void meson_serial_console_write(struct console *co, const char *s,
-				       u_int count)
+static void meson_serial_port_write(struct uart_port *port, const char *s,
+				    u_int count)
 {
-	struct uart_port *port;
 	unsigned long flags;
 	int locked;
 	u32 val, tmp;
-
-	port = meson_ports[co->index];
-	if (!port)
-		return;
 
 	local_irq_save(flags);
 	if (port->sysrq) {
@@ -514,6 +522,18 @@ static void meson_serial_console_write(struct console *co, const char *s,
 	if (locked)
 		spin_unlock(&port->lock);
 	local_irq_restore(flags);
+}
+
+static void meson_serial_console_write(struct console *co, const char *s,
+				       u_int count)
+{
+	struct uart_port *port;
+
+	port = meson_ports[co->index];
+	if (!port)
+		return;
+
+	meson_serial_port_write(port, s, count);
 }
 
 static int meson_serial_console_setup(struct console *co, char *options)
@@ -553,6 +573,27 @@ static int __init meson_serial_console_init(void)
 	return 0;
 }
 console_initcall(meson_serial_console_init);
+
+static void meson_serial_early_console_write(struct console *co,
+					     const char *s,
+					     u_int count)
+{
+	struct earlycon_device *dev = co->data;
+
+	meson_serial_port_write(&dev->port, s, count);
+}
+
+static int __init
+meson_serial_early_console_setup(struct earlycon_device *device, const char *opt)
+{
+	if (!device->port.membase)
+		return -ENODEV;
+
+	device->con->write = meson_serial_early_console_write;
+	return 0;
+}
+OF_EARLYCON_DECLARE(meson, "amlogic,meson-uart",
+		    meson_serial_early_console_setup);
 
 #define MESON_SERIAL_CONSOLE	(&meson_serial_console)
 #else

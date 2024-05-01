@@ -141,7 +141,9 @@ static DECLARE_TLV_DB_SCALE(mic_tlv, 1600, 100, 0);
 
 static DECLARE_TLV_DB_SCALE(pga_tlv, -600, 50, 0);
 
-static DECLARE_TLV_DB_SCALE(mix_tlv, -50, 50, 0);
+static DECLARE_TLV_DB_SCALE(pass_tlv, -6000, 50, 0);
+
+static DECLARE_TLV_DB_SCALE(mix_tlv, -5150, 50, 0);
 
 static DECLARE_TLV_DB_SCALE(beep_tlv, -56, 200, 0);
 
@@ -355,7 +357,7 @@ static const struct snd_kcontrol_new cs42l52_snd_controls[] = {
 			      CS42L52_SPKB_VOL, 0, 0x40, 0xC0, hl_tlv),
 
 	SOC_DOUBLE_R_SX_TLV("Bypass Volume", CS42L52_PASSTHRUA_VOL,
-			      CS42L52_PASSTHRUB_VOL, 0, 0x88, 0x90, pga_tlv),
+			      CS42L52_PASSTHRUB_VOL, 0, 0x88, 0x90, pass_tlv),
 
 	SOC_DOUBLE("Bypass Mute", CS42L52_MISC_CTL, 4, 5, 1, 0),
 
@@ -368,7 +370,7 @@ static const struct snd_kcontrol_new cs42l52_snd_controls[] = {
 			      CS42L52_ADCB_VOL, 0, 0xA0, 0x78, ipd_tlv),
 	SOC_DOUBLE_R_SX_TLV("ADC Mixer Volume",
 			     CS42L52_ADCA_MIXER_VOL, CS42L52_ADCB_MIXER_VOL,
-				0, 0x19, 0x7F, ipd_tlv),
+				0, 0x19, 0x7F, mix_tlv),
 
 	SOC_DOUBLE("ADC Switch", CS42L52_ADC_MISC_CTL, 0, 1, 1, 0),
 
@@ -1056,13 +1058,14 @@ static const struct snd_soc_codec_driver soc_codec_dev_cs42l52 = {
 	.set_bias_level = cs42l52_set_bias_level,
 	.suspend_bias_off = true,
 
-	.dapm_widgets = cs42l52_dapm_widgets,
-	.num_dapm_widgets = ARRAY_SIZE(cs42l52_dapm_widgets),
-	.dapm_routes = cs42l52_audio_map,
-	.num_dapm_routes = ARRAY_SIZE(cs42l52_audio_map),
-
-	.controls = cs42l52_snd_controls,
-	.num_controls = ARRAY_SIZE(cs42l52_snd_controls),
+	.component_driver = {
+		.controls		= cs42l52_snd_controls,
+		.num_controls		= ARRAY_SIZE(cs42l52_snd_controls),
+		.dapm_widgets		= cs42l52_dapm_widgets,
+		.num_dapm_widgets	= ARRAY_SIZE(cs42l52_dapm_widgets),
+		.dapm_routes		= cs42l52_audio_map,
+		.num_dapm_routes	= ARRAY_SIZE(cs42l52_audio_map),
+	},
 };
 
 /* Current and threshold powerup sequence Pg37 */

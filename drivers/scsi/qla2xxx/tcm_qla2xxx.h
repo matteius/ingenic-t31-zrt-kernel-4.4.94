@@ -34,6 +34,7 @@ struct tcm_qla2xxx_tpg_attrib {
 	int prod_mode_write_protect;
 	int demo_mode_login_only;
 	int fabric_prot_type;
+	int jam_host;
 };
 
 struct tcm_qla2xxx_tpg {
@@ -47,9 +48,6 @@ struct tcm_qla2xxx_tpg {
 	struct tcm_qla2xxx_tpg_attrib tpg_attrib;
 	/* Returned by tcm_qla2xxx_make_tpg() */
 	struct se_portal_group se_tpg;
-	/* Items for dealing with configfs_depend_item */
-	struct completion tpg_base_comp;
-	struct work_struct tpg_base_work;
 };
 
 struct tcm_qla2xxx_fc_loopid {

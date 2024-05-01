@@ -51,6 +51,7 @@
 #include <linux/slab.h>
 #include <linux/errno.h>
 #include <linux/interrupt.h>
+#include <linux/workqueue.h>
 #include "adf_accel_devices.h"
 #include "adf_common_drv.h"
 #include "adf_cfg.h"
@@ -63,6 +64,13 @@
 #define ADF_VINTSOU_OFFSET	0x204
 #define ADF_VINTSOU_BUN		BIT(0)
 #define ADF_VINTSOU_PF2VF	BIT(1)
+
+static struct workqueue_struct *adf_vf_stop_wq;
+
+struct adf_vf_stop_data {
+	struct adf_accel_dev *accel_dev;
+	struct work_struct work;
+};
 
 static int adf_enable_msi(struct adf_accel_dev *accel_dev)
 {
@@ -90,6 +98,20 @@ static void adf_disable_msi(struct adf_accel_dev *accel_dev)
 	pci_disable_msi(pdev);
 }
 
+static void adf_dev_stop_async(struct work_struct *work)
+{
+	struct adf_vf_stop_data *stop_data =
+		container_of(work, struct adf_vf_stop_data, work);
+	struct adf_accel_dev *accel_dev = stop_data->accel_dev;
+
+	adf_dev_stop(accel_dev);
+	adf_dev_shutdown(accel_dev);
+
+	/* Re-enable PF2VF interrupts */
+	adf_enable_pf2vf_interrupts(accel_dev);
+	kfree(stop_data);
+}
+
 static void adf_pf2vf_bh_handler(void *data)
 {
 	struct adf_accel_dev *accel_dev = data;
@@ -101,17 +123,40 @@ static void adf_pf2vf_bh_handler(void *data)
 
 	/* Read the message from PF */
 	msg = ADF_CSR_RD(pmisc_bar_addr, hw_data->get_pf2vf_offset(0));
+	if (!(msg & ADF_PF2VF_INT)) {
+		dev_info(&GET_DEV(accel_dev),
+			 "Spurious PF2VF interrupt, msg %X. Ignored\n", msg);
+		goto out;
+	}
 
 	if (!(msg & ADF_PF2VF_MSGORIGIN_SYSTEM))
 		/* Ignore legacy non-system (non-kernel) PF2VF messages */
 		goto err;
 
 	switch ((msg & ADF_PF2VF_MSGTYPE_MASK) >> ADF_PF2VF_MSGTYPE_SHIFT) {
-	case ADF_PF2VF_MSGTYPE_RESTARTING:
+	case ADF_PF2VF_MSGTYPE_RESTARTING: {
+		struct adf_vf_stop_data *stop_data;
+
 		dev_dbg(&GET_DEV(accel_dev),
 			"Restarting msg received from PF 0x%x\n", msg);
-		adf_dev_stop(accel_dev);
-		break;
+
+		clear_bit(ADF_STATUS_PF_RUNNING, &accel_dev->status);
+
+		stop_data = kzalloc(sizeof(*stop_data), GFP_ATOMIC);
+		if (!stop_data) {
+			dev_err(&GET_DEV(accel_dev),
+				"Couldn't schedule stop for vf_%d\n",
+				accel_dev->accel_id);
+			return;
+		}
+		stop_data->accel_dev = accel_dev;
+		INIT_WORK(&stop_data->work, adf_dev_stop_async);
+		queue_work(adf_vf_stop_wq, &stop_data->work);
+		/* To ack, clear the PF2VFINT bit */
+		msg &= ~BIT(0);
+		ADF_CSR_WR(pmisc_bar_addr, hw_data->get_pf2vf_offset(0), msg);
+		return;
+	}
 	case ADF_PF2VF_MSGTYPE_VERSION_RESP:
 		dev_dbg(&GET_DEV(accel_dev),
 			"Version resp received from PF 0x%x\n", msg);
@@ -131,6 +176,7 @@ static void adf_pf2vf_bh_handler(void *data)
 	msg &= ~BIT(0);
 	ADF_CSR_WR(pmisc_bar_addr, hw_data->get_pf2vf_offset(0), msg);
 
+out:
 	/* Re-enable PF2VF interrupts */
 	adf_enable_pf2vf_interrupts(accel_dev);
 	return;
@@ -163,6 +209,7 @@ static irqreturn_t adf_isr(int irq, void *privdata)
 	struct adf_bar *pmisc =
 			&GET_BARS(accel_dev)[hw_data->get_misc_bar_id(hw_data)];
 	void __iomem *pmisc_bar_addr = pmisc->virt_addr;
+	bool handled = false;
 	u32 v_int;
 
 	/* Read VF INT source CSR to determine the source of VF interrupt */
@@ -175,7 +222,7 @@ static irqreturn_t adf_isr(int irq, void *privdata)
 
 		/* Schedule tasklet to handle interrupt BH */
 		tasklet_hi_schedule(&accel_dev->vf.pf2vf_bh_tasklet);
-		return IRQ_HANDLED;
+		handled = true;
 	}
 
 	/* Check bundle interrupt */
@@ -187,10 +234,10 @@ static irqreturn_t adf_isr(int irq, void *privdata)
 		WRITE_CSR_INT_FLAG_AND_COL(bank->csr_addr, bank->bank_number,
 					   0);
 		tasklet_hi_schedule(&bank->resp_handler);
-		return IRQ_HANDLED;
+		handled = true;
 	}
 
-	return IRQ_NONE;
+	return handled ? IRQ_HANDLED : IRQ_NONE;
 }
 
 static int adf_request_msi_irq(struct adf_accel_dev *accel_dev)
@@ -264,17 +311,41 @@ int adf_vf_isr_resource_alloc(struct adf_accel_dev *accel_dev)
 		goto err_out;
 
 	if (adf_setup_pf2vf_bh(accel_dev))
-		goto err_out;
+		goto err_disable_msi;
 
 	if (adf_setup_bh(accel_dev))
-		goto err_out;
+		goto err_cleanup_pf2vf_bh;
 
 	if (adf_request_msi_irq(accel_dev))
-		goto err_out;
+		goto err_cleanup_bh;
 
 	return 0;
+
+err_cleanup_bh:
+	adf_cleanup_bh(accel_dev);
+
+err_cleanup_pf2vf_bh:
+	adf_cleanup_pf2vf_bh(accel_dev);
+
+err_disable_msi:
+	adf_disable_msi(accel_dev);
+
 err_out:
-	adf_vf_isr_resource_free(accel_dev);
 	return -EFAULT;
 }
 EXPORT_SYMBOL_GPL(adf_vf_isr_resource_alloc);
+
+int __init adf_init_vf_wq(void)
+{
+	adf_vf_stop_wq = alloc_workqueue("adf_vf_stop_wq", WQ_MEM_RECLAIM, 0);
+
+	return !adf_vf_stop_wq ? -EFAULT : 0;
+}
+
+void adf_exit_vf_wq(void)
+{
+	if (adf_vf_stop_wq)
+		destroy_workqueue(adf_vf_stop_wq);
+
+	adf_vf_stop_wq = NULL;
+}

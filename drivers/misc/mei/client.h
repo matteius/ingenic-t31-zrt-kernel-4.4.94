@@ -82,11 +82,7 @@ static inline u8 mei_me_cl_ver(const struct mei_me_client *me_cl)
 /*
  * MEI IO Functions
  */
-struct mei_cl_cb *mei_io_cb_init(struct mei_cl *cl, enum mei_cb_file_ops type,
-				 const struct file *fp);
 void mei_io_cb_free(struct mei_cl_cb *priv_cb);
-int mei_io_cb_alloc_buf(struct mei_cl_cb *cb, size_t length);
-
 
 /**
  * mei_io_list_init - Sets up a queue list.
@@ -118,6 +114,9 @@ void mei_cl_read_cb_flush(const struct mei_cl *cl, const struct file *fp);
 struct mei_cl_cb *mei_cl_alloc_cb(struct mei_cl *cl, size_t length,
 				  enum mei_cb_file_ops type,
 				  const struct file *fp);
+struct mei_cl_cb *mei_cl_enqueue_ctrl_wr_cb(struct mei_cl *cl, size_t length,
+					    enum mei_cb_file_ops type,
+					    const struct file *fp);
 int mei_cl_flush_queues(struct mei_cl *cl, const struct file *fp);
 
 /*
@@ -153,11 +152,11 @@ static inline u8 mei_cl_me_id(const struct mei_cl *cl)
  *
  * @cl: host client
  *
- * Return: mtu
+ * Return: mtu or 0 if client is not connected
  */
 static inline size_t mei_cl_mtu(const struct mei_cl *cl)
 {
-	return cl->me_cl->props.max_msg_length;
+	return cl->me_cl ? cl->me_cl->props.max_msg_length : 0;
 }
 
 /**

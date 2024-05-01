@@ -94,6 +94,14 @@ static const struct hvs_format {
 		.pixel_order = HVS_PIXEL_ORDER_ABGR, .has_alpha = true,
 	},
 	{
+		.drm = DRM_FORMAT_ABGR8888, .hvs = HVS_PIXEL_FORMAT_RGBA8888,
+		.pixel_order = HVS_PIXEL_ORDER_ARGB, .has_alpha = true,
+	},
+	{
+		.drm = DRM_FORMAT_XBGR8888, .hvs = HVS_PIXEL_FORMAT_RGBA8888,
+		.pixel_order = HVS_PIXEL_ORDER_ARGB, .has_alpha = false,
+	},
+	{
 		.drm = DRM_FORMAT_RGB565, .hvs = HVS_PIXEL_FORMAT_RGB565,
 		.pixel_order = HVS_PIXEL_ORDER_XRGB, .has_alpha = false,
 	},
@@ -208,7 +216,7 @@ static void vc4_plane_destroy_state(struct drm_plane *plane,
 	}
 
 	kfree(vc4_state->dlist);
-	__drm_atomic_helper_plane_destroy_state(plane, &vc4_state->base);
+	__drm_atomic_helper_plane_destroy_state(&vc4_state->base);
 	kfree(state);
 }
 
@@ -319,6 +327,9 @@ static int vc4_plane_setup_clipping_and_scaling(struct drm_plane_state *state)
 	vc4_state->y_scaling[0] = vc4_get_scaling_mode(vc4_state->src_h[0],
 						       vc4_state->crtc_h);
 
+	vc4_state->is_unity = (vc4_state->x_scaling[0] == VC4_SCALING_NONE &&
+			       vc4_state->y_scaling[0] == VC4_SCALING_NONE);
+
 	if (num_planes > 1) {
 		vc4_state->is_yuv = true;
 
@@ -334,20 +345,19 @@ static int vc4_plane_setup_clipping_and_scaling(struct drm_plane_state *state)
 			vc4_get_scaling_mode(vc4_state->src_h[1],
 					     vc4_state->crtc_h);
 
-		/* YUV conversion requires that scaling be enabled,
-		 * even on a plane that's otherwise 1:1.  Choose TPZ
-		 * for simplicity.
+		/* YUV conversion requires that horizontal scaling be enabled
+		 * on the UV plane even if vc4_get_scaling_mode() returned
+		 * VC4_SCALING_NONE (which can happen when the down-scaling
+		 * ratio is 0.5). Let's force it to VC4_SCALING_PPF in this
+		 * case.
 		 */
-		if (vc4_state->x_scaling[0] == VC4_SCALING_NONE)
-			vc4_state->x_scaling[0] = VC4_SCALING_TPZ;
-		if (vc4_state->y_scaling[0] == VC4_SCALING_NONE)
-			vc4_state->y_scaling[0] = VC4_SCALING_TPZ;
+		if (vc4_state->x_scaling[1] == VC4_SCALING_NONE)
+			vc4_state->x_scaling[1] = VC4_SCALING_PPF;
+	} else {
+		vc4_state->is_yuv = false;
+		vc4_state->x_scaling[1] = VC4_SCALING_NONE;
+		vc4_state->y_scaling[1] = VC4_SCALING_NONE;
 	}
-
-	vc4_state->is_unity = (vc4_state->x_scaling[0] == VC4_SCALING_NONE &&
-			       vc4_state->y_scaling[0] == VC4_SCALING_NONE &&
-			       vc4_state->x_scaling[1] == VC4_SCALING_NONE &&
-			       vc4_state->y_scaling[1] == VC4_SCALING_NONE);
 
 	/* No configuring scaling on the cursor plane, since it gets
 	   non-vblank-synced updates, and scaling requires requires
@@ -525,7 +535,7 @@ static int vc4_plane_mode_set(struct drm_plane *plane,
 	 * the scl fields here.
 	 */
 	if (num_planes == 1) {
-		scl0 = vc4_get_scl_field(state, 1);
+		scl0 = vc4_get_scl_field(state, 0);
 		scl1 = scl0;
 	} else {
 		scl0 = vc4_get_scl_field(state, 1);
@@ -603,7 +613,10 @@ static int vc4_plane_mode_set(struct drm_plane *plane,
 		vc4_dlist_write(vc4_state, SCALER_CSC2_ITR_R_601_5);
 	}
 
-	if (!vc4_state->is_unity) {
+	if (vc4_state->x_scaling[0] != VC4_SCALING_NONE ||
+	    vc4_state->x_scaling[1] != VC4_SCALING_NONE ||
+	    vc4_state->y_scaling[0] != VC4_SCALING_NONE ||
+	    vc4_state->y_scaling[1] != VC4_SCALING_NONE) {
 		/* LBM Base Address. */
 		if (vc4_state->y_scaling[0] != VC4_SCALING_NONE ||
 		    vc4_state->y_scaling[1] != VC4_SCALING_NONE) {
@@ -690,9 +703,10 @@ u32 vc4_plane_write_dlist(struct drm_plane *plane, u32 __iomem *dlist)
 	return vc4_state->dlist_count;
 }
 
-u32 vc4_plane_dlist_size(struct drm_plane_state *state)
+u32 vc4_plane_dlist_size(const struct drm_plane_state *state)
 {
-	struct vc4_plane_state *vc4_state = to_vc4_plane_state(state);
+	const struct vc4_plane_state *vc4_state =
+		container_of(state, typeof(*vc4_state), base);
 
 	return vc4_state->dlist_count;
 }
@@ -726,8 +740,6 @@ void vc4_plane_async_set_fb(struct drm_plane *plane, struct drm_framebuffer *fb)
 }
 
 static const struct drm_plane_helper_funcs vc4_plane_helper_funcs = {
-	.prepare_fb = NULL,
-	.cleanup_fb = NULL,
 	.atomic_check = vc4_plane_atomic_check,
 	.atomic_update = vc4_plane_atomic_update,
 };

@@ -57,6 +57,8 @@ int qxl_mode_dumb_create(struct drm_file *file_priv,
 	surf.height = args->height;
 	surf.stride = pitch;
 	surf.format = format;
+	surf.data = 0;
+
 	r = qxl_gem_object_create_with_handle(qdev, file_priv,
 					      QXL_GEM_DOMAIN_VRAM,
 					      args->size, &surf, &qobj,
@@ -76,7 +78,7 @@ int qxl_mode_dumb_mmap(struct drm_file *file_priv,
 	struct qxl_bo *qobj;
 
 	BUG_ON(!offset_p);
-	gobj = drm_gem_object_lookup(dev, file_priv, handle);
+	gobj = drm_gem_object_lookup(file_priv, handle);
 	if (gobj == NULL)
 		return -ENOENT;
 	qobj = gem_to_qxl_bo(gobj);

@@ -1,4 +1,6 @@
-#include <linux/module.h>
+#include <linux/types.h>
+#include <linux/export.h>
+#include <asm/cpu.h>
 
 unsigned int x86_family(unsigned int sig)
 {
@@ -17,7 +19,7 @@ unsigned int x86_model(unsigned int sig)
 {
 	unsigned int fam, model;
 
-	 fam = x86_family(sig);
+	fam = x86_family(sig);
 
 	model = (sig >> 4) & 0xf;
 

@@ -4790,7 +4790,7 @@ static void transmit_cleanup(struct dev_info *hw_priv, int normal)
 
 	/* Notify the network subsystem that the packet has been sent. */
 	if (dev)
-		dev->trans_start = jiffies;
+		netif_trans_update(dev);
 }
 
 /**
@@ -4965,7 +4965,7 @@ static void netdev_tx_timeout(struct net_device *dev)
 		hw_ena_intr(hw);
 	}
 
-	dev->trans_start = jiffies;
+	netif_trans_update(dev);
 	netif_wake_queue(dev);
 }
 
@@ -6932,7 +6932,7 @@ static int pcidev_init(struct pci_dev *pdev, const struct pci_device_id *id)
 	char banner[sizeof(version)];
 	struct ksz_switch *sw = NULL;
 
-	result = pci_enable_device(pdev);
+	result = pcim_enable_device(pdev);
 	if (result)
 		return result;
 

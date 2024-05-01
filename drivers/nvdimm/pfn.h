@@ -19,6 +19,7 @@
 
 #define PFN_SIG_LEN 16
 #define PFN_SIG "NVDIMM_PFN_INFO\0"
+#define DAX_SIG "NVDIMM_DAX_INFO\0"
 
 struct nd_pfn_sb {
 	u8 signature[PFN_SIG_LEN];
@@ -33,7 +34,10 @@ struct nd_pfn_sb {
 	/* minor-version-1 additions for section alignment */
 	__le32 start_pad;
 	__le32 end_trunc;
-	u8 padding[4004];
+	/* minor-version-2 record the base alignment of the mapping */
+	__le32 align;
+	/* minor-version-3 guarantee the padding and flags are zero */
+	u8 padding[4000];
 	__le64 checksum;
 };
 

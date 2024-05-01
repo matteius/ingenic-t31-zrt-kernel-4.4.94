@@ -22,7 +22,6 @@
 
 #include "i2s.h"
 #include "idma.h"
-#include "dma.h"
 #include "i2s-regs.h"
 
 #define ST_RUNNING		(1<<0)
@@ -370,6 +369,8 @@ static int preallocate_idma_buffer(struct snd_pcm *pcm, int stream)
 	buf->addr = idma.lp_tx_addr;
 	buf->bytes = idma_hardware.buffer_bytes_max;
 	buf->area = (unsigned char * __force)ioremap(buf->addr, buf->bytes);
+	if (!buf->area)
+		return -ENOMEM;
 
 	return 0;
 }

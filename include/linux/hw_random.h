@@ -29,7 +29,9 @@
  *			Returns the number of lower random bytes in "data".
  *			Must not be NULL.    *OBSOLETE*
  * @read:		New API. drivers can fill up to max bytes of data
- *			into the buffer. The buffer is aligned for any type.
+ *			into the buffer. The buffer is aligned for any type
+ *			and max is guaranteed to be >= to that alignment
+ *			(either 4 or 8 depending on architecture).
  * @priv:		Private data, for use by the RNG driver.
  * @quality:		Estimation of true entropy in RNG's bitstream
  *			(per mill).
@@ -58,7 +60,5 @@ extern int devm_hwrng_register(struct device *dev, struct hwrng *rng);
 /** Unregister a Hardware Random Number Generator driver. */
 extern void hwrng_unregister(struct hwrng *rng);
 extern void devm_hwrng_unregister(struct device *dve, struct hwrng *rng);
-/** Feed random bits into the pool. */
-extern void add_hwgenerator_randomness(const char *buffer, size_t count, size_t entropy);
 
 #endif /* LINUX_HWRANDOM_H_ */

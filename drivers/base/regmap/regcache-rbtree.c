@@ -296,14 +296,14 @@ static int regcache_rbtree_insert_to_block(struct regmap *map,
 	if (!blk)
 		return -ENOMEM;
 
+	rbnode->block = blk;
+
 	if (BITS_TO_LONGS(blklen) > BITS_TO_LONGS(rbnode->blklen)) {
 		present = krealloc(rbnode->cache_present,
 				   BITS_TO_LONGS(blklen) * sizeof(*present),
 				   GFP_KERNEL);
-		if (!present) {
-			kfree(blk);
+		if (!present)
 			return -ENOMEM;
-		}
 
 		memset(present + BITS_TO_LONGS(rbnode->blklen), 0,
 		       (BITS_TO_LONGS(blklen) - BITS_TO_LONGS(rbnode->blklen))
@@ -320,7 +320,6 @@ static int regcache_rbtree_insert_to_block(struct regmap *map,
 	}
 
 	/* update the rbnode block, its size and the base register */
-	rbnode->block = blk;
 	rbnode->blklen = blklen;
 	rbnode->base_reg = base_reg;
 	rbnode->cache_present = present;
@@ -404,6 +403,7 @@ static int regcache_rbtree_write(struct regmap *map, unsigned int reg,
 		unsigned int new_base_reg, new_top_reg;
 		unsigned int min, max;
 		unsigned int max_dist;
+		unsigned int dist, best_dist = UINT_MAX;
 
 		max_dist = map->reg_stride * sizeof(*rbnode_tmp) /
 			map->cache_word_size;
@@ -423,24 +423,41 @@ static int regcache_rbtree_write(struct regmap *map, unsigned int reg,
 				&base_reg, &top_reg);
 
 			if (base_reg <= max && top_reg >= min) {
-				new_base_reg = min(reg, base_reg);
-				new_top_reg = max(reg, top_reg);
-			} else {
-				if (max < base_reg)
-					node = node->rb_left;
+				if (reg < base_reg)
+					dist = base_reg - reg;
+				else if (reg > top_reg)
+					dist = reg - top_reg;
 				else
-					node = node->rb_right;
-
-				continue;
+					dist = 0;
+				if (dist < best_dist) {
+					rbnode = rbnode_tmp;
+					best_dist = dist;
+					new_base_reg = min(reg, base_reg);
+					new_top_reg = max(reg, top_reg);
+				}
 			}
 
-			ret = regcache_rbtree_insert_to_block(map, rbnode_tmp,
+			/*
+			 * Keep looking, we want to choose the closest block,
+			 * otherwise we might end up creating overlapping
+			 * blocks, which breaks the rbtree.
+			 */
+			if (reg < base_reg)
+				node = node->rb_left;
+			else if (reg > top_reg)
+				node = node->rb_right;
+			else
+				break;
+		}
+
+		if (rbnode) {
+			ret = regcache_rbtree_insert_to_block(map, rbnode,
 							      new_base_reg,
 							      new_top_reg, reg,
 							      value);
 			if (ret)
 				return ret;
-			rbtree_ctx->cached_rbnode = rbnode_tmp;
+			rbtree_ctx->cached_rbnode = rbnode;
 			return 0;
 		}
 

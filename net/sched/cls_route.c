@@ -268,8 +268,7 @@ static int route4_init(struct tcf_proto *tp)
 	return 0;
 }
 
-static void
-route4_delete_filter(struct rcu_head *head)
+static void route4_delete_filter(struct rcu_head *head)
 {
 	struct route4_filter *f = container_of(head, struct route4_filter, rcu);
 
@@ -383,17 +382,19 @@ static int route4_set_parms(struct net *net, struct tcf_proto *tp,
 			    struct nlattr **tb, struct nlattr *est, int new,
 			    bool ovr)
 {
-	int err;
 	u32 id = 0, to = 0, nhandle = 0x8000;
 	struct route4_filter *fp;
 	unsigned int h1;
 	struct route4_bucket *b;
 	struct tcf_exts e;
+	int err;
 
-	tcf_exts_init(&e, TCA_ROUTE4_ACT, TCA_ROUTE4_POLICE);
-	err = tcf_exts_validate(net, tp, tb, est, &e, ovr);
+	err = tcf_exts_init(&e, TCA_ROUTE4_ACT, TCA_ROUTE4_POLICE);
 	if (err < 0)
 		return err;
+	err = tcf_exts_validate(net, tp, tb, est, &e, ovr);
+	if (err < 0)
+		goto errout;
 
 	err = -EINVAL;
 	if (tb[TCA_ROUTE4_TO]) {
@@ -425,6 +426,9 @@ static int route4_set_parms(struct net *net, struct tcf_proto *tp,
 		if (nhandle != handle)
 			goto errout;
 	}
+
+	if (!nhandle)
+		return -EINVAL;
 
 	h1 = to_hash(nhandle);
 	b = rtnl_dereference(head->table[h1]);
@@ -472,10 +476,8 @@ errout:
 }
 
 static int route4_change(struct net *net, struct sk_buff *in_skb,
-		       struct tcf_proto *tp, unsigned long base,
-		       u32 handle,
-		       struct nlattr **tca,
-		       unsigned long *arg, bool ovr)
+			 struct tcf_proto *tp, unsigned long base, u32 handle,
+			 struct nlattr **tca, unsigned long *arg, bool ovr)
 {
 	struct route4_head *head = rtnl_dereference(tp->root);
 	struct route4_filter __rcu **fp;
@@ -486,6 +488,9 @@ static int route4_change(struct net *net, struct sk_buff *in_skb,
 	unsigned int h, th;
 	int err;
 	bool new = true;
+
+	if (!handle)
+		return -EINVAL;
 
 	if (opt == NULL)
 		return handle ? -EINVAL : 0;
@@ -503,7 +508,10 @@ static int route4_change(struct net *net, struct sk_buff *in_skb,
 	if (!f)
 		goto errout;
 
-	tcf_exts_init(&f->exts, TCA_ROUTE4_ACT, TCA_ROUTE4_POLICE);
+	err = tcf_exts_init(&f->exts, TCA_ROUTE4_ACT, TCA_ROUTE4_POLICE);
+	if (err < 0)
+		goto errout;
+
 	if (fold) {
 		f->id = fold->id;
 		f->iif = fold->iif;
@@ -532,7 +540,7 @@ static int route4_change(struct net *net, struct sk_buff *in_skb,
 	rcu_assign_pointer(f->next, f1);
 	rcu_assign_pointer(*fp, f);
 
-	if (fold && fold->handle && f->handle != fold->handle) {
+	if (fold) {
 		th = to_hash(fold->handle);
 		h = from_hash(fold->handle >> 16);
 		b = rtnl_dereference(head->table[th]);
@@ -540,8 +548,8 @@ static int route4_change(struct net *net, struct sk_buff *in_skb,
 			fp = &b->ht[h];
 			for (pfp = rtnl_dereference(*fp); pfp;
 			     fp = &pfp->next, pfp = rtnl_dereference(*fp)) {
-				if (pfp == f) {
-					*fp = f->next;
+				if (pfp == fold) {
+					rcu_assign_pointer(*fp, fold->next);
 					break;
 				}
 			}
@@ -557,6 +565,8 @@ static int route4_change(struct net *net, struct sk_buff *in_skb,
 	return 0;
 
 errout:
+	if (f)
+		tcf_exts_destroy(&f->exts);
 	kfree(f);
 	return err;
 }

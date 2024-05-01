@@ -175,11 +175,13 @@ void etnaviv_core_dump(struct etnaviv_gpu *gpu)
 	etnaviv_core_dump_registers(&iter, gpu);
 	etnaviv_core_dump_mmu(&iter, gpu, mmu_size);
 	etnaviv_core_dump_mem(&iter, ETDUMP_BUF_RING, gpu->buffer->vaddr,
-			      gpu->buffer->size, gpu->buffer->paddr);
+			      gpu->buffer->size,
+			      etnaviv_iommu_get_cmdbuf_va(gpu, gpu->buffer));
 
 	list_for_each_entry(cmd, &gpu->active_cmd_list, node)
 		etnaviv_core_dump_mem(&iter, ETDUMP_BUF_CMD, cmd->vaddr,
-				      cmd->size, cmd->paddr);
+				      cmd->size,
+				      etnaviv_iommu_get_cmdbuf_va(gpu, cmd));
 
 	/* Reserve space for the bomap */
 	if (n_bomap_pages) {
@@ -204,7 +206,7 @@ void etnaviv_core_dump(struct etnaviv_gpu *gpu)
 		mutex_lock(&obj->lock);
 		pages = etnaviv_gem_get_pages(obj);
 		mutex_unlock(&obj->lock);
-		if (pages) {
+		if (!IS_ERR(pages)) {
 			int j;
 
 			iter.hdr->data[0] = bomap - bomap_start;

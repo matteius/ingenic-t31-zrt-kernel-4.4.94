@@ -37,14 +37,17 @@
 #include <uapi/linux/if_ether.h>
 
 enum {
-	IB_LRH_BYTES  = 8,
-	IB_ETH_BYTES  = 14,
-	IB_VLAN_BYTES = 4,
-	IB_GRH_BYTES  = 40,
-	IB_IP4_BYTES  = 20,
-	IB_UDP_BYTES  = 8,
-	IB_BTH_BYTES  = 12,
-	IB_DETH_BYTES = 8
+	IB_LRH_BYTES		= 8,
+	IB_ETH_BYTES		= 14,
+	IB_VLAN_BYTES		= 4,
+	IB_GRH_BYTES		= 40,
+	IB_IP4_BYTES		= 20,
+	IB_UDP_BYTES		= 8,
+	IB_BTH_BYTES		= 12,
+	IB_DETH_BYTES		= 8,
+	IB_EXT_ATOMICETH_BYTES	= 28,
+	IB_EXT_XRC_BYTES	= 4,
+	IB_ICRC_BYTES		= 4
 };
 
 struct ib_field {
@@ -103,6 +106,9 @@ enum {
 	IB_OPCODE_ATOMIC_ACKNOWLEDGE                = 0x12,
 	IB_OPCODE_COMPARE_SWAP                      = 0x13,
 	IB_OPCODE_FETCH_ADD                         = 0x14,
+	/* opcode 0x15 is reserved */
+	IB_OPCODE_SEND_LAST_WITH_INVALIDATE         = 0x16,
+	IB_OPCODE_SEND_ONLY_WITH_INVALIDATE         = 0x17,
 
 	/* real constants follow -- see comment about above IB_OPCODE()
 	   macro for more details */
@@ -129,6 +135,8 @@ enum {
 	IB_OPCODE(RC, ATOMIC_ACKNOWLEDGE),
 	IB_OPCODE(RC, COMPARE_SWAP),
 	IB_OPCODE(RC, FETCH_ADD),
+	IB_OPCODE(RC, SEND_LAST_WITH_INVALIDATE),
+	IB_OPCODE(RC, SEND_ONLY_WITH_INVALIDATE),
 
 	/* UC */
 	IB_OPCODE(UC, SEND_FIRST),

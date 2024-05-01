@@ -145,11 +145,6 @@ struct throtl_data
 	/* Total Number of queued bios on READ and WRITE lists */
 	unsigned int nr_queued[2];
 
-	/*
-	 * number of total undestroyed groups
-	 */
-	unsigned int nr_undestroyed_grps;
-
 	/* Work for dispatching throttled bios */
 	struct work_struct dispatch_work;
 };
@@ -211,15 +206,14 @@ static struct throtl_data *sq_to_td(struct throtl_service_queue *sq)
  *
  * The messages are prefixed with "throtl BLKG_NAME" if @sq belongs to a
  * throtl_grp; otherwise, just "throtl".
- *
- * TODO: this should be made a function and name formatting should happen
- * after testing whether blktrace is enabled.
  */
 #define throtl_log(sq, fmt, args...)	do {				\
 	struct throtl_grp *__tg = sq_to_tg((sq));			\
 	struct throtl_data *__td = sq_to_td((sq));			\
 									\
 	(void)__td;							\
+	if (likely(!blk_trace_note_message_enabled(__td->queue)))	\
+		break;							\
 	if ((__tg)) {							\
 		char __pbuf[128];					\
 									\
@@ -505,6 +499,17 @@ static void throtl_dequeue_tg(struct throtl_grp *tg)
 static void throtl_schedule_pending_timer(struct throtl_service_queue *sq,
 					  unsigned long expires)
 {
+	unsigned long max_expire = jiffies + 8 * throtl_slice;
+
+	/*
+	 * Since we are adjusting the throttle limit dynamically, the sleep
+	 * time calculated according to previous limit might be invalid. It's
+	 * possible the cgroup sleep time is very long and no other cgroups
+	 * have IO running so notify the limit changes. Make sure the cgroup
+	 * doesn't sleep too long to avoid the missed notification.
+	 */
+	if (time_after(expires, max_expire))
+		expires = max_expire;
 	mod_timer(&sq->pending_timer, expires);
 	throtl_log(sq, "schedule timer. delay=%lu jiffies=%lu",
 		   expires - jiffies, jiffies);
@@ -786,9 +791,11 @@ static bool tg_may_dispatch(struct throtl_grp *tg, struct bio *bio,
 	/*
 	 * If previous slice expired, start a new one otherwise renew/extend
 	 * existing slice to make sure it is at least throtl_slice interval
-	 * long since now.
+	 * long since now. New slice is started only for empty throttle group.
+	 * If there is queued bio, that means there should be an active
+	 * slice and it should be extended instead.
 	 */
-	if (throtl_slice_used(tg, rw))
+	if (throtl_slice_used(tg, rw) && !(tg->service_queue.nr_queued[rw]))
 		throtl_start_new_slice(tg, rw);
 	else {
 		if (time_before(tg->slice_end[rw], jiffies + throtl_slice))
@@ -827,8 +834,8 @@ static void throtl_charge_bio(struct throtl_grp *tg, struct bio *bio)
 	 * second time when it eventually gets issued.  Set it when a bio
 	 * is being charged to a tg.
 	 */
-	if (!(bio->bi_rw & REQ_THROTTLED))
-		bio->bi_rw |= REQ_THROTTLED;
+	if (!(bio->bi_opf & REQ_THROTTLED))
+		bio->bi_opf |= REQ_THROTTLED;
 }
 
 /**
@@ -1405,7 +1412,7 @@ bool blk_throtl_bio(struct request_queue *q, struct blkcg_gq *blkg,
 	WARN_ON_ONCE(!rcu_read_lock_held());
 
 	/* see throtl_charge_bio() */
-	if ((bio->bi_rw & REQ_THROTTLED) || !tg->has_rules[rw])
+	if ((bio->bi_opf & REQ_THROTTLED) || !tg->has_rules[rw])
 		goto out;
 
 	spin_lock_irq(q->queue_lock);
@@ -1484,7 +1491,7 @@ out:
 	 * being issued.
 	 */
 	if (!throttled)
-		bio->bi_rw &= ~REQ_THROTTLED;
+		bio->bi_opf &= ~REQ_THROTTLED;
 	return throttled;
 }
 
@@ -1577,6 +1584,7 @@ int blk_throtl_init(struct request_queue *q)
 void blk_throtl_exit(struct request_queue *q)
 {
 	BUG_ON(!q->td);
+	del_timer_sync(&q->td->service_queue.pending_timer);
 	throtl_shutdown_wq(q);
 	blkcg_deactivate_policy(q, &blkcg_policy_throtl);
 	kfree(q->td);

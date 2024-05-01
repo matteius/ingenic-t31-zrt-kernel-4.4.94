@@ -287,7 +287,6 @@ struct cal_ctx {
 	/* Several counters */
 	unsigned long		jiffies;
 
-	struct vb2_alloc_ctx	*alloc_ctx;
 	struct cal_dmaqueue	vidq;
 
 	/* Input Number */
@@ -549,16 +548,16 @@ static void enable_irqs(struct cal_ctx *ctx)
 
 static void disable_irqs(struct cal_ctx *ctx)
 {
+	u32 val;
+
 	/* Disable IRQ_WDMA_END 0/1 */
-	reg_write_field(ctx->dev,
-			CAL_HL_IRQENABLE_CLR(2),
-			CAL_HL_IRQ_CLEAR,
-			CAL_HL_IRQ_MASK(ctx->csi2_port));
+	val = 0;
+	set_field(&val, CAL_HL_IRQ_CLEAR, CAL_HL_IRQ_MASK(ctx->csi2_port));
+	reg_write(ctx->dev, CAL_HL_IRQENABLE_CLR(2), val);
 	/* Disable IRQ_WDMA_START 0/1 */
-	reg_write_field(ctx->dev,
-			CAL_HL_IRQENABLE_CLR(3),
-			CAL_HL_IRQ_CLEAR,
-			CAL_HL_IRQ_MASK(ctx->csi2_port));
+	val = 0;
+	set_field(&val, CAL_HL_IRQ_CLEAR, CAL_HL_IRQ_MASK(ctx->csi2_port));
+	reg_write(ctx->dev, CAL_HL_IRQENABLE_CLR(3), val);
 	/* Todo: Add VC_IRQ and CSI2_COMPLEXIO_IRQ handling */
 	reg_write(ctx->dev, CAL_CSI2_VC_IRQENABLE(1), 0);
 }
@@ -691,12 +690,13 @@ static void pix_proc_config(struct cal_ctx *ctx)
 }
 
 static void cal_wr_dma_config(struct cal_ctx *ctx,
-			      unsigned int width)
+			      unsigned int width, unsigned int height)
 {
 	u32 val;
 
 	val = reg_read(ctx->dev, CAL_WR_DMA_CTRL(ctx->csi2_port));
 	set_field(&val, ctx->csi2_port, CAL_WR_DMA_CTRL_CPORT_MASK);
+	set_field(&val, height, CAL_WR_DMA_CTRL_YSIZE_MASK);
 	set_field(&val, CAL_WR_DMA_CTRL_DTAG_PIX_DAT,
 		  CAL_WR_DMA_CTRL_DTAG_MASK);
 	set_field(&val, CAL_WR_DMA_CTRL_MODE_CONST,
@@ -1226,14 +1226,13 @@ static int cal_enum_frameintervals(struct file *file, void *priv,
  */
 static int cal_queue_setup(struct vb2_queue *vq,
 			   unsigned int *nbuffers, unsigned int *nplanes,
-			   unsigned int sizes[], void *alloc_ctxs[])
+			   unsigned int sizes[], struct device *alloc_devs[])
 {
 	struct cal_ctx *ctx = vb2_get_drv_priv(vq);
 	unsigned size = ctx->v_fmt.fmt.pix.sizeimage;
 
 	if (vq->num_buffers + *nbuffers < 3)
 		*nbuffers = 3 - vq->num_buffers;
-	alloc_ctxs[0] = ctx->alloc_ctx;
 
 	if (*nplanes) {
 		if (sizes[0] < size)
@@ -1323,7 +1322,8 @@ static int cal_start_streaming(struct vb2_queue *vq, unsigned int count)
 	csi2_lane_config(ctx);
 	csi2_ctx_config(ctx);
 	pix_proc_config(ctx);
-	cal_wr_dma_config(ctx, ctx->v_fmt.fmt.pix.bytesperline);
+	cal_wr_dma_config(ctx, ctx->v_fmt.fmt.pix.bytesperline,
+			  ctx->v_fmt.fmt.pix.height);
 	cal_wr_dma_addr(ctx, addr);
 	csi2_ppi_enable(ctx);
 
@@ -1381,7 +1381,7 @@ static void cal_stop_streaming(struct vb2_queue *vq)
 	cal_runtime_put(ctx->dev);
 }
 
-static struct vb2_ops cal_video_qops = {
+static const struct vb2_ops cal_video_qops = {
 	.queue_setup		= cal_queue_setup,
 	.buf_prepare		= cal_buffer_prepare,
 	.buf_queue		= cal_buffer_queue,
@@ -1551,6 +1551,7 @@ static int cal_complete_ctx(struct cal_ctx *ctx)
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &ctx->mutex;
 	q->min_buffers_needed = 3;
+	q->dev = ctx->v4l2_dev.dev;
 
 	ret = vb2_queue_init(q);
 	if (ret)
@@ -1578,18 +1579,7 @@ static int cal_complete_ctx(struct cal_ctx *ctx)
 	v4l2_info(&ctx->v4l2_dev, "V4L2 device registered as %s\n",
 		  video_device_node_name(vfd));
 
-	ctx->alloc_ctx = vb2_dma_contig_init_ctx(vfd->v4l2_dev->dev);
-	if (IS_ERR(ctx->alloc_ctx)) {
-		ctx_err(ctx, "Failed to alloc vb2 context\n");
-		ret = PTR_ERR(ctx->alloc_ctx);
-		goto vdev_unreg;
-	}
-
 	return 0;
-
-vdev_unreg:
-	video_unregister_device(vfd);
-	return ret;
 }
 
 static struct device_node *
@@ -1914,7 +1904,6 @@ static int cal_remove(struct platform_device *pdev)
 				video_device_node_name(&ctx->vdev));
 			camerarx_phy_disable(ctx);
 			v4l2_async_notifier_unregister(&ctx->notifier);
-			vb2_dma_contig_cleanup_ctx(ctx->alloc_ctx);
 			v4l2_ctrl_handler_free(&ctx->ctrl_handler);
 			v4l2_device_unregister(&ctx->v4l2_dev);
 			video_unregister_device(&ctx->vdev);

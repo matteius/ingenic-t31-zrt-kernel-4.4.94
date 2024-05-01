@@ -10,7 +10,6 @@
  */
 
 #include <linux/kernel.h>
-#include <linux/kconfig.h>
 #include <linux/errno.h>
 #include <linux/init.h>
 #include <linux/slab.h>
@@ -155,10 +154,8 @@ int hdpvr_alloc_buffers(struct hdpvr_device *dev, uint count)
 		buf->dev = dev;
 
 		urb = usb_alloc_urb(0, GFP_KERNEL);
-		if (!urb) {
-			v4l2_err(&dev->v4l2_dev, "cannot allocate urb\n");
+		if (!urb)
 			goto exit_urb;
-		}
 		buf->urb = urb;
 
 		mem = usb_alloc_coherent(dev->udev, dev->bulk_in_size, GFP_KERNEL,
@@ -315,8 +312,7 @@ static int hdpvr_start_streaming(struct hdpvr_device *dev)
 
 	dev->status = STATUS_STREAMING;
 
-	INIT_WORK(&dev->worker, hdpvr_transmit_buffers);
-	queue_work(dev->workqueue, &dev->worker);
+	schedule_work(&dev->worker);
 
 	v4l2_dbg(MSG_BUFFER, hdpvr_debug, &dev->v4l2_dev,
 			"streaming started\n");
@@ -350,7 +346,7 @@ static int hdpvr_stop_streaming(struct hdpvr_device *dev)
 	wake_up_interruptible(&dev->wait_buffer);
 	msleep(50);
 
-	flush_workqueue(dev->workqueue);
+	flush_work(&dev->worker);
 
 	mutex_lock(&dev->io_mutex);
 	/* kill the still outstanding urbs */
@@ -1123,7 +1119,7 @@ static void hdpvr_device_release(struct video_device *vdev)
 
 	hdpvr_delete(dev);
 	mutex_lock(&dev->io_mutex);
-	destroy_workqueue(dev->workqueue);
+	flush_work(&dev->worker);
 	mutex_unlock(&dev->io_mutex);
 
 	v4l2_device_unregister(&dev->v4l2_dev);
@@ -1158,6 +1154,9 @@ int hdpvr_register_videodev(struct hdpvr_device *dev, struct device *parent,
 	struct v4l2_ctrl_handler *hdl = &dev->hdl;
 	bool ac3 = dev->flags & HDPVR_FLAG_AC3_CAP;
 	int res;
+
+	// initialize dev->worker
+	INIT_WORK(&dev->worker, hdpvr_transmit_buffers);
 
 	dev->cur_std = V4L2_STD_525_60;
 	dev->width = 720;

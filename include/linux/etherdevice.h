@@ -125,7 +125,7 @@ static inline bool is_multicast_ether_addr(const u8 *addr)
 #endif
 }
 
-static inline bool is_multicast_ether_addr_64bits(const u8 addr[6+2])
+static inline bool is_multicast_ether_addr_64bits(const u8 *addr)
 {
 #if defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS) && BITS_PER_LONG == 64
 #ifdef __BIG_ENDIAN
@@ -339,8 +339,7 @@ static inline bool ether_addr_equal(const u8 *addr1, const u8 *addr2)
  * Please note that alignment of addr1 & addr2 are only guaranteed to be 16 bits.
  */
 
-static inline bool ether_addr_equal_64bits(const u8 addr1[6+2],
-					   const u8 addr2[6+2])
+static inline bool ether_addr_equal_64bits(const u8 *addr1, const u8 *addr2)
 {
 #if defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS) && BITS_PER_LONG == 64
 	u64 fold = (*(const u64 *)addr1) ^ (*(const u64 *)addr2);
@@ -371,6 +370,29 @@ static inline bool ether_addr_equal_unaligned(const u8 *addr1, const u8 *addr2)
 #else
 	return memcmp(addr1, addr2, ETH_ALEN) == 0;
 #endif
+}
+
+/**
+ * ether_addr_equal_masked - Compare two Ethernet addresses with a mask
+ * @addr1: Pointer to a six-byte array containing the 1st Ethernet address
+ * @addr2: Pointer to a six-byte array containing the 2nd Ethernet address
+ * @mask: Pointer to a six-byte array containing the Ethernet address bitmask
+ *
+ * Compare two Ethernet addresses with a mask, returns true if for every bit
+ * set in the bitmask the equivalent bits in the ethernet addresses are equal.
+ * Using a mask with all bits set is a slower ether_addr_equal.
+ */
+static inline bool ether_addr_equal_masked(const u8 *addr1, const u8 *addr2,
+					   const u8 *mask)
+{
+	int i;
+
+	for (i = 0; i < ETH_ALEN; i++) {
+		if ((addr1[i] ^ addr2[i]) & mask[i])
+			return false;
+	}
+
+	return true;
 }
 
 /**

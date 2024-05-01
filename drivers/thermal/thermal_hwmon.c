@@ -98,7 +98,7 @@ temp_crit_show(struct device *dev, struct device_attribute *attr, char *buf)
 	int temperature;
 	int ret;
 
-	ret = tz->ops->get_trip_temp(tz, 0, &temperature);
+	ret = tz->ops->get_crit_temp(tz, &temperature);
 	if (ret)
 		return ret;
 
@@ -232,6 +232,7 @@ int thermal_add_hwmon_sysfs(struct thermal_zone_device *tz)
 
 	return result;
 }
+EXPORT_SYMBOL_GPL(thermal_add_hwmon_sysfs);
 
 void thermal_remove_hwmon_sysfs(struct thermal_zone_device *tz)
 {
@@ -270,3 +271,4 @@ void thermal_remove_hwmon_sysfs(struct thermal_zone_device *tz)
 	hwmon_device_unregister(hwmon->device);
 	kfree(hwmon);
 }
+EXPORT_SYMBOL_GPL(thermal_remove_hwmon_sysfs);

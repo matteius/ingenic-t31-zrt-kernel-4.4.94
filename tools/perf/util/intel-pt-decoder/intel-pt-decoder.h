@@ -53,6 +53,14 @@ enum {
 	INTEL_PT_ERR_MAX,
 };
 
+enum intel_pt_param_flags {
+	/*
+	 * FUP packet can contain next linear instruction pointer instead of
+	 * current linear instruction pointer.
+	 */
+	INTEL_PT_FUP_WITH_NLIP	= 1 << 0,
+};
+
 struct intel_pt_state {
 	enum intel_pt_sample_type type;
 	int err;
@@ -83,6 +91,7 @@ struct intel_pt_params {
 	int (*walk_insn)(struct intel_pt_insn *intel_pt_insn,
 			 uint64_t *insn_cnt_ptr, uint64_t *ip, uint64_t to_ip,
 			 uint64_t max_insn_cnt, void *data);
+	bool (*pgd_ip)(uint64_t ip, void *data);
 	void *data;
 	bool return_compression;
 	uint64_t period;
@@ -91,6 +100,7 @@ struct intel_pt_params {
 	unsigned int mtc_period;
 	uint32_t tsc_ctc_ratio_n;
 	uint32_t tsc_ctc_ratio_d;
+	enum intel_pt_param_flags flags;
 };
 
 struct intel_pt_decoder;
@@ -102,7 +112,7 @@ const struct intel_pt_state *intel_pt_decode(struct intel_pt_decoder *decoder);
 
 unsigned char *intel_pt_find_overlap(unsigned char *buf_a, size_t len_a,
 				     unsigned char *buf_b, size_t len_b,
-				     bool have_tsc);
+				     bool have_tsc, bool *consecutive);
 
 int intel_pt__strerror(int code, char *buf, size_t buflen);
 

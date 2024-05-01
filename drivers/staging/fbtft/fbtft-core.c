@@ -247,7 +247,7 @@ static int fbtft_request_gpios_dt(struct fbtft_par *par)
 static int fbtft_backlight_update_status(struct backlight_device *bd)
 {
 	struct fbtft_par *par = bl_get_data(bd);
-	bool polarity = !!(bd->props.state & BL_CORE_DRIVER1);
+	bool polarity = par->polarity;
 
 	fbtft_par_dbg(DEBUG_BACKLIGHT, par,
 		"%s: polarity=%d, power=%d, fb_blank=%d\n",
@@ -296,7 +296,7 @@ void fbtft_register_backlight(struct fbtft_par *par)
 	/* Assume backlight is off, get polarity from current state of pin */
 	bl_props.power = FB_BLANK_POWERDOWN;
 	if (!gpio_get_value(par->gpio.led[0]))
-		bl_props.state |= BL_CORE_DRIVER1;
+		par->polarity = true;
 
 	bd = backlight_device_register(dev_driver_string(par->info->device),
 				par->info->device, par, &fbtft_bl_ops, &bl_props);
@@ -341,8 +341,8 @@ static void fbtft_reset(struct fbtft_par *par)
 	mdelay(120);
 }
 
-static void fbtft_update_display(struct fbtft_par *par, unsigned start_line,
-				 unsigned end_line)
+static void fbtft_update_display(struct fbtft_par *par, unsigned int start_line,
+				 unsigned int end_line)
 {
 	size_t offset, len;
 	ktime_t ts_start, ts_end;
@@ -391,11 +391,11 @@ static void fbtft_update_display(struct fbtft_par *par, unsigned start_line,
 
 	if (unlikely(timeit)) {
 		ts_end = ktime_get();
-		if (ktime_to_ns(par->update_time))
+		if (!ktime_to_ns(par->update_time))
 			par->update_time = ts_start;
 
-		par->update_time = ts_start;
 		fps = ktime_us_delta(ts_start, par->update_time);
+		par->update_time = ts_start;
 		fps = fps ? 1000000 / fps : 0;
 
 		throughput = ktime_us_delta(ts_end, ts_start);
@@ -435,10 +435,10 @@ static void fbtft_mkdirty(struct fb_info *info, int y, int height)
 static void fbtft_deferred_io(struct fb_info *info, struct list_head *pagelist)
 {
 	struct fbtft_par *par = info->par;
-	unsigned dirty_lines_start, dirty_lines_end;
+	unsigned int dirty_lines_start, dirty_lines_end;
 	struct page *page;
 	unsigned long index;
-	unsigned y_low = 0, y_high = 0;
+	unsigned int y_low = 0, y_high = 0;
 	int count = 0;
 
 	spin_lock(&par->dirty_lock);
@@ -526,18 +526,18 @@ static ssize_t fbtft_fb_write(struct fb_info *info, const char __user *buf,
 }
 
 /* from pxafb.c */
-static unsigned int chan_to_field(unsigned chan, struct fb_bitfield *bf)
+static unsigned int chan_to_field(unsigned int chan, struct fb_bitfield *bf)
 {
 	chan &= 0xffff;
 	chan >>= 16 - bf->length;
 	return chan << bf->offset;
 }
 
-static int fbtft_fb_setcolreg(unsigned regno, unsigned red, unsigned green,
-			      unsigned blue, unsigned transp,
+static int fbtft_fb_setcolreg(unsigned int regno, unsigned int red, unsigned int green,
+			      unsigned int blue, unsigned int transp,
 			      struct fb_info *info)
 {
-	unsigned val;
+	unsigned int val;
 	int ret = 1;
 
 	dev_dbg(info->dev,
@@ -654,11 +654,11 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 	u8 *vmem = NULL;
 	void *txbuf = NULL;
 	void *buf = NULL;
-	unsigned width;
-	unsigned height;
+	unsigned int width;
+	unsigned int height;
 	int txbuflen = display->txbuflen;
-	unsigned bpp = display->bpp;
-	unsigned fps = display->fps;
+	unsigned int bpp = display->bpp;
+	unsigned int fps = display->fps;
 	int vmem_size, i;
 	int *init_sequence = display->init_sequence;
 	char *gamma = display->gamma;
@@ -766,7 +766,7 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 	fbdefio->deferred_io =     fbtft_deferred_io;
 	fb_deferred_io_init(info);
 
-	strncpy(info->fix.id, dev->driver->name, 16);
+	snprintf(info->fix.id, sizeof(info->fix.id), "%s", dev->driver->name);
 	info->fix.type =           FB_TYPE_PACKED_PIXELS;
 	info->fix.visual =         FB_VISUAL_TRUECOLOR;
 	info->fix.xpanstep =	   0;
@@ -814,12 +814,14 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 	if (par->gamma.curves && gamma) {
 		if (fbtft_gamma_parse_str(par,
 			par->gamma.curves, gamma, strlen(gamma)))
-			goto alloc_fail;
+			goto release_framebuf;
 	}
 
 	/* Transmit buffer */
 	if (txbuflen == -1)
 		txbuflen = vmem_size + 2; /* add in case startbyte is used */
+	if (txbuflen >= vmem_size + 2)
+		txbuflen = 0;
 
 #ifdef __LITTLE_ENDIAN
 	if ((!txbuflen) && (bpp > 8))
@@ -837,7 +839,7 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 			txbuf = devm_kzalloc(par->info->device, txbuflen, GFP_KERNEL);
 		}
 		if (!txbuf)
-			goto alloc_fail;
+			goto release_framebuf;
 		par->txbuf.buf = txbuf;
 		par->txbuf.len = txbuflen;
 	}
@@ -872,6 +874,9 @@ struct fb_info *fbtft_framebuffer_alloc(struct fbtft_display *display,
 	fbtft_merge_fbtftops(&par->fbtftops, &display->fbtftops);
 
 	return info;
+
+release_framebuf:
+	framebuffer_release(info);
 
 alloc_fail:
 	vfree(vmem);

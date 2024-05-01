@@ -65,7 +65,7 @@
 #include "bnx2fc_constants.h"
 
 #define BNX2FC_NAME		"bnx2fc"
-#define BNX2FC_VERSION		"2.9.6"
+#define BNX2FC_VERSION		"2.10.3"
 
 #define PFX			"bnx2fc: "
 
@@ -191,6 +191,7 @@ struct bnx2fc_hba {
 	struct bnx2fc_cmd_mgr *cmd_mgr;
 	spinlock_t hba_lock;
 	struct mutex hba_mutex;
+	struct mutex hba_stats_mutex;
 	unsigned long adapter_state;
 		#define ADAPTER_STATE_UP		0
 		#define ADAPTER_STATE_GOING_DOWN	1
@@ -261,6 +262,7 @@ struct bnx2fc_interface {
 	u8 vlan_enabled;
 	int vlan_id;
 	bool enabled;
+	u8 tm_timeout;
 };
 
 #define bnx2fc_from_ctlr(x)			\

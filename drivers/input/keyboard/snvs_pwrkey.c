@@ -156,6 +156,9 @@ static int imx_snvs_pwrkey_probe(struct platform_device *pdev)
 		return error;
 	}
 
+	pdata->input = input;
+	platform_set_drvdata(pdev, pdata);
+
 	error = devm_request_irq(&pdev->dev, pdata->irq,
 			       imx_snvs_pwrkey_interrupt,
 			       0, pdev->name, pdev);
@@ -168,12 +171,8 @@ static int imx_snvs_pwrkey_probe(struct platform_device *pdev)
 	error = input_register_device(input);
 	if (error < 0) {
 		dev_err(&pdev->dev, "failed to register input device\n");
-		input_free_device(input);
 		return error;
 	}
-
-	pdata->input = input;
-	platform_set_drvdata(pdev, pdata);
 
 	device_init_wakeup(&pdev->dev, pdata->wakeup);
 

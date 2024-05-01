@@ -198,22 +198,16 @@ static int if_usb_probe(struct usb_interface *intf,
 	}
 
 	cardp->rx_urb = usb_alloc_urb(0, GFP_KERNEL);
-	if (!cardp->rx_urb) {
-		lbtf_deb_usbd(&udev->dev, "Rx URB allocation failed\n");
+	if (!cardp->rx_urb)
 		goto dealloc;
-	}
 
 	cardp->tx_urb = usb_alloc_urb(0, GFP_KERNEL);
-	if (!cardp->tx_urb) {
-		lbtf_deb_usbd(&udev->dev, "Tx URB allocation failed\n");
+	if (!cardp->tx_urb)
 		goto dealloc;
-	}
 
 	cardp->cmd_urb = usb_alloc_urb(0, GFP_KERNEL);
-	if (!cardp->cmd_urb) {
-		lbtf_deb_usbd(&udev->dev, "Cmd URB allocation failed\n");
+	if (!cardp->cmd_urb)
 		goto dealloc;
-	}
 
 	cardp->ep_out_buf = kmalloc(MRVDRV_ETH_TX_PACKET_BUFFER_SIZE,
 				    GFP_KERNEL);
@@ -240,6 +234,7 @@ static int if_usb_probe(struct usb_interface *intf,
 
 dealloc:
 	if_usb_free(cardp);
+	kfree(cardp);
 error:
 lbtf_deb_leave(LBTF_DEB_MAIN);
 	return -ENOMEM;
@@ -264,6 +259,7 @@ static void if_usb_disconnect(struct usb_interface *intf)
 
 	/* Unlink and free urb */
 	if_usb_free(cardp);
+	kfree(cardp);
 
 	usb_set_intfdata(intf, NULL);
 	usb_put_dev(interface_to_usbdev(intf));
@@ -438,8 +434,6 @@ static int __if_usb_submit_rx_urb(struct if_usb_card *cardp,
 			  usb_rcvbulkpipe(cardp->udev, cardp->ep_in),
 			  skb_tail_pointer(skb),
 			  MRVDRV_ETH_RX_PACKET_BUFFER_SIZE, callbackfn, cardp);
-
-	cardp->rx_urb->transfer_flags |= URB_ZERO_PACKET;
 
 	lbtf_deb_usb2(&cardp->udev->dev, "Pointer for rx_urb %p\n",
 		cardp->rx_urb);

@@ -19,8 +19,7 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/efi.h>
-#include <linux/verify_pefile.h>
-#include <keys/system_keyring.h>
+#include <linux/verification.h>
 
 #include <asm/bootparam.h>
 #include <asm/setup.h>
@@ -100,14 +99,14 @@ static int setup_e820_entries(struct boot_params *params)
 {
 	unsigned int nr_e820_entries;
 
-	nr_e820_entries = e820_saved.nr_map;
+	nr_e820_entries = e820_saved->nr_map;
 
 	/* TODO: Pass entries more than E820MAX in bootparams setup data */
 	if (nr_e820_entries > E820MAX)
 		nr_e820_entries = E820MAX;
 
 	params->e820_entries = nr_e820_entries;
-	memcpy(&params->e820_map, &e820_saved.map,
+	memcpy(&params->e820_map, &e820_saved->map,
 	       nr_e820_entries * sizeof(struct e820entry));
 
 	return 0;
@@ -168,6 +167,9 @@ setup_efi_state(struct boot_params *params, unsigned long params_load_addr,
 	struct efi_info *current_ei = &boot_params.efi_info;
 	struct efi_info *ei = &params->efi_info;
 
+	if (!efi_enabled(EFI_RUNTIME_SERVICES))
+		return 0;
+
 	if (!current_ei->efi_memmap_size)
 		return 0;
 
@@ -209,8 +211,7 @@ setup_boot_parameters(struct kimage *image, struct boot_params *params,
 	params->hdr.hardware_subarch = boot_params.hdr.hardware_subarch;
 
 	/* Copying screen_info will do? */
-	memcpy(&params->screen_info, &boot_params.screen_info,
-				sizeof(struct screen_info));
+	memcpy(&params->screen_info, &screen_info, sizeof(struct screen_info));
 
 	/* Fill in memsize later */
 	params->screen_info.ext_mem_k = 0;
@@ -529,18 +530,9 @@ static int bzImage64_cleanup(void *loader_data)
 #ifdef CONFIG_KEXEC_BZIMAGE_VERIFY_SIG
 static int bzImage64_verify_sig(const char *kernel, unsigned long kernel_len)
 {
-	bool trusted;
-	int ret;
-
-	ret = verify_pefile_signature(kernel, kernel_len,
-				      system_trusted_keyring,
-				      VERIFYING_KEXEC_PE_SIGNATURE,
-				      &trusted);
-	if (ret < 0)
-		return ret;
-	if (!trusted)
-		return -EKEYREJECTED;
-	return 0;
+	return verify_pefile_signature(kernel, kernel_len,
+				       VERIFY_USE_SECONDARY_KEYRING,
+				       VERIFYING_KEXEC_PE_SIGNATURE);
 }
 #endif
 

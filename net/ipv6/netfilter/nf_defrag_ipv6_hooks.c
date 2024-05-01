@@ -14,8 +14,7 @@
 #include <linux/skbuff.h>
 #include <linux/icmp.h>
 #include <linux/sysctl.h>
-#include <net/ipv6.h>
-#include <net/inet_frag.h>
+#include <net/ipv6_frag.h>
 
 #include <linux/netfilter_ipv6.h>
 #include <linux/netfilter_bridge.h>
@@ -69,7 +68,7 @@ static unsigned int ipv6_defrag(void *priv,
 	if (err == -EINPROGRESS)
 		return NF_STOLEN;
 
-	return NF_ACCEPT;
+	return err == 0 ? NF_ACCEPT : NF_DROP;
 }
 
 static struct nf_hook_ops ipv6_defrag_ops[] = {

@@ -122,7 +122,7 @@ static ssize_t xenbus_file_read(struct file *filp,
 {
 	struct xenbus_file_priv *u = filp->private_data;
 	struct read_buffer *rb;
-	unsigned i;
+	ssize_t i;
 	int ret;
 
 	mutex_lock(&u->reply_mutex);
@@ -142,7 +142,7 @@ again:
 	rb = list_entry(u->read_buffers.next, struct read_buffer, list);
 	i = 0;
 	while (i < len) {
-		unsigned sz = min((unsigned)len - i, rb->len - rb->cons);
+		size_t sz = min_t(size_t, len - i, rb->len - rb->cons);
 
 		ret = copy_to_user(ubuf + i, &rb->msg[rb->cons], sz);
 
@@ -316,11 +316,18 @@ static int xenbus_write_transaction(unsigned msg_type,
 			rc = -ENOMEM;
 			goto out;
 		}
+	} else if (u->u.msg.tx_id != 0) {
+		list_for_each_entry(trans, &u->transactions, list)
+			if (trans->handle.id == u->u.msg.tx_id)
+				break;
+		if (&trans->list == &u->transactions)
+			return -ESRCH;
 	}
 
 	reply = xenbus_dev_request_and_reply(&u->u.msg);
 	if (IS_ERR(reply)) {
-		kfree(trans);
+		if (msg_type == XS_TRANSACTION_START)
+			kfree(trans);
 		rc = PTR_ERR(reply);
 		goto out;
 	}
@@ -333,12 +340,7 @@ static int xenbus_write_transaction(unsigned msg_type,
 			list_add(&trans->list, &u->transactions);
 		}
 	} else if (u->u.msg.type == XS_TRANSACTION_END) {
-		list_for_each_entry(trans, &u->transactions, list)
-			if (trans->handle.id == u->u.msg.tx_id)
-				break;
-		BUG_ON(&trans->list == &u->transactions);
 		list_del(&trans->list);
-
 		kfree(trans);
 	}
 
@@ -362,7 +364,7 @@ out:
 
 static int xenbus_write_watch(unsigned msg_type, struct xenbus_file_priv *u)
 {
-	struct watch_adapter *watch, *tmp_watch;
+	struct watch_adapter *watch;
 	char *path, *token;
 	int err, rc;
 	LIST_HEAD(staging_q);
@@ -397,7 +399,7 @@ static int xenbus_write_watch(unsigned msg_type, struct xenbus_file_priv *u)
 		}
 		list_add(&watch->list, &u->watches);
 	} else {
-		list_for_each_entry_safe(watch, tmp_watch, &u->watches, list) {
+		list_for_each_entry(watch, &u->watches, list) {
 			if (!strcmp(watch->token, token) &&
 			    !strcmp(watch->watch.node, path)) {
 				unregister_xenbus_watch(&watch->watch);
@@ -534,7 +536,7 @@ static int xenbus_file_open(struct inode *inode, struct file *filp)
 	if (xen_store_evtchn == 0)
 		return -ENOENT;
 
-	nonseekable_open(inode, filp);
+	stream_open(inode, filp);
 
 	u = kzalloc(sizeof(*u), GFP_KERNEL);
 	if (u == NULL)

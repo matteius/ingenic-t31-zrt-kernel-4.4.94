@@ -22,10 +22,13 @@
 #include <limits.h>
 #include <sys/time.h>
 #include <sys/syscall.h>
+#include <sys/sysinfo.h>
 #include <sys/types.h>
 #include <sys/shm.h>
 #include <linux/futex.h>
-
+#ifdef __powerpc__
+#include <altivec.h>
+#endif
 #include "../utils.h"
 
 static unsigned int timeout = 30;
@@ -37,12 +40,15 @@ static int touch_fp = 1;
 double fp;
 
 static int touch_vector = 1;
-typedef int v4si __attribute__ ((vector_size (16)));
-v4si a, b, c;
+vector int a, b, c;
 
 #ifdef __powerpc__
 static int touch_altivec = 1;
 
+/*
+ * Note: LTO (Link Time Optimisation) doesn't play well with this function
+ * attribute. Be very careful enabling LTO for this test.
+ */
 static void __attribute__((__target__("no-vsx"))) altivec_touch_fn(void)
 {
 	c = a + b;
@@ -92,8 +98,9 @@ static void start_thread_on(void *(*fn)(void *), void *arg, unsigned long cpu)
 
 static void start_process_on(void *(*fn)(void *), void *arg, unsigned long cpu)
 {
-	int pid;
-	cpu_set_t cpuset;
+	int pid, ncpus;
+	cpu_set_t *cpuset;
+	size_t size;
 
 	pid = fork();
 	if (pid == -1) {
@@ -104,14 +111,23 @@ static void start_process_on(void *(*fn)(void *), void *arg, unsigned long cpu)
 	if (pid)
 		return;
 
-	CPU_ZERO(&cpuset);
-	CPU_SET(cpu, &cpuset);
+	ncpus = get_nprocs();
+	size = CPU_ALLOC_SIZE(ncpus);
+	cpuset = CPU_ALLOC(ncpus);
+	if (!cpuset) {
+		perror("malloc");
+		exit(1);
+	}
+	CPU_ZERO_S(size, cpuset);
+	CPU_SET_S(cpu, size, cpuset);
 
-	if (sched_setaffinity(0, sizeof(cpuset), &cpuset)) {
+	if (sched_setaffinity(0, size, cpuset)) {
 		perror("sched_setaffinity");
+		CPU_FREE(cpuset);
 		exit(1);
 	}
 
+	CPU_FREE(cpuset);
 	fn(arg);
 
 	exit(0);
@@ -369,11 +385,11 @@ static void usage(void)
 	fprintf(stderr, "\t\t--process\tUse processes (default threads)\n");
 	fprintf(stderr, "\t\t--timeout=X\tDuration in seconds to run (default 30)\n");
 	fprintf(stderr, "\t\t--vdso\t\ttouch VDSO\n");
-	fprintf(stderr, "\t\t--fp\t\ttouch FP\n");
+	fprintf(stderr, "\t\t--no-fp\t\tDon't touch FP\n");
 #ifdef __powerpc__
-	fprintf(stderr, "\t\t--altivec\ttouch altivec\n");
+	fprintf(stderr, "\t\t--no-altivec\tDon't touch altivec\n");
 #endif
-	fprintf(stderr, "\t\t--vector\ttouch vector\n");
+	fprintf(stderr, "\t\t--no-vector\tDon't touch vector\n");
 }
 
 int main(int argc, char *argv[])

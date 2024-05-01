@@ -55,9 +55,13 @@ MODULE_LICENSE("GPL");
 #define CHAOSKEY_VENDOR_ID	0x1d50	/* OpenMoko */
 #define CHAOSKEY_PRODUCT_ID	0x60c6	/* ChaosKey */
 
+#define ALEA_VENDOR_ID		0x12d8	/* Araneus */
+#define ALEA_PRODUCT_ID		0x0001	/* Alea I */
+
 #define CHAOSKEY_BUF_LEN	64	/* max size of USB full speed packet */
 
-#define NAK_TIMEOUT (HZ)		/* stall/wait timeout for device */
+#define NAK_TIMEOUT (HZ)		/* normal stall/wait timeout */
+#define ALEA_FIRST_TIMEOUT (HZ*3)	/* first stall/wait timeout for Alea */
 
 #ifdef CONFIG_USB_DYNAMIC_MINORS
 #define USB_CHAOSKEY_MINOR_BASE 0
@@ -69,6 +73,7 @@ MODULE_LICENSE("GPL");
 
 static const struct usb_device_id chaoskey_table[] = {
 	{ USB_DEVICE(CHAOSKEY_VENDOR_ID, CHAOSKEY_PRODUCT_ID) },
+	{ USB_DEVICE(ALEA_VENDOR_ID, ALEA_PRODUCT_ID) },
 	{ },
 };
 MODULE_DEVICE_TABLE(usb, chaoskey_table);
@@ -84,6 +89,7 @@ struct chaoskey {
 	int open;			/* open count */
 	bool present;			/* device not disconnected */
 	bool reading;			/* ongoing IO */
+	bool reads_started;		/* track first read for Alea */
 	int size;			/* size of buf */
 	int valid;			/* bytes of buf read */
 	int used;			/* bytes of buf consumed */
@@ -102,6 +108,7 @@ static void chaoskey_free(struct chaoskey *dev)
 		usb_free_urb(dev->urb);
 		kfree(dev->name);
 		kfree(dev->buf);
+		usb_put_intf(dev->interface);
 		kfree(dev);
 	}
 }
@@ -151,6 +158,8 @@ static int chaoskey_probe(struct usb_interface *interface,
 	if (dev == NULL)
 		goto out;
 
+	dev->interface = usb_get_intf(interface);
+
 	dev->buf = kmalloc(size, GFP_KERNEL);
 
 	if (dev->buf == NULL)
@@ -184,9 +193,10 @@ static int chaoskey_probe(struct usb_interface *interface,
 		strcat(dev->name, udev->serial);
 	}
 
-	dev->interface = interface;
-
 	dev->in_ep = in_ep;
+
+	if (le16_to_cpu(udev->descriptor.idVendor) != ALEA_VENDOR_ID)
+		dev->reads_started = 1;
 
 	dev->size = size;
 	dev->present = 1;
@@ -357,6 +367,7 @@ static int _chaoskey_fill(struct chaoskey *dev)
 {
 	DEFINE_WAIT(wait);
 	int result;
+	bool started;
 
 	usb_dbg(dev->interface, "fill");
 
@@ -389,18 +400,29 @@ static int _chaoskey_fill(struct chaoskey *dev)
 		goto out;
 	}
 
+	/* The first read on the Alea takes a little under 2 seconds.
+	 * Reads after the first read take only a few microseconds
+	 * though.  Presumably the entropy-generating circuit needs
+	 * time to ramp up.  So, we wait longer on the first read.
+	 */
+	started = dev->reads_started;
+	dev->reads_started = true;
 	result = wait_event_interruptible_timeout(
 		dev->wait_q,
 		!dev->reading,
-		NAK_TIMEOUT);
+		(started ? NAK_TIMEOUT : ALEA_FIRST_TIMEOUT) );
 
-	if (result < 0)
+	if (result < 0) {
+		usb_kill_urb(dev->urb);
 		goto out;
+	}
 
-	if (result == 0)
+	if (result == 0) {
 		result = -ETIMEDOUT;
-	else
+		usb_kill_urb(dev->urb);
+	} else {
 		result = dev->valid;
+	}
 out:
 	/* Let the device go back to sleep eventually */
 	usb_autopm_put_interface(dev->interface);
@@ -536,7 +558,21 @@ static int chaoskey_suspend(struct usb_interface *interface,
 
 static int chaoskey_resume(struct usb_interface *interface)
 {
+	struct chaoskey *dev;
+	struct usb_device *udev = interface_to_usbdev(interface);
+
 	usb_dbg(interface, "resume");
+	dev = usb_get_intfdata(interface);
+
+	/*
+	 * We may have lost power.
+	 * In that case the device that needs a long time
+	 * for the first requests needs an extended timeout
+	 * again
+	 */
+	if (le16_to_cpu(udev->descriptor.idVendor) == ALEA_VENDOR_ID)
+		dev->reads_started = false;
+
 	return 0;
 }
 #else

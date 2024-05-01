@@ -39,6 +39,7 @@
 #include <linux/dmi.h>
 #include <linux/slab.h>
 #include <linux/iommu.h>
+#include <linux/limits.h>
 #include <asm/irq_remapping.h>
 #include <asm/iommu_table.h>
 
@@ -138,12 +139,19 @@ dmar_alloc_pci_notify_info(struct pci_dev *dev, unsigned long event)
 
 	BUG_ON(dev->is_virtfn);
 
+	/*
+	 * Ignore devices that have a domain number higher than what can
+	 * be looked up in DMAR, e.g. VMD subdevices with domain 0x10000
+	 */
+	if (pci_domain_nr(dev->bus) > U16_MAX)
+		return NULL;
+
 	/* Only generate path[] for device addition event */
 	if (event == BUS_NOTIFY_ADD_DEVICE)
 		for (tmp = dev; tmp; tmp = tmp->bus->self)
 			level++;
 
-	size = sizeof(*info) + level * sizeof(struct acpi_dmar_pci_path);
+	size = sizeof(*info) + level * sizeof(info->path[0]);
 	if (size <= sizeof(dmar_pci_notify_info_buf)) {
 		info = (struct dmar_pci_notify_info *)dmar_pci_notify_info_buf;
 	} else {
@@ -241,8 +249,20 @@ int dmar_insert_dev_scope(struct dmar_pci_notify_info *info,
 		if (!dmar_match_pci_path(info, scope->bus, path, level))
 			continue;
 
-		if ((scope->entry_type == ACPI_DMAR_SCOPE_TYPE_ENDPOINT) ^
-		    (info->dev->hdr_type == PCI_HEADER_TYPE_NORMAL)) {
+		/*
+		 * We expect devices with endpoint scope to have normal PCI
+		 * headers, and devices with bridge scope to have bridge PCI
+		 * headers.  However PCI NTB devices may be listed in the
+		 * DMAR table with bridge scope, even though they have a
+		 * normal PCI header.  NTB devices are identified by class
+		 * "BRIDGE_OTHER" (0680h) - we don't declare a socpe mismatch
+		 * for this special case.
+		 */
+		if ((scope->entry_type == ACPI_DMAR_SCOPE_TYPE_ENDPOINT &&
+		     info->dev->hdr_type != PCI_HEADER_TYPE_NORMAL) ||
+		    (scope->entry_type == ACPI_DMAR_SCOPE_TYPE_BRIDGE &&
+		     (info->dev->hdr_type == PCI_HEADER_TYPE_NORMAL &&
+		      info->dev->class >> 8 != PCI_CLASS_BRIDGE_OTHER))) {
 			pr_warn("Device scope type does not match for %s\n",
 				pci_name(info->dev));
 			return -EINVAL;
@@ -326,7 +346,9 @@ static int dmar_pci_bus_notifier(struct notifier_block *nb,
 	struct pci_dev *pdev = to_pci_dev(data);
 	struct dmar_pci_notify_info *info;
 
-	/* Only care about add/remove events for physical functions */
+	/* Only care about add/remove events for physical functions.
+	 * For VFs we actually do the lookup based on the corresponding
+	 * PF in device_to_iommu() anyway. */
 	if (pdev->is_virtfn)
 		return NOTIFY_DONE;
 	if (action != BUS_NOTIFY_ADD_DEVICE &&
@@ -351,7 +373,7 @@ static int dmar_pci_bus_notifier(struct notifier_block *nb,
 
 static struct notifier_block dmar_pci_bus_nb = {
 	.notifier_call = dmar_pci_bus_notifier,
-	.priority = INT_MIN,
+	.priority = 1,
 };
 
 static struct dmar_drhd_unit *
@@ -436,12 +458,13 @@ static int __init dmar_parse_one_andd(struct acpi_dmar_header *header,
 
 	/* Check for NUL termination within the designated length */
 	if (strnlen(andd->device_name, header->length - 8) == header->length - 8) {
-		WARN_TAINT(1, TAINT_FIRMWARE_WORKAROUND,
+		pr_warn(FW_BUG
 			   "Your BIOS is broken; ANDD object name is not NUL-terminated\n"
 			   "BIOS vendor: %s; Ver: %s; Product Version: %s\n",
 			   dmi_get_system_info(DMI_BIOS_VENDOR),
 			   dmi_get_system_info(DMI_BIOS_VERSION),
 			   dmi_get_system_info(DMI_PRODUCT_VERSION));
+		add_taint(TAINT_FIRMWARE_WORKAROUND, LOCKDEP_STILL_OK);
 		return -EINVAL;
 	}
 	pr_info("ANDD device: %x name: %s\n", andd->device_number,
@@ -467,14 +490,14 @@ static int dmar_parse_one_rhsa(struct acpi_dmar_header *header, void *arg)
 			return 0;
 		}
 	}
-	WARN_TAINT(
-		1, TAINT_FIRMWARE_WORKAROUND,
+	pr_warn(FW_BUG
 		"Your BIOS is broken; RHSA refers to non-existent DMAR unit at %llx\n"
 		"BIOS vendor: %s; Ver: %s; Product Version: %s\n",
-		drhd->reg_base_addr,
+		rhsa->base_address,
 		dmi_get_system_info(DMI_BIOS_VENDOR),
 		dmi_get_system_info(DMI_BIOS_VERSION),
 		dmi_get_system_info(DMI_PRODUCT_VERSION));
+	add_taint(TAINT_FIRMWARE_WORKAROUND, LOCKDEP_STILL_OK);
 
 	return 0;
 }
@@ -780,6 +803,7 @@ int __init dmar_dev_scope_init(void)
 			info = dmar_alloc_pci_notify_info(dev,
 					BUS_NOTIFY_ADD_DEVICE);
 			if (!info) {
+				pci_dev_put(dev);
 				return dmar_dev_scope_status;
 			} else {
 				dmar_pci_bus_add_dev(info);
@@ -820,14 +844,14 @@ int __init dmar_table_init(void)
 
 static void warn_invalid_dmar(u64 addr, const char *message)
 {
-	WARN_TAINT_ONCE(
-		1, TAINT_FIRMWARE_WORKAROUND,
+	pr_warn_once(FW_BUG
 		"Your BIOS is broken; DMAR reported at address %llx%s!\n"
 		"BIOS vendor: %s; Ver: %s; Product Version: %s\n",
 		addr, message,
 		dmi_get_system_info(DMI_BIOS_VENDOR),
 		dmi_get_system_info(DMI_BIOS_VERSION),
 		dmi_get_system_info(DMI_PRODUCT_VERSION));
+	add_taint(TAINT_FIRMWARE_WORKAROUND, LOCKDEP_STILL_OK);
 }
 
 static int __ref
@@ -1001,8 +1025,8 @@ static int alloc_iommu(struct dmar_drhd_unit *drhd)
 {
 	struct intel_iommu *iommu;
 	u32 ver, sts;
-	int agaw = 0;
-	int msagaw = 0;
+	int agaw = -1;
+	int msagaw = -1;
 	int err;
 
 	if (!drhd->reg_base_addr) {
@@ -1027,17 +1051,28 @@ static int alloc_iommu(struct dmar_drhd_unit *drhd)
 	}
 
 	err = -EINVAL;
-	agaw = iommu_calculate_agaw(iommu);
-	if (agaw < 0) {
-		pr_err("Cannot get a valid agaw for iommu (seq_id = %d)\n",
-			iommu->seq_id);
-		goto err_unmap;
+	if (cap_sagaw(iommu->cap) == 0) {
+		pr_info("%s: No supported address widths. Not attempting DMA translation.\n",
+			iommu->name);
+		drhd->ignored = 1;
 	}
-	msagaw = iommu_calculate_max_sagaw(iommu);
-	if (msagaw < 0) {
-		pr_err("Cannot get a valid max agaw for iommu (seq_id = %d)\n",
-			iommu->seq_id);
-		goto err_unmap;
+
+	if (!drhd->ignored) {
+		agaw = iommu_calculate_agaw(iommu);
+		if (agaw < 0) {
+			pr_err("Cannot get a valid agaw for iommu (seq_id = %d)\n",
+			       iommu->seq_id);
+			drhd->ignored = 1;
+		}
+	}
+	if (!drhd->ignored) {
+		msagaw = iommu_calculate_max_sagaw(iommu);
+		if (msagaw < 0) {
+			pr_err("Cannot get a valid max agaw for iommu (seq_id = %d)\n",
+			       iommu->seq_id);
+			drhd->ignored = 1;
+			agaw = -1;
+		}
 	}
 	iommu->agaw = agaw;
 	iommu->msagaw = msagaw;
@@ -1064,7 +1099,7 @@ static int alloc_iommu(struct dmar_drhd_unit *drhd)
 
 	raw_spin_lock_init(&iommu->register_lock);
 
-	if (intel_iommu_enabled) {
+	if (intel_iommu_enabled && !drhd->ignored) {
 		iommu->iommu_dev = iommu_device_create(NULL, iommu,
 						       intel_iommu_groups,
 						       "%s", iommu->name);
@@ -1076,6 +1111,7 @@ static int alloc_iommu(struct dmar_drhd_unit *drhd)
 	}
 
 	drhd->iommu = iommu;
+	iommu->drhd = drhd;
 
 	return 0;
 
@@ -1090,7 +1126,8 @@ error:
 
 static void free_iommu(struct intel_iommu *iommu)
 {
-	iommu_device_destroy(iommu->iommu_dev);
+	if (intel_iommu_enabled && !iommu->drhd->ignored)
+		iommu_device_destroy(iommu->iommu_dev);
 
 	if (iommu->irq) {
 		if (iommu->pr_irq) {
@@ -1154,8 +1191,6 @@ static int qi_check_fault(struct intel_iommu *iommu, int index)
 				(unsigned long long)qi->desc[index].low,
 				(unsigned long long)qi->desc[index].high);
 			memcpy(&qi->desc[index], &qi->desc[wait_index],
-					sizeof(struct qi_desc));
-			__iommu_flush_cache(iommu, &qi->desc[index],
 					sizeof(struct qi_desc));
 			writel(DMA_FSTS_IQE, iommu->reg + DMAR_FSTS_REG);
 			return -EINVAL;
@@ -1230,9 +1265,6 @@ restart:
 	wait_desc.high = virt_to_phys(&qi->desc_status[wait_index]);
 
 	hw[wait_index] = wait_desc;
-
-	__iommu_flush_cache(iommu, &hw[index], sizeof(struct qi_desc));
-	__iommu_flush_cache(iommu, &hw[wait_index], sizeof(struct qi_desc));
 
 	qi->free_head = (qi->free_head + 2) % QI_LENGTH;
 	qi->free_cnt -= 2;
@@ -1319,8 +1351,8 @@ void qi_flush_iotlb(struct intel_iommu *iommu, u16 did, u64 addr,
 	qi_submit_sync(&desc, iommu);
 }
 
-void qi_flush_dev_iotlb(struct intel_iommu *iommu, u16 sid, u16 qdep,
-			u64 addr, unsigned mask)
+void qi_flush_dev_iotlb(struct intel_iommu *iommu, u16 sid, u16 pfsid,
+			u16 qdep, u64 addr, unsigned mask)
 {
 	struct qi_desc desc;
 
@@ -1335,7 +1367,7 @@ void qi_flush_dev_iotlb(struct intel_iommu *iommu, u16 sid, u16 qdep,
 		qdep = 0;
 
 	desc.low = QI_DEV_IOTLB_SID(sid) | QI_DEV_IOTLB_QDEP(qdep) |
-		   QI_DIOTLB_TYPE;
+		   QI_DIOTLB_TYPE | QI_DEV_IOTLB_PFSID(pfsid);
 
 	qi_submit_sync(&desc, iommu);
 }
@@ -1579,18 +1611,14 @@ static int dmar_fault_do_one(struct intel_iommu *iommu, int type,
 	reason = dmar_get_fault_reason(fault_reason, &fault_type);
 
 	if (fault_type == INTR_REMAP)
-		pr_err("INTR-REMAP: Request device [[%02x:%02x.%d] "
-		       "fault index %llx\n"
-			"INTR-REMAP:[fault reason %02d] %s\n",
-			(source_id >> 8), PCI_SLOT(source_id & 0xFF),
+		pr_err("[INTR-REMAP] Request device [%02x:%02x.%d] fault index %llx [fault reason %02d] %s\n",
+			source_id >> 8, PCI_SLOT(source_id & 0xFF),
 			PCI_FUNC(source_id & 0xFF), addr >> 48,
 			fault_reason, reason);
 	else
-		pr_err("DMAR:[%s] Request device [%02x:%02x.%d] "
-		       "fault addr %llx \n"
-		       "DMAR:[fault reason %02d] %s\n",
-		       (type ? "DMA Read" : "DMA Write"),
-		       (source_id >> 8), PCI_SLOT(source_id & 0xFF),
+		pr_err("[%s] Request device [%02x:%02x.%d] fault addr %llx [fault reason %02d] %s\n",
+		       type ? "DMA Read" : "DMA Write",
+		       source_id >> 8, PCI_SLOT(source_id & 0xFF),
 		       PCI_FUNC(source_id & 0xFF), addr, fault_reason, reason);
 	return 0;
 }
@@ -1602,10 +1630,17 @@ irqreturn_t dmar_fault(int irq, void *dev_id)
 	int reg, fault_index;
 	u32 fault_status;
 	unsigned long flag;
+	bool ratelimited;
+	static DEFINE_RATELIMIT_STATE(rs,
+				      DEFAULT_RATELIMIT_INTERVAL,
+				      DEFAULT_RATELIMIT_BURST);
+
+	/* Disable printing, simply clear the fault when ratelimited */
+	ratelimited = !__ratelimit(&rs);
 
 	raw_spin_lock_irqsave(&iommu->register_lock, flag);
 	fault_status = readl(iommu->reg + DMAR_FSTS_REG);
-	if (fault_status)
+	if (fault_status && !ratelimited)
 		pr_err("DRHD: handling fault status reg %x\n", fault_status);
 
 	/* TBD: ignore advanced fault log currently */
@@ -1627,24 +1662,28 @@ irqreturn_t dmar_fault(int irq, void *dev_id)
 		if (!(data & DMA_FRCD_F))
 			break;
 
-		fault_reason = dma_frcd_fault_reason(data);
-		type = dma_frcd_type(data);
+		if (!ratelimited) {
+			fault_reason = dma_frcd_fault_reason(data);
+			type = dma_frcd_type(data);
 
-		data = readl(iommu->reg + reg +
-				fault_index * PRIMARY_FAULT_REG_LEN + 8);
-		source_id = dma_frcd_source_id(data);
+			data = readl(iommu->reg + reg +
+				     fault_index * PRIMARY_FAULT_REG_LEN + 8);
+			source_id = dma_frcd_source_id(data);
 
-		guest_addr = dmar_readq(iommu->reg + reg +
-				fault_index * PRIMARY_FAULT_REG_LEN);
-		guest_addr = dma_frcd_page_addr(guest_addr);
+			guest_addr = dmar_readq(iommu->reg + reg +
+					fault_index * PRIMARY_FAULT_REG_LEN);
+			guest_addr = dma_frcd_page_addr(guest_addr);
+		}
+
 		/* clear the fault */
 		writel(DMA_FRCD_F, iommu->reg + reg +
 			fault_index * PRIMARY_FAULT_REG_LEN + 12);
 
 		raw_spin_unlock_irqrestore(&iommu->register_lock, flag);
 
-		dmar_fault_do_one(iommu, type, fault_reason,
-				source_id, guest_addr);
+		if (!ratelimited)
+			dmar_fault_do_one(iommu, type, fault_reason,
+					  source_id, guest_addr);
 
 		fault_index++;
 		if (fault_index >= cap_num_fault_regs(iommu->cap))
@@ -1864,10 +1903,11 @@ static int dmar_hp_remove_drhd(struct acpi_dmar_header *header, void *arg)
 	/*
 	 * All PCI devices managed by this unit should have been destroyed.
 	 */
-	if (!dmaru->include_all && dmaru->devices && dmaru->devices_cnt)
+	if (!dmaru->include_all && dmaru->devices && dmaru->devices_cnt) {
 		for_each_active_dev_scope(dmaru->devices,
 					  dmaru->devices_cnt, i, dev)
 			return -EBUSY;
+	}
 
 	ret = dmar_ir_hotplug(dmaru, false);
 	if (ret == 0)

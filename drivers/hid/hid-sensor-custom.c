@@ -67,7 +67,7 @@ struct hid_sensor_sample {
 	u32 raw_len;
 } __packed;
 
-static struct attribute hid_custom_attrs[] = {
+static struct attribute hid_custom_attrs[HID_CUSTOM_TOTAL_ATTRS] = {
 	{.name = "name", .mode = S_IRUGO},
 	{.name = "units", .mode = S_IRUGO},
 	{.name = "unit-expo", .mode = S_IRUGO},
@@ -292,11 +292,11 @@ static ssize_t show_value(struct device *dev, struct device_attribute *attr,
 	bool input = false;
 	int value = 0;
 
-	if (sscanf(attr->attr.name, "feature-%d-%x-%s", &index, &usage,
+	if (sscanf(attr->attr.name, "feature-%x-%x-%s", &index, &usage,
 		   name) == 3) {
 		feature = true;
 		field_index = index + sensor_inst->input_field_count;
-	} else if (sscanf(attr->attr.name, "input-%d-%x-%s", &index, &usage,
+	} else if (sscanf(attr->attr.name, "input-%x-%x-%s", &index, &usage,
 		   name) == 3) {
 		input = true;
 		field_index = index;
@@ -398,7 +398,7 @@ static ssize_t store_value(struct device *dev, struct device_attribute *attr,
 	char name[HID_CUSTOM_NAME_LENGTH];
 	int value;
 
-	if (sscanf(attr->attr.name, "feature-%d-%x-%s", &index, &usage,
+	if (sscanf(attr->attr.name, "feature-%x-%x-%s", &index, &usage,
 		   name) == 3) {
 		field_index = index + sensor_inst->input_field_count;
 	} else

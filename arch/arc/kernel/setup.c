@@ -12,10 +12,10 @@
 #include <linux/root_dev.h>
 #include <linux/console.h>
 #include <linux/module.h>
+#include <linux/sizes.h>
 #include <linux/cpu.h>
-#include <linux/clk-provider.h>
 #include <linux/of_fdt.h>
-#include <linux/of_platform.h>
+#include <linux/of.h>
 #include <linux/cache.h>
 #include <asm/sections.h>
 #include <asm/arcregs.h>
@@ -24,7 +24,6 @@
 #include <asm/page.h>
 #include <asm/irq.h>
 #include <asm/unwind.h>
-#include <asm/clk.h>
 #include <asm/mach_desc.h>
 #include <asm/smp.h>
 
@@ -34,6 +33,7 @@ unsigned int intr_to_DE_cnt;
 
 /* Part of U-boot ABI: see head.S */
 int __initdata uboot_tag;
+int __initdata uboot_magic;
 char __initdata *uboot_arg;
 
 const struct machine_desc *machine_desc;
@@ -41,6 +41,29 @@ const struct machine_desc *machine_desc;
 struct task_struct *_current_task[NR_CPUS];	/* For stack switching */
 
 struct cpuinfo_arc cpuinfo_arc700[NR_CPUS];
+
+static const struct id_to_str arc_cpu_rel[] = {
+#ifdef CONFIG_ISA_ARCOMPACT
+	{ 0x34, "R4.10"},
+	{ 0x35, "R4.11"},
+#else
+	{ 0x51, "R2.0" },
+	{ 0x52, "R2.1" },
+	{ 0x53, "R3.0" },
+#endif
+	{ 0x00, NULL   }
+};
+
+static const struct id_to_str arc_cpu_nm[] = {
+#ifdef CONFIG_ISA_ARCOMPACT
+	{ 0x20, "ARC 600"   },
+	{ 0x30, "ARC 770"   },  /* 750 identified seperately */
+#else
+	{ 0x40, "ARC EM"  },
+	{ 0x50, "ARC HS38"  },
+#endif
+	{ 0x00, "Unknown"   }
+};
 
 static void read_decode_ccm_bcr(struct cpuinfo_arc *cpu)
 {
@@ -94,10 +117,25 @@ static void read_arc_build_cfg_regs(void)
 	struct bcr_timer timer;
 	struct bcr_generic bcr;
 	struct cpuinfo_arc *cpu = &cpuinfo_arc700[smp_processor_id()];
+	const struct id_to_str *tbl;
+
 	FIX_PTR(cpu);
 
 	READ_BCR(AUX_IDENTITY, cpu->core);
 	READ_BCR(ARC_REG_ISA_CFG_BCR, cpu->isa);
+
+	for (tbl = &arc_cpu_rel[0]; tbl->id != 0; tbl++) {
+		if (cpu->core.family == tbl->id) {
+			cpu->details = tbl->str;
+			break;
+		}
+	}
+
+	for (tbl = &arc_cpu_nm[0]; tbl->id != 0; tbl++) {
+		if ((cpu->core.family & 0xF0) == tbl->id)
+			break;
+	}
+	cpu->name = tbl->str;
 
 	READ_BCR(ARC_REG_TIMERS_BCR, timer);
 	cpu->extn.timer0 = timer.t0;
@@ -113,6 +151,9 @@ static void read_arc_build_cfg_regs(void)
 	cpu->extn.swap = read_aux_reg(ARC_REG_SWAP_BCR) ? 1 : 0;        /* 1,3 */
 	cpu->extn.crc = read_aux_reg(ARC_REG_CRC_BCR) ? 1 : 0;
 	cpu->extn.minmax = read_aux_reg(ARC_REG_MIXMAX_BCR) > 1 ? 1 : 0; /* 2 */
+	cpu->extn.swape = (cpu->core.family >= 0x34) ? 1 :
+				IS_ENABLED(CONFIG_ARC_HAS_SWAPE);
+
 	READ_BCR(ARC_REG_XY_MEM_BCR, cpu->extn_xymem);
 
 	/* Read CCM BCRs for boot reporting even if not enabled in Kconfig */
@@ -162,67 +203,38 @@ static void read_arc_build_cfg_regs(void)
 	cpu->extn.rtt = bcr.ver ? 1 : 0;
 
 	cpu->extn.debug = cpu->extn.ap | cpu->extn.smart | cpu->extn.rtt;
+
+	/* some hacks for lack of feature BCR info in old ARC700 cores */
+	if (is_isa_arcompact()) {
+		if (!cpu->isa.ver)	/* ISA BCR absent, use Kconfig info */
+			cpu->isa.atomic = IS_ENABLED(CONFIG_ARC_HAS_LLSC);
+		else
+			cpu->isa.atomic = cpu->isa.atomic1;
+
+		cpu->isa.be = IS_ENABLED(CONFIG_CPU_BIG_ENDIAN);
+
+		 /* there's no direct way to distinguish 750 vs. 770 */
+		if (unlikely(cpu->core.family < 0x34 || cpu->mmu.ver < 3))
+			cpu->name = "ARC750";
+	}
 }
-
-static const struct cpuinfo_data arc_cpu_tbl[] = {
-#ifdef CONFIG_ISA_ARCOMPACT
-	{ {0x20, "ARC 600"      }, 0x2F},
-	{ {0x30, "ARC 700"      }, 0x33},
-	{ {0x34, "ARC 700 R4.10"}, 0x34},
-	{ {0x35, "ARC 700 R4.11"}, 0x35},
-#else
-	{ {0x50, "ARC HS38 R2.0"}, 0x51},
-	{ {0x52, "ARC HS38 R2.1"}, 0x52},
-#endif
-	{ {0x00, NULL		} }
-};
-
 
 static char *arc_cpu_mumbojumbo(int cpu_id, char *buf, int len)
 {
 	struct cpuinfo_arc *cpu = &cpuinfo_arc700[cpu_id];
 	struct bcr_identity *core = &cpu->core;
-	const struct cpuinfo_data *tbl;
-	char *isa_nm;
-	int i, be, atomic;
-	int n = 0;
+	int i, n = 0;
 
 	FIX_PTR(cpu);
-
-	if (is_isa_arcompact()) {
-		isa_nm = "ARCompact";
-		be = IS_ENABLED(CONFIG_CPU_BIG_ENDIAN);
-
-		atomic = cpu->isa.atomic1;
-		if (!cpu->isa.ver)	/* ISA BCR absent, use Kconfig info */
-			atomic = IS_ENABLED(CONFIG_ARC_HAS_LLSC);
-	} else {
-		isa_nm = "ARCv2";
-		be = cpu->isa.be;
-		atomic = cpu->isa.atomic;
-	}
 
 	n += scnprintf(buf + n, len - n,
 		       "\nIDENTITY\t: ARCVER [%#02x] ARCNUM [%#02x] CHIPID [%#4x]\n",
 		       core->family, core->cpu_id, core->chip_id);
 
-	for (tbl = &arc_cpu_tbl[0]; tbl->info.id != 0; tbl++) {
-		if ((core->family >= tbl->info.id) &&
-		    (core->family <= tbl->up_range)) {
-			n += scnprintf(buf + n, len - n,
-				       "processor [%d]\t: %s (%s ISA) %s\n",
-				       cpu_id, tbl->info.str, isa_nm,
-				       IS_AVAIL1(be, "[Big-Endian]"));
-			break;
-		}
-	}
-
-	if (tbl->info.id == 0)
-		n += scnprintf(buf + n, len - n, "UNKNOWN ARC Processor\n");
-
-	n += scnprintf(buf + n, len - n, "CPU speed\t: %u.%02u Mhz\n",
-		       (unsigned int)(arc_get_core_freq() / 1000000),
-		       (unsigned int)(arc_get_core_freq() / 10000) % 100);
+	n += scnprintf(buf + n, len - n, "processor [%d]\t: %s %s (%s ISA) %s\n",
+		       cpu_id, cpu->name, cpu->details,
+		       is_isa_arcompact() ? "ARCompact" : "ARCv2",
+		       IS_AVAIL1(cpu->isa.be, "[Big-Endian]"));
 
 	n += scnprintf(buf + n, len - n, "Timers\t\t: %s%s%s%s\nISA Extn\t: ",
 		       IS_AVAIL1(cpu->extn.timer0, "Timer0 "),
@@ -231,7 +243,7 @@ static char *arc_cpu_mumbojumbo(int cpu_id, char *buf, int len)
 				 CONFIG_ARC_HAS_RTC));
 
 	n += i = scnprintf(buf + n, len - n, "%s%s%s%s%s",
-			   IS_AVAIL2(atomic, "atomic ", CONFIG_ARC_HAS_LLSC),
+			   IS_AVAIL2(cpu->isa.atomic, "atomic ", CONFIG_ARC_HAS_LLSC),
 			   IS_AVAIL2(cpu->isa.ldd, "ll64 ", CONFIG_ARC_HAS_LL64),
 			   IS_AVAIL1(cpu->isa.unalign, "unalign (not used)"));
 
@@ -258,7 +270,7 @@ static char *arc_cpu_mumbojumbo(int cpu_id, char *buf, int len)
 		       IS_AVAIL1(cpu->extn.swap, "swap "),
 		       IS_AVAIL1(cpu->extn.minmax, "minmax "),
 		       IS_AVAIL1(cpu->extn.crc, "crc "),
-		       IS_AVAIL2(1, "swape", CONFIG_ARC_HAS_SWAPE));
+		       IS_AVAIL2(cpu->extn.swape, "swape", CONFIG_ARC_HAS_SWAPE));
 
 	if (cpu->bpu.ver)
 		n += scnprintf(buf + n, len - n,
@@ -277,9 +289,7 @@ static char *arc_extn_mumbojumbo(int cpu_id, char *buf, int len)
 
 	FIX_PTR(cpu);
 
-	n += scnprintf(buf + n, len - n,
-		       "Vector Table\t: %#x\nUncached Base\t: %#lx\n",
-		       cpu->vec_base, perip_base);
+	n += scnprintf(buf + n, len - n, "Vector Table\t: %#x\n", cpu->vec_base);
 
 	if (cpu->extn.fpu_sp || cpu->extn.fpu_dp)
 		n += scnprintf(buf + n, len - n, "FPU\t\t: %s%s\n",
@@ -297,8 +307,10 @@ static char *arc_extn_mumbojumbo(int cpu_id, char *buf, int len)
 			       cpu->dccm.base_addr, TO_KB(cpu->dccm.sz),
 			       cpu->iccm.base_addr, TO_KB(cpu->iccm.sz));
 
-	n += scnprintf(buf + n, len - n,
-		       "OS ABI [v3]\t: no-legacy-syscalls\n");
+	n += scnprintf(buf + n, len - n, "OS ABI [v%d]\t: %s\n",
+			EF_ARC_OSABI_CURRENT >> 8,
+			EF_ARC_OSABI_CURRENT == EF_ARC_OSABI_V3 ?
+			"no-legacy-syscalls" : "64-bit data any register aligned");
 
 	return buf;
 }
@@ -314,9 +326,6 @@ static void arc_chk_core_config(void)
 	if (!cpu->extn.timer1)
 		panic("Timer1 is not present!\n");
 
-	if (IS_ENABLED(CONFIG_ARC_HAS_RTC) && !cpu->extn.rtc)
-		panic("RTC is not present\n");
-
 #ifdef CONFIG_ARC_HAS_DCCM
 	/*
 	 * DCCM can be arbit placed in hardware.
@@ -325,12 +334,12 @@ static void arc_chk_core_config(void)
 	if ((unsigned int)__arc_dccm_base != cpu->dccm.base_addr)
 		panic("Linux built with incorrect DCCM Base address\n");
 
-	if (CONFIG_ARC_DCCM_SZ != cpu->dccm.sz)
+	if (CONFIG_ARC_DCCM_SZ * SZ_1K != cpu->dccm.sz)
 		panic("Linux built with incorrect DCCM Size\n");
 #endif
 
 #ifdef CONFIG_ARC_HAS_ICCM
-	if (CONFIG_ARC_ICCM_SZ != cpu->iccm.sz)
+	if (CONFIG_ARC_ICCM_SZ * SZ_1K != cpu->iccm.sz)
 		panic("Linux built with incorrect ICCM Size\n");
 #endif
 
@@ -374,43 +383,87 @@ void setup_processor(void)
 	arc_chk_core_config();
 }
 
-static inline int is_kernel(unsigned long addr)
+static inline bool uboot_arg_invalid(unsigned long addr)
 {
-	if (addr >= (unsigned long)_stext && addr <= (unsigned long)_end)
-		return 1;
-	return 0;
+	/*
+	 * Check that it is a untranslated address (although MMU is not enabled
+	 * yet, it being a high address ensures this is not by fluke)
+	 */
+	if (addr < PAGE_OFFSET)
+		return true;
+
+	/* Check that address doesn't clobber resident kernel image */
+	return addr >= (unsigned long)_stext && addr <= (unsigned long)_end;
+}
+
+#define IGNORE_ARGS		"Ignore U-boot args: "
+
+/* uboot_tag values for U-boot - kernel ABI revision 0; see head.S */
+#define UBOOT_TAG_NONE		0
+#define UBOOT_TAG_CMDLINE	1
+#define UBOOT_TAG_DTB		2
+/* We always pass 0 as magic from U-boot */
+#define UBOOT_MAGIC_VALUE	0
+
+void __init handle_uboot_args(void)
+{
+	bool use_embedded_dtb = true;
+	bool append_cmdline = false;
+
+#ifdef CONFIG_ARC_UBOOT_SUPPORT
+	/* check that we know this tag */
+	if (uboot_tag != UBOOT_TAG_NONE &&
+	    uboot_tag != UBOOT_TAG_CMDLINE &&
+	    uboot_tag != UBOOT_TAG_DTB) {
+		pr_warn(IGNORE_ARGS "invalid uboot tag: '%08x'\n", uboot_tag);
+		goto ignore_uboot_args;
+	}
+
+	if (uboot_magic != UBOOT_MAGIC_VALUE) {
+		pr_warn(IGNORE_ARGS "non zero uboot magic\n");
+		goto ignore_uboot_args;
+	}
+
+	if (uboot_tag != UBOOT_TAG_NONE &&
+            uboot_arg_invalid((unsigned long)uboot_arg)) {
+		pr_warn(IGNORE_ARGS "invalid uboot arg: '%px'\n", uboot_arg);
+		goto ignore_uboot_args;
+	}
+
+	/* see if U-boot passed an external Device Tree blob */
+	if (uboot_tag == UBOOT_TAG_DTB) {
+		machine_desc = setup_machine_fdt((void *)uboot_arg);
+
+		/* external Device Tree blob is invalid - use embedded one */
+		use_embedded_dtb = !machine_desc;
+	}
+
+	if (uboot_tag == UBOOT_TAG_CMDLINE)
+		append_cmdline = true;
+
+ignore_uboot_args:
+#endif
+
+	if (use_embedded_dtb) {
+		machine_desc = setup_machine_fdt(__dtb_start);
+		if (!machine_desc)
+			panic("Embedded DT invalid\n");
+	}
+
+	/*
+	 * NOTE: @boot_command_line is populated by setup_machine_fdt() so this
+	 * append processing can only happen after.
+	 */
+	if (append_cmdline) {
+		/* Ensure a whitespace between the 2 cmdlines */
+		strlcat(boot_command_line, " ", COMMAND_LINE_SIZE);
+		strlcat(boot_command_line, uboot_arg, COMMAND_LINE_SIZE);
+	}
 }
 
 void __init setup_arch(char **cmdline_p)
 {
-#ifdef CONFIG_ARC_UBOOT_SUPPORT
-	/* make sure that uboot passed pointer to cmdline/dtb is valid */
-	if (uboot_tag && is_kernel((unsigned long)uboot_arg))
-		panic("Invalid uboot arg\n");
-
-	/* See if u-boot passed an external Device Tree blob */
-	machine_desc = setup_machine_fdt(uboot_arg);	/* uboot_tag == 2 */
-	if (!machine_desc)
-#endif
-	{
-		/* No, so try the embedded one */
-		machine_desc = setup_machine_fdt(__dtb_start);
-		if (!machine_desc)
-			panic("Embedded DT invalid\n");
-
-		/*
-		 * If we are here, it is established that @uboot_arg didn't
-		 * point to DT blob. Instead if u-boot says it is cmdline,
-		 * Appent to embedded DT cmdline.
-		 * setup_machine_fdt() would have populated @boot_command_line
-		 */
-		if (uboot_tag == 1) {
-			/* Ensure a whitespace between the 2 cmdlines */
-			strlcat(boot_command_line, " ", COMMAND_LINE_SIZE);
-			strlcat(boot_command_line, uboot_arg,
-				COMMAND_LINE_SIZE);
-		}
-	}
+	handle_uboot_args();
 
 	/* Save unparsed command line copy for /proc/cmdline */
 	*cmdline_p = boot_command_line;
@@ -444,13 +497,6 @@ void __init setup_arch(char **cmdline_p)
 
 static int __init customize_machine(void)
 {
-	of_clk_init(NULL);
-	/*
-	 * Traverses flattened DeviceTree - registering platform devices
-	 * (if any) complete with their resources
-	 */
-	of_platform_default_populate(NULL, NULL, NULL);
-
 	if (machine_desc->init_machine)
 		machine_desc->init_machine();
 
@@ -477,6 +523,8 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 {
 	char *str;
 	int cpu_id = ptr_to_cpu(v);
+	struct device_node *core_clk = of_find_node_by_name(NULL, "core_clk");
+	u32 freq = 0;
 
 	if (!cpu_online(cpu_id)) {
 		seq_printf(m, "processor [%d]\t: Offline\n", cpu_id);
@@ -488,6 +536,11 @@ static int show_cpuinfo(struct seq_file *m, void *v)
 		goto done;
 
 	seq_printf(m, arc_cpu_mumbojumbo(cpu_id, str, PAGE_SIZE));
+
+	of_property_read_u32(core_clk, "clock-frequency", &freq);
+	if (freq)
+		seq_printf(m, "CPU speed\t: %u.%02u Mhz\n",
+			   freq / 1000000, (freq / 10000) % 100);
 
 	seq_printf(m, "Bogo MIPS\t: %lu.%02lu\n",
 		   loops_per_jiffy / (500000 / HZ),
@@ -513,7 +566,7 @@ static void *c_start(struct seq_file *m, loff_t *pos)
 	 * way to pass it w/o having to kmalloc/free a 2 byte string.
 	 * Encode cpu-id as 0xFFcccc, which is decoded by show routine.
 	 */
-	return *pos < num_possible_cpus() ? cpu_to_ptr(*pos) : NULL;
+	return *pos < nr_cpu_ids ? cpu_to_ptr(*pos) : NULL;
 }
 
 static void *c_next(struct seq_file *m, void *v, loff_t *pos)

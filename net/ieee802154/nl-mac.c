@@ -34,9 +34,11 @@
 
 #include "ieee802154.h"
 
-static int nla_put_hwaddr(struct sk_buff *msg, int type, __le64 hwaddr)
+static int nla_put_hwaddr(struct sk_buff *msg, int type, __le64 hwaddr,
+			  int padattr)
 {
-	return nla_put_u64(msg, type, swab64((__force u64)hwaddr));
+	return nla_put_u64_64bit(msg, type, swab64((__force u64)hwaddr),
+				 padattr);
 }
 
 static __le64 nla_get_hwaddr(const struct nlattr *nla)
@@ -557,9 +559,7 @@ ieee802154_llsec_parse_key_id(struct genl_info *info,
 	desc->mode = nla_get_u8(info->attrs[IEEE802154_ATTR_LLSEC_KEY_MODE]);
 
 	if (desc->mode == IEEE802154_SCF_KEY_IMPLICIT) {
-		if (!info->attrs[IEEE802154_ATTR_PAN_ID] &&
-		    !(info->attrs[IEEE802154_ATTR_SHORT_ADDR] ||
-		      info->attrs[IEEE802154_ATTR_HW_ADDR]))
+		if (!info->attrs[IEEE802154_ATTR_PAN_ID])
 			return -EINVAL;
 
 		desc->device_addr.pan_id = nla_get_shortaddr(info->attrs[IEEE802154_ATTR_PAN_ID]);
@@ -568,6 +568,9 @@ ieee802154_llsec_parse_key_id(struct genl_info *info,
 			desc->device_addr.mode = IEEE802154_ADDR_SHORT;
 			desc->device_addr.short_addr = nla_get_shortaddr(info->attrs[IEEE802154_ATTR_SHORT_ADDR]);
 		} else {
+			if (!info->attrs[IEEE802154_ATTR_HW_ADDR])
+				return -EINVAL;
+
 			desc->device_addr.mode = IEEE802154_ADDR_LONG;
 			desc->device_addr.extended_addr = nla_get_hwaddr(info->attrs[IEEE802154_ATTR_HW_ADDR]);
 		}
@@ -623,7 +626,8 @@ ieee802154_llsec_fill_key_id(struct sk_buff *msg,
 
 		if (desc->device_addr.mode == IEEE802154_ADDR_LONG &&
 		    nla_put_hwaddr(msg, IEEE802154_ATTR_HW_ADDR,
-				   desc->device_addr.extended_addr))
+				   desc->device_addr.extended_addr,
+				   IEEE802154_ATTR_PAD))
 			return -EMSGSIZE;
 	}
 
@@ -638,7 +642,7 @@ ieee802154_llsec_fill_key_id(struct sk_buff *msg,
 
 	if (desc->mode == IEEE802154_SCF_KEY_HW_INDEX &&
 	    nla_put_hwaddr(msg, IEEE802154_ATTR_LLSEC_KEY_SOURCE_EXTENDED,
-			   desc->extended_source))
+			   desc->extended_source, IEEE802154_ATTR_PAD))
 		return -EMSGSIZE;
 
 	return 0;
@@ -684,8 +688,10 @@ int ieee802154_llsec_getparams(struct sk_buff *skb, struct genl_info *info)
 	    nla_put_u8(msg, IEEE802154_ATTR_LLSEC_SECLEVEL, params.out_level) ||
 	    nla_put_u32(msg, IEEE802154_ATTR_LLSEC_FRAME_COUNTER,
 			be32_to_cpu(params.frame_counter)) ||
-	    ieee802154_llsec_fill_key_id(msg, &params.out_key))
+	    ieee802154_llsec_fill_key_id(msg, &params.out_key)) {
+		rc = -ENOBUFS;
 		goto out_free;
+	}
 
 	dev_put(dev);
 
@@ -1063,7 +1069,8 @@ ieee802154_nl_fill_dev(struct sk_buff *msg, u32 portid, u32 seq,
 	    nla_put_shortaddr(msg, IEEE802154_ATTR_PAN_ID, desc->pan_id) ||
 	    nla_put_shortaddr(msg, IEEE802154_ATTR_SHORT_ADDR,
 			      desc->short_addr) ||
-	    nla_put_hwaddr(msg, IEEE802154_ATTR_HW_ADDR, desc->hwaddr) ||
+	    nla_put_hwaddr(msg, IEEE802154_ATTR_HW_ADDR, desc->hwaddr,
+			   IEEE802154_ATTR_PAD) ||
 	    nla_put_u32(msg, IEEE802154_ATTR_LLSEC_FRAME_COUNTER,
 			desc->frame_counter) ||
 	    nla_put_u8(msg, IEEE802154_ATTR_LLSEC_DEV_OVERRIDE,
@@ -1167,7 +1174,8 @@ ieee802154_nl_fill_devkey(struct sk_buff *msg, u32 portid, u32 seq,
 
 	if (nla_put_string(msg, IEEE802154_ATTR_DEV_NAME, dev->name) ||
 	    nla_put_u32(msg, IEEE802154_ATTR_DEV_INDEX, dev->ifindex) ||
-	    nla_put_hwaddr(msg, IEEE802154_ATTR_HW_ADDR, devaddr) ||
+	    nla_put_hwaddr(msg, IEEE802154_ATTR_HW_ADDR, devaddr,
+			   IEEE802154_ATTR_PAD) ||
 	    nla_put_u32(msg, IEEE802154_ATTR_LLSEC_FRAME_COUNTER,
 			devkey->frame_counter) ||
 	    ieee802154_llsec_fill_key_id(msg, &devkey->key_id))

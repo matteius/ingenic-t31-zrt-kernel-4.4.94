@@ -367,7 +367,8 @@ static void pmap_unschedule(unsigned long *map, int bits_per_period,
  * @fmt:   The format for printf.
  * @...:   The args for printf.
  */
-static void cat_printf(char **buf, size_t *size, const char *fmt, ...)
+static __printf(3, 4)
+void cat_printf(char **buf, size_t *size, const char *fmt, ...)
 {
 	va_list args;
 	int i;
@@ -478,7 +479,7 @@ static unsigned long *dwc2_get_ls_map(struct dwc2_hsotg *hsotg,
 	/* Get the map and adjust if this is a multi_tt hub */
 	map = qh->dwc_tt->periodic_bitmaps;
 	if (qh->dwc_tt->usb_tt->multi)
-		map += DWC2_ELEMENTS_PER_LS_BITMAP * qh->ttport;
+		map += DWC2_ELEMENTS_PER_LS_BITMAP * (qh->ttport - 1);
 
 	return map;
 }
@@ -1709,7 +1710,8 @@ void dwc2_hcd_qh_unlink(struct dwc2_hsotg *hsotg, struct dwc2_qh *qh)
 
 	dwc2_deschedule_periodic(hsotg, qh);
 	hsotg->periodic_qh_count--;
-	if (!hsotg->periodic_qh_count) {
+	if (!hsotg->periodic_qh_count &&
+	    hsotg->core_params->dma_desc_enable <= 0) {
 		intr_mask = dwc2_readl(hsotg->regs + GINTMSK);
 		intr_mask &= ~GINTSTS_SOF;
 		dwc2_writel(intr_mask, hsotg->regs + GINTMSK);

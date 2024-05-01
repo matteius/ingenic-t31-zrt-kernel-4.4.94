@@ -15,6 +15,7 @@
 #include <linux/cache.h>
 #include <linux/timer.h>
 #include <linux/init.h>
+#include <linux/of.h>
 #include <asm/div64.h>
 #include <asm/io.h>
 
@@ -116,7 +117,7 @@ struct clocksource {
 #define CLOCK_SOURCE_RESELECT			0x100
 
 /* simplify initialization of mask field */
-#define CLOCKSOURCE_MASK(bits) (cycle_t)((bits) < 64 ? ((1ULL<<(bits))-1) : -1)
+#define CLOCKSOURCE_MASK(bits) GENMASK_ULL((bits) - 1, 0)
 
 static inline u32 clocksource_freq2mult(u32 freq, u32 shift_constant, u64 from)
 {
@@ -243,7 +244,7 @@ extern int clocksource_mmio_init(void __iomem *, const char *,
 extern int clocksource_i8253_init(void);
 
 #define CLOCKSOURCE_OF_DECLARE(name, compat, fn) \
-	OF_DECLARE_1(clksrc, name, compat, fn)
+	OF_DECLARE_1_RET(clksrc, name, compat, fn)
 
 #ifdef CONFIG_CLKSRC_PROBE
 extern void clocksource_probe(void);

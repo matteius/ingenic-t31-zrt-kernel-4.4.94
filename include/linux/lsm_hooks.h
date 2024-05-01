@@ -151,6 +151,16 @@
  *	@name name of the last path component used to create file
  *	@ctx pointer to place the pointer to the resulting context in.
  *	@ctxlen point to place the length of the resulting context.
+ * @dentry_create_files_as:
+ *	Compute a context for a dentry as the inode is not yet available
+ *	and set that context in passed in creds so that new files are
+ *	created using that context. Context is calculated using the
+ *	passed in creds and not the creds of the caller.
+ *	@dentry dentry to use in calculating the context.
+ *	@mode mode used to determine resource type.
+ *	@name name of the last path component used to create file
+ *	@old creds which should be used for context calculation
+ *	@new creds to modify
  *
  *
  * Security hooks for inode operations.
@@ -401,6 +411,23 @@
  *	@inode contains a pointer to the inode.
  *	@secid contains a pointer to the location where result will be saved.
  *	In case of failure, @secid will be set to zero.
+ * @inode_copy_up:
+ *	A file is about to be copied up from lower layer to upper layer of
+ *	overlay filesystem. Security module can prepare a set of new creds
+ *	and modify as need be and return new creds. Caller will switch to
+ *	new creds temporarily to create new file and release newly allocated
+ *	creds.
+ *	@src indicates the union dentry of file that is being copied up.
+ *	@new pointer to pointer to return newly allocated creds.
+ *	Returns 0 on success or a negative error code on error.
+ * @inode_copy_up_xattr:
+ *	Filter the xattrs being copied up when a unioned file is copied
+ *	up from a lower layer to the union/overlay layer.
+ *	@name indicates the name of the xattr.
+ *	Returns 0 to accept the xattr, 1 to discard the xattr, -EOPNOTSUPP if
+ *	security module does not know about attribute or a negative error code
+ *	to abort the copy up. Note that the caller is responsible for reading
+ *	and writing the xattrs as this hook is merely a filter.
  *
  * Security hooks for file operations
  *
@@ -638,11 +665,6 @@
  *	@info contains the signal information.
  *	@sig contains the signal value.
  *	@secid contains the sid of the process where the signal originated
- *	Return 0 if permission is granted.
- * @task_wait:
- *	Check permission before allowing a process to reap a child process @p
- *	and collect its status information.
- *	@p contains the task_struct for process.
  *	Return 0 if permission is granted.
  * @task_prctl:
  *	Check permission before performing a process control operation on the
@@ -1120,22 +1142,22 @@
  *
  * @binder_set_context_mgr
  *	Check whether @mgr is allowed to be the binder context manager.
- *	@mgr contains the task_struct for the task being registered.
+ *	@mgr contains the struct cred for the current binder process.
  *	Return 0 if permission is granted.
  * @binder_transaction
  *	Check whether @from is allowed to invoke a binder transaction call
  *	to @to.
- *	@from contains the task_struct for the sending task.
- *	@to contains the task_struct for the receiving task.
- * @binder_transfer_binder
+ *	@from contains the struct cred for the sending process.
+ *	@to contains the struct cred for the receiving process.
+ * @binder_transfer_binder:
  *	Check whether @from is allowed to transfer a binder reference to @to.
- *	@from contains the task_struct for the sending task.
- *	@to contains the task_struct for the receiving task.
- * @binder_transfer_file
+ *	@from contains the struct cred for the sending process.
+ *	@to contains the struct cred for the receiving process.
+ * @binder_transfer_file:
  *	Check whether @from is allowed to transfer @file to @to.
- *	@from contains the task_struct for the sending task.
+ *	@from contains the struct cred for the sending process.
  *	@file contains the struct file being transferred.
- *	@to contains the task_struct for the receiving task.
+ *	@to contains the struct cred for the receiving process.
  *
  * @ptrace_access_check:
  *	Check permission before allowing the current process to trace the
@@ -1190,7 +1212,8 @@
  *	Return 0 if permission is granted.
  * @settime:
  *	Check permission to change the system time.
- *	struct timespec and timezone are defined in include/linux/time.h
+ *	struct timespec64 is defined in include/linux/time64.h and timezone
+ *	is defined in include/linux/time.h
  *	@ts contains new time
  *	@tz contains new timezone
  *	Return 0 if permission is granted.
@@ -1304,13 +1327,13 @@
  */
 
 union security_list_options {
-	int (*binder_set_context_mgr)(struct task_struct *mgr);
-	int (*binder_transaction)(struct task_struct *from,
-					struct task_struct *to);
-	int (*binder_transfer_binder)(struct task_struct *from,
-					struct task_struct *to);
-	int (*binder_transfer_file)(struct task_struct *from,
-					struct task_struct *to,
+	int (*binder_set_context_mgr)(const struct cred *mgr);
+	int (*binder_transaction)(const struct cred *from,
+					const struct cred *to);
+	int (*binder_transfer_binder)(const struct cred *from,
+					const struct cred *to);
+	int (*binder_transfer_file)(const struct cred *from,
+					const struct cred *to,
 					struct file *file);
 
 	int (*ptrace_access_check)(struct task_struct *child,
@@ -1327,7 +1350,7 @@ union security_list_options {
 	int (*quotactl)(int cmds, int type, int id, struct super_block *sb);
 	int (*quota_on)(struct dentry *dentry);
 	int (*syslog)(int type);
-	int (*settime)(const struct timespec *ts, const struct timezone *tz);
+	int (*settime)(const struct timespec64 *ts, const struct timezone *tz);
 	int (*vm_enough_memory)(struct mm_struct *mm, long pages);
 
 	int (*bprm_set_creds)(struct linux_binprm *bprm);
@@ -1343,10 +1366,10 @@ union security_list_options {
 	int (*sb_kern_mount)(struct super_block *sb, int flags, void *data);
 	int (*sb_show_options)(struct seq_file *m, struct super_block *sb);
 	int (*sb_statfs)(struct dentry *dentry);
-	int (*sb_mount)(const char *dev_name, struct path *path,
+	int (*sb_mount)(const char *dev_name, const struct path *path,
 			const char *type, unsigned long flags, void *data);
 	int (*sb_umount)(struct vfsmount *mnt, int flags);
-	int (*sb_pivotroot)(struct path *old_path, struct path *new_path);
+	int (*sb_pivotroot)(const struct path *old_path, const struct path *new_path);
 	int (*sb_set_mnt_opts)(struct super_block *sb,
 				struct security_mnt_opts *opts,
 				unsigned long kern_flags,
@@ -1355,28 +1378,32 @@ union security_list_options {
 					struct super_block *newsb);
 	int (*sb_parse_opts_str)(char *options, struct security_mnt_opts *opts);
 	int (*dentry_init_security)(struct dentry *dentry, int mode,
-					struct qstr *name, void **ctx,
+					const struct qstr *name, void **ctx,
 					u32 *ctxlen);
+	int (*dentry_create_files_as)(struct dentry *dentry, int mode,
+					struct qstr *name,
+					const struct cred *old,
+					struct cred *new);
 
 
 #ifdef CONFIG_SECURITY_PATH
-	int (*path_unlink)(struct path *dir, struct dentry *dentry);
-	int (*path_mkdir)(struct path *dir, struct dentry *dentry,
+	int (*path_unlink)(const struct path *dir, struct dentry *dentry);
+	int (*path_mkdir)(const struct path *dir, struct dentry *dentry,
 				umode_t mode);
-	int (*path_rmdir)(struct path *dir, struct dentry *dentry);
-	int (*path_mknod)(struct path *dir, struct dentry *dentry,
+	int (*path_rmdir)(const struct path *dir, struct dentry *dentry);
+	int (*path_mknod)(const struct path *dir, struct dentry *dentry,
 				umode_t mode, unsigned int dev);
-	int (*path_truncate)(struct path *path);
-	int (*path_symlink)(struct path *dir, struct dentry *dentry,
+	int (*path_truncate)(const struct path *path);
+	int (*path_symlink)(const struct path *dir, struct dentry *dentry,
 				const char *old_name);
-	int (*path_link)(struct dentry *old_dentry, struct path *new_dir,
+	int (*path_link)(struct dentry *old_dentry, const struct path *new_dir,
 				struct dentry *new_dentry);
-	int (*path_rename)(struct path *old_dir, struct dentry *old_dentry,
-				struct path *new_dir,
+	int (*path_rename)(const struct path *old_dir, struct dentry *old_dentry,
+				const struct path *new_dir,
 				struct dentry *new_dentry);
-	int (*path_chmod)(struct path *path, umode_t mode);
-	int (*path_chown)(struct path *path, kuid_t uid, kgid_t gid);
-	int (*path_chroot)(struct path *path);
+	int (*path_chmod)(const struct path *path, umode_t mode);
+	int (*path_chown)(const struct path *path, kuid_t uid, kgid_t gid);
+	int (*path_chroot)(const struct path *path);
 #endif
 
 	int (*inode_alloc_security)(struct inode *inode);
@@ -1424,6 +1451,8 @@ union security_list_options {
 	int (*inode_listsecurity)(struct inode *inode, char *buffer,
 					size_t buffer_size);
 	void (*inode_getsecid)(struct inode *inode, u32 *secid);
+	int (*inode_copy_up)(struct dentry *src, struct cred **new);
+	int (*inode_copy_up_xattr)(const char *name);
 
 	int (*file_permission)(struct file *file, int mask);
 	int (*file_alloc_security)(struct file *file);
@@ -1454,7 +1483,6 @@ union security_list_options {
 	int (*kernel_act_as)(struct cred *new, u32 secid);
 	int (*kernel_create_files_as)(struct cred *new, struct inode *inode);
 	int (*kernel_module_request)(char *kmod_name);
-	int (*kernel_module_from_file)(struct file *file);
 	int (*kernel_read_file)(struct file *file, enum kernel_read_file_id id);
 	int (*kernel_post_read_file)(struct file *file, char *buf, loff_t size,
 				     enum kernel_read_file_id id);
@@ -1474,7 +1502,6 @@ union security_list_options {
 	int (*task_movememory)(struct task_struct *p);
 	int (*task_kill)(struct task_struct *p, struct siginfo *info,
 				int sig, u32 secid);
-	int (*task_wait)(struct task_struct *p);
 	int (*task_prctl)(int option, unsigned long arg2, unsigned long arg3,
 				unsigned long arg4, unsigned long arg5);
 	void (*task_to_inode)(struct task_struct *p, struct inode *inode);
@@ -1655,6 +1682,7 @@ struct security_hook_heads {
 	struct list_head sb_clone_mnt_opts;
 	struct list_head sb_parse_opts_str;
 	struct list_head dentry_init_security;
+	struct list_head dentry_create_files_as;
 #ifdef CONFIG_SECURITY_PATH
 	struct list_head path_unlink;
 	struct list_head path_mkdir;
@@ -1695,6 +1723,8 @@ struct security_hook_heads {
 	struct list_head inode_setsecurity;
 	struct list_head inode_listsecurity;
 	struct list_head inode_getsecid;
+	struct list_head inode_copy_up;
+	struct list_head inode_copy_up_xattr;
 	struct list_head file_permission;
 	struct list_head file_alloc_security;
 	struct list_head file_free_security;
@@ -1732,7 +1762,6 @@ struct security_hook_heads {
 	struct list_head task_getscheduler;
 	struct list_head task_movememory;
 	struct list_head task_kill;
-	struct list_head task_wait;
 	struct list_head task_prctl;
 	struct list_head task_to_inode;
 	struct list_head ipc_permission;
@@ -1804,7 +1833,6 @@ struct security_hook_heads {
 	struct list_head tun_dev_attach_queue;
 	struct list_head tun_dev_attach;
 	struct list_head tun_dev_open;
-	struct list_head skb_owned_by;
 #endif	/* CONFIG_SECURITY_NETWORK */
 #ifdef CONFIG_SECURITY_NETWORK_XFRM
 	struct list_head xfrm_policy_alloc_security;
@@ -1892,6 +1920,11 @@ extern void __init capability_add_hooks(void);
 extern void __init yama_add_hooks(void);
 #else
 static inline void __init yama_add_hooks(void) { }
+#endif
+#ifdef CONFIG_SECURITY_LOADPIN
+void __init loadpin_add_hooks(void);
+#else
+static inline void loadpin_add_hooks(void) { };
 #endif
 
 #endif /* ! __LINUX_LSM_HOOKS_H */

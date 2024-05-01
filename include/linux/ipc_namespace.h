@@ -58,13 +58,12 @@ struct ipc_namespace {
 
 	/* user_ns which owns the ipc ns */
 	struct user_namespace *user_ns;
+	struct ucounts *ucounts;
 
 	struct ns_common ns;
 };
 
 extern struct ipc_namespace init_ipc_ns;
-extern atomic_t nr_ipc_ns;
-
 extern spinlock_t mq_lock;
 
 #ifdef CONFIG_SYSVIPC
@@ -123,6 +122,16 @@ static inline struct ipc_namespace *get_ipc_ns(struct ipc_namespace *ns)
 	return ns;
 }
 
+static inline struct ipc_namespace *get_ipc_ns_not_zero(struct ipc_namespace *ns)
+{
+	if (ns) {
+		if (atomic_inc_not_zero(&ns->count))
+			return ns;
+	}
+
+	return NULL;
+}
+
 extern void put_ipc_ns(struct ipc_namespace *ns);
 #else
 static inline struct ipc_namespace *copy_ipcs(unsigned long flags,
@@ -135,6 +144,11 @@ static inline struct ipc_namespace *copy_ipcs(unsigned long flags,
 }
 
 static inline struct ipc_namespace *get_ipc_ns(struct ipc_namespace *ns)
+{
+	return ns;
+}
+
+static inline struct ipc_namespace *get_ipc_ns_not_zero(struct ipc_namespace *ns)
 {
 	return ns;
 }

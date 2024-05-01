@@ -137,7 +137,7 @@ static int s2mps11_clk_probe(struct platform_device *pdev)
 {
 	struct sec_pmic_dev *iodev = dev_get_drvdata(pdev->dev.parent);
 	struct s2mps11_clk *s2mps11_clks;
-	struct clk_onecell_data *clk_data;
+	struct clk_hw_onecell_data *clk_data;
 	unsigned int s2mps11_reg;
 	int i, ret = 0;
 	enum sec_device_type hwid = platform_get_device_id(pdev)->driver_data;
@@ -147,13 +147,10 @@ static int s2mps11_clk_probe(struct platform_device *pdev)
 	if (!s2mps11_clks)
 		return -ENOMEM;
 
-	clk_data = devm_kzalloc(&pdev->dev, sizeof(*clk_data), GFP_KERNEL);
+	clk_data = devm_kzalloc(&pdev->dev, sizeof(*clk_data) +
+				sizeof(*clk_data->hws) * S2MPS11_CLKS_NUM,
+				GFP_KERNEL);
 	if (!clk_data)
-		return -ENOMEM;
-
-	clk_data->clks = devm_kcalloc(&pdev->dev, S2MPS11_CLKS_NUM,
-				sizeof(struct clk *), GFP_KERNEL);
-	if (!clk_data->clks)
 		return -ENOMEM;
 
 	switch (hwid) {
@@ -196,24 +193,25 @@ static int s2mps11_clk_probe(struct platform_device *pdev)
 			goto err_reg;
 		}
 
-		s2mps11_clks[i].lookup = clkdev_create(s2mps11_clks[i].clk,
+		s2mps11_clks[i].lookup = clkdev_hw_create(&s2mps11_clks[i].hw,
 					s2mps11_clks_init[i].name, NULL);
 		if (!s2mps11_clks[i].lookup) {
 			ret = -ENOMEM;
 			goto err_reg;
 		}
-		clk_data->clks[i] = s2mps11_clks[i].clk;
+		clk_data->hws[i] = &s2mps11_clks[i].hw;
 	}
 
-	clk_data->clk_num = S2MPS11_CLKS_NUM;
-	of_clk_add_provider(s2mps11_clks->clk_np, of_clk_src_onecell_get,
-			clk_data);
+	clk_data->num = S2MPS11_CLKS_NUM;
+	of_clk_add_hw_provider(s2mps11_clks->clk_np, of_clk_hw_onecell_get,
+			       clk_data);
 
 	platform_set_drvdata(pdev, s2mps11_clks);
 
 	return ret;
 
 err_reg:
+	of_node_put(s2mps11_clks[0].clk_np);
 	while (--i >= 0)
 		clkdev_drop(s2mps11_clks[i].lookup);
 
@@ -247,6 +245,36 @@ static const struct platform_device_id s2mps11_clk_id[] = {
 	{ },
 };
 MODULE_DEVICE_TABLE(platform, s2mps11_clk_id);
+
+#ifdef CONFIG_OF
+/*
+ * Device is instantiated through parent MFD device and device matching is done
+ * through platform_device_id.
+ *
+ * However if device's DT node contains proper clock compatible and driver is
+ * built as a module, then the *module* matching will be done trough DT aliases.
+ * This requires of_device_id table.  In the same time this will not change the
+ * actual *device* matching so do not add .of_match_table.
+ */
+static const struct of_device_id s2mps11_dt_match[] __used = {
+	{
+		.compatible = "samsung,s2mps11-clk",
+		.data = (void *)S2MPS11X,
+	}, {
+		.compatible = "samsung,s2mps13-clk",
+		.data = (void *)S2MPS13X,
+	}, {
+		.compatible = "samsung,s2mps14-clk",
+		.data = (void *)S2MPS14X,
+	}, {
+		.compatible = "samsung,s5m8767-clk",
+		.data = (void *)S5M8767X,
+	}, {
+		/* Sentinel */
+	},
+};
+MODULE_DEVICE_TABLE(of, s2mps11_dt_match);
+#endif
 
 static struct platform_driver s2mps11_clk_driver = {
 	.driver = {

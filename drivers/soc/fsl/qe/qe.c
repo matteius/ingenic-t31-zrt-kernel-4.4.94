@@ -69,8 +69,8 @@ static phys_addr_t qebase = -1;
 phys_addr_t get_qe_base(void)
 {
 	struct device_node *qe;
-	int size;
-	const u32 *prop;
+	int ret;
+	struct resource res;
 
 	if (qebase != -1)
 		return qebase;
@@ -82,9 +82,9 @@ phys_addr_t get_qe_base(void)
 			return qebase;
 	}
 
-	prop = of_get_property(qe, "reg", &size);
-	if (prop && size >= sizeof(*prop))
-		qebase = of_translate_address(qe, prop);
+	ret = of_address_to_resource(qe, 0, &res);
+	if (!ret)
+		qebase = res.start;
 	of_node_put(qe);
 
 	return qebase;
@@ -163,11 +163,15 @@ EXPORT_SYMBOL(qe_issue_cmd);
  */
 static unsigned int brg_clk = 0;
 
+#define CLK_GRAN	(1000)
+#define CLK_GRAN_LIMIT	(5)
+
 unsigned int qe_get_brg_clk(void)
 {
 	struct device_node *qe;
 	int size;
 	const u32 *prop;
+	unsigned int mod;
 
 	if (brg_clk)
 		return brg_clk;
@@ -184,6 +188,15 @@ unsigned int qe_get_brg_clk(void)
 		brg_clk = *prop;
 
 	of_node_put(qe);
+
+	/* round this if near to a multiple of CLK_GRAN */
+	mod = brg_clk % CLK_GRAN;
+	if (mod) {
+		if (mod < CLK_GRAN_LIMIT)
+			brg_clk -= mod;
+		else if (mod > (CLK_GRAN - CLK_GRAN_LIMIT))
+			brg_clk += CLK_GRAN - mod;
+	}
 
 	return brg_clk;
 }
@@ -238,6 +251,12 @@ enum qe_clock qe_clock_source(const char *source)
 
 	if (strcasecmp(source, "none") == 0)
 		return QE_CLK_NONE;
+
+	if (strcmp(source, "tsync_pin") == 0)
+		return QE_TSYNC_PIN;
+
+	if (strcmp(source, "rsync_pin") == 0)
+		return QE_RSYNC_PIN;
 
 	if (strncasecmp(source, "brg", 3) == 0) {
 		i = simple_strtoul(source + 3, NULL, 10);

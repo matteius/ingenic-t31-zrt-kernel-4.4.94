@@ -357,14 +357,13 @@ static void pdc_chain_complete(struct pch_dma_chan *pd_chan,
 			       struct pch_dma_desc *desc)
 {
 	struct dma_async_tx_descriptor *txd = &desc->txd;
-	dma_async_tx_callback callback = txd->callback;
-	void *param = txd->callback_param;
+	struct dmaengine_desc_callback cb;
 
+	dmaengine_desc_get_callback(txd, &cb);
 	list_splice_init(&desc->tx_list, &pd_chan->free_list);
 	list_move(&desc->desc_node, &pd_chan->free_list);
 
-	if (callback)
-		callback(param);
+	dmaengine_desc_callback_invoke(&cb, NULL);
 }
 
 static void pdc_complete_all(struct pch_dma_chan *pd_chan)
@@ -877,6 +876,7 @@ static int pch_dma_probe(struct pci_dev *pdev,
 	}
 
 	pci_set_master(pdev);
+	pd->dma.dev = &pdev->dev;
 
 	err = request_irq(pdev->irq, pd_irq, IRQF_SHARED, DRV_NAME, pd);
 	if (err) {
@@ -892,7 +892,6 @@ static int pch_dma_probe(struct pci_dev *pdev,
 		goto err_free_irq;
 	}
 
-	pd->dma.dev = &pdev->dev;
 
 	INIT_LIST_HEAD(&pd->dma.channels);
 

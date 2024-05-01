@@ -216,6 +216,7 @@ static void dvb_media_device_free(struct dvb_device *dvbdev)
 
 	if (dvbdev->adapter->conn) {
 		media_device_unregister_entity(dvbdev->adapter->conn);
+		kfree(dvbdev->adapter->conn);
 		dvbdev->adapter->conn = NULL;
 		kfree(dvbdev->adapter->conn_pads);
 		dvbdev->adapter->conn_pads = NULL;
@@ -314,8 +315,11 @@ static int dvb_create_media_entity(struct dvb_device *dvbdev,
 	if (npads) {
 		dvbdev->pads = kcalloc(npads, sizeof(*dvbdev->pads),
 				       GFP_KERNEL);
-		if (!dvbdev->pads)
+		if (!dvbdev->pads) {
+			kfree(dvbdev->entity);
+			dvbdev->entity = NULL;
 			return -ENOMEM;
+		}
 	}
 
 	switch (type) {
@@ -676,13 +680,13 @@ int dvb_create_media_graph(struct dvb_adapter *adap,
 					     demux, 0, MEDIA_LNK_FL_ENABLED,
 					     false);
 		if (ret)
-			return -ENOMEM;
+			return ret;
 	}
 	if (demux && ca) {
 		ret = media_create_pad_link(demux, 1, ca,
 					    0, MEDIA_LNK_FL_ENABLED);
 		if (ret)
-			return -ENOMEM;
+			return ret;
 	}
 
 	/* Create demux links for each ringbuffer/pad */

@@ -5,17 +5,14 @@
 #include <linux/list.h>
 #include <linux/rbtree.h>
 #include "event.h"
+#include "map.h"
 #include "symbol.h"
 
 #define HELP_PAD "\t\t\t\t"
 
 #define CALLCHAIN_HELP "setup and enables call-graph (stack chain/backtrace):\n\n"
 
-#ifdef HAVE_DWARF_UNWIND_SUPPORT
 # define RECORD_MODE_HELP  HELP_PAD "record_mode:\tcall graph recording mode (fp|dwarf|lbr)\n"
-#else
-# define RECORD_MODE_HELP  HELP_PAD "record_mode:\tcall graph recording mode (fp|lbr)\n"
-#endif
 
 #define RECORD_SIZE_HELP						\
 	HELP_PAD "record_size:\tif record_mode is 'dwarf', max size of stack recording (<bytes>)\n" \
@@ -94,6 +91,7 @@ struct callchain_param {
 	enum perf_call_graph_mode record_mode;
 	u32			dump_size;
 	enum chain_mode 	mode;
+	u16			max_stack;
 	u32			print_limit;
 	double			min_percent;
 	sort_chain_func_t	sort;
@@ -105,6 +103,7 @@ struct callchain_param {
 };
 
 extern struct callchain_param callchain_param;
+extern struct callchain_param callchain_param_default;
 
 struct callchain_list {
 	u64			ip;
@@ -176,8 +175,13 @@ int callchain_merge(struct callchain_cursor *cursor,
  */
 static inline void callchain_cursor_reset(struct callchain_cursor *cursor)
 {
+	struct callchain_cursor_node *node;
+
 	cursor->nr = 0;
 	cursor->last = &cursor->first;
+
+	for (node = cursor->first; node != NULL; node = node->next)
+		map__zput(node->map);
 }
 
 int callchain_cursor_append(struct callchain_cursor *cursor, u64 ip,
@@ -212,7 +216,14 @@ struct hist_entry;
 int record_parse_callchain_opt(const struct option *opt, const char *arg, int unset);
 int record_callchain_opt(const struct option *opt, const char *arg, int unset);
 
-int sample__resolve_callchain(struct perf_sample *sample, struct symbol **parent,
+struct record_opts;
+
+int record_opts__parse_callchain(struct record_opts *record,
+				 struct callchain_param *callchain,
+				 const char *arg, bool unset);
+
+int sample__resolve_callchain(struct perf_sample *sample,
+			      struct callchain_cursor *cursor, struct symbol **parent,
 			      struct perf_evsel *evsel, struct addr_location *al,
 			      int max_stack);
 int hist_entry__append_callchain(struct hist_entry *he, struct perf_sample *sample);

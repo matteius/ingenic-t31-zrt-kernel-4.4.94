@@ -1994,6 +1994,7 @@ static struct scsi_host_template mptsas_driver_template = {
 	.cmd_per_lun			= 7,
 	.use_clustering			= ENABLE_CLUSTERING,
 	.shost_attrs			= mptscsih_host_attrs,
+	.no_write_same			= 1,
 };
 
 static int mptsas_get_linkerrors(struct sas_phy *phy)
@@ -2281,7 +2282,7 @@ static int mptsas_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
 
 	dma_addr_out = pci_map_single(ioc->pcidev, bio_data(req->bio),
 				      blk_rq_bytes(req), PCI_DMA_BIDIRECTIONAL);
-	if (!dma_addr_out)
+	if (pci_dma_mapping_error(ioc->pcidev, dma_addr_out))
 		goto put_mf;
 	ioc->add_sge(psge, flagsLength, dma_addr_out);
 	psge += ioc->SGE_size;
@@ -2296,7 +2297,7 @@ static int mptsas_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
 	flagsLength |= blk_rq_bytes(rsp) + 4;
 	dma_addr_in =  pci_map_single(ioc->pcidev, bio_data(rsp->bio),
 				      blk_rq_bytes(rsp), PCI_DMA_BIDIRECTIONAL);
-	if (!dma_addr_in)
+	if (pci_dma_mapping_error(ioc->pcidev, dma_addr_in))
 		goto unmap;
 	ioc->add_sge(psge, flagsLength, dma_addr_in);
 

@@ -139,9 +139,10 @@ static int __of_iio_channel_get(struct iio_channel *channel,
 
 	idev = bus_find_device(&iio_bus_type, NULL, iiospec.np,
 			       iio_dev_node_match);
-	of_node_put(iiospec.np);
-	if (idev == NULL)
+	if (idev == NULL) {
+		of_node_put(iiospec.np);
 		return -EPROBE_DEFER;
+	}
 
 	indio_dev = dev_to_iio_dev(idev);
 	channel->indio_dev = indio_dev;
@@ -149,6 +150,7 @@ static int __of_iio_channel_get(struct iio_channel *channel,
 		index = indio_dev->info->of_xlate(indio_dev, &iiospec);
 	else
 		index = __of_iio_simple_xlate(indio_dev, &iiospec);
+	of_node_put(iiospec.np);
 	if (index < 0)
 		goto err_put;
 	channel->channel = &indio_dev->channels[index];
@@ -356,6 +358,54 @@ void iio_channel_release(struct iio_channel *channel)
 }
 EXPORT_SYMBOL_GPL(iio_channel_release);
 
+static void devm_iio_channel_free(struct device *dev, void *res)
+{
+	struct iio_channel *channel = *(struct iio_channel **)res;
+
+	iio_channel_release(channel);
+}
+
+static int devm_iio_channel_match(struct device *dev, void *res, void *data)
+{
+	struct iio_channel **r = res;
+
+	if (!r || !*r) {
+		WARN_ON(!r || !*r);
+		return 0;
+	}
+
+	return *r == data;
+}
+
+struct iio_channel *devm_iio_channel_get(struct device *dev,
+					 const char *channel_name)
+{
+	struct iio_channel **ptr, *channel;
+
+	ptr = devres_alloc(devm_iio_channel_free, sizeof(*ptr), GFP_KERNEL);
+	if (!ptr)
+		return ERR_PTR(-ENOMEM);
+
+	channel = iio_channel_get(dev, channel_name);
+	if (IS_ERR(channel)) {
+		devres_free(ptr);
+		return channel;
+	}
+
+	*ptr = channel;
+	devres_add(dev, ptr);
+
+	return channel;
+}
+EXPORT_SYMBOL_GPL(devm_iio_channel_get);
+
+void devm_iio_channel_release(struct device *dev, struct iio_channel *channel)
+{
+	WARN_ON(devres_release(dev, devm_iio_channel_free,
+			       devm_iio_channel_match, channel));
+}
+EXPORT_SYMBOL_GPL(devm_iio_channel_release);
+
 struct iio_channel *iio_channel_get_all(struct device *dev)
 {
 	const char *name;
@@ -441,6 +491,42 @@ void iio_channel_release_all(struct iio_channel *channels)
 }
 EXPORT_SYMBOL_GPL(iio_channel_release_all);
 
+static void devm_iio_channel_free_all(struct device *dev, void *res)
+{
+	struct iio_channel *channels = *(struct iio_channel **)res;
+
+	iio_channel_release_all(channels);
+}
+
+struct iio_channel *devm_iio_channel_get_all(struct device *dev)
+{
+	struct iio_channel **ptr, *channels;
+
+	ptr = devres_alloc(devm_iio_channel_free_all, sizeof(*ptr), GFP_KERNEL);
+	if (!ptr)
+		return ERR_PTR(-ENOMEM);
+
+	channels = iio_channel_get_all(dev);
+	if (IS_ERR(channels)) {
+		devres_free(ptr);
+		return channels;
+	}
+
+	*ptr = channels;
+	devres_add(dev, ptr);
+
+	return channels;
+}
+EXPORT_SYMBOL_GPL(devm_iio_channel_get_all);
+
+void devm_iio_channel_release_all(struct device *dev,
+				  struct iio_channel *channels)
+{
+	WARN_ON(devres_release(dev, devm_iio_channel_free_all,
+			       devm_iio_channel_match, channels));
+}
+EXPORT_SYMBOL_GPL(devm_iio_channel_release_all);
+
 static int iio_channel_read(struct iio_channel *chan, int *val, int *val2,
 	enum iio_chan_info_enum info)
 {
@@ -452,7 +538,7 @@ static int iio_channel_read(struct iio_channel *chan, int *val, int *val2,
 	if (val2 == NULL)
 		val2 = &unused;
 
-	if(!iio_channel_has_info(chan->channel, info))
+	if (!iio_channel_has_info(chan->channel, info))
 		return -EINVAL;
 
 	if (chan->indio_dev->info->read_raw_multi) {
@@ -507,13 +593,35 @@ EXPORT_SYMBOL_GPL(iio_read_channel_average_raw);
 static int iio_convert_raw_to_processed_unlocked(struct iio_channel *chan,
 	int raw, int *processed, unsigned int scale)
 {
-	int scale_type, scale_val, scale_val2, offset;
+	int scale_type, scale_val, scale_val2;
+	int offset_type, offset_val, offset_val2;
 	s64 raw64 = raw;
-	int ret;
 
-	ret = iio_channel_read(chan, &offset, NULL, IIO_CHAN_INFO_OFFSET);
-	if (ret >= 0)
-		raw64 += offset;
+	offset_type = iio_channel_read(chan, &offset_val, &offset_val2,
+				       IIO_CHAN_INFO_OFFSET);
+	if (offset_type >= 0) {
+		switch (offset_type) {
+		case IIO_VAL_INT:
+			break;
+		case IIO_VAL_INT_PLUS_MICRO:
+		case IIO_VAL_INT_PLUS_NANO:
+			/*
+			 * Both IIO_VAL_INT_PLUS_MICRO and IIO_VAL_INT_PLUS_NANO
+			 * implicitely truncate the offset to it's integer form.
+			 */
+			break;
+		case IIO_VAL_FRACTIONAL:
+			offset_val /= offset_val2;
+			break;
+		case IIO_VAL_FRACTIONAL_LOG2:
+			offset_val >>= offset_val2;
+			break;
+		default:
+			return -EINVAL;
+		}
+
+		raw64 += offset_val;
+	}
 
 	scale_type = iio_channel_read(chan, &scale_val, &scale_val2,
 					IIO_CHAN_INFO_SCALE);
@@ -522,7 +630,7 @@ static int iio_convert_raw_to_processed_unlocked(struct iio_channel *chan,
 
 	switch (scale_type) {
 	case IIO_VAL_INT:
-		*processed = raw64 * scale_val;
+		*processed = raw64 * scale_val * scale;
 		break;
 	case IIO_VAL_INT_PLUS_MICRO:
 		if (scale_val2 < 0)

@@ -73,6 +73,89 @@ MODULE_PARM_DESC(autosuspend, "default autosuspend delay");
 
 
 /**
+ * usb_find_common_endpoints() -- look up common endpoint descriptors
+ * @alt:	alternate setting to search
+ * @bulk_in:	pointer to descriptor pointer, or NULL
+ * @bulk_out:	pointer to descriptor pointer, or NULL
+ * @int_in:	pointer to descriptor pointer, or NULL
+ * @int_out:	pointer to descriptor pointer, or NULL
+ *
+ * Search the alternate setting's endpoint descriptors for the first bulk-in,
+ * bulk-out, interrupt-in and interrupt-out endpoints and return them in the
+ * provided pointers (unless they are NULL).
+ *
+ * If a requested endpoint is not found, the corresponding pointer is set to
+ * NULL.
+ *
+ * Return: Zero if all requested descriptors were found, or -ENXIO otherwise.
+ */
+int usb_find_common_endpoints(struct usb_host_interface *alt,
+		struct usb_endpoint_descriptor **bulk_in,
+		struct usb_endpoint_descriptor **bulk_out,
+		struct usb_endpoint_descriptor **int_in,
+		struct usb_endpoint_descriptor **int_out)
+{
+	struct usb_endpoint_descriptor *epd;
+	int i;
+
+	if (bulk_in)
+		*bulk_in = NULL;
+	if (bulk_out)
+		*bulk_out = NULL;
+	if (int_in)
+		*int_in = NULL;
+	if (int_out)
+		*int_out = NULL;
+
+	for (i = 0; i < alt->desc.bNumEndpoints; ++i) {
+		epd = &alt->endpoint[i].desc;
+
+		switch (usb_endpoint_type(epd)) {
+		case USB_ENDPOINT_XFER_BULK:
+			if (usb_endpoint_dir_in(epd)) {
+				if (bulk_in && !*bulk_in) {
+					*bulk_in = epd;
+					break;
+				}
+			} else {
+				if (bulk_out && !*bulk_out) {
+					*bulk_out = epd;
+					break;
+				}
+			}
+
+			continue;
+		case USB_ENDPOINT_XFER_INT:
+			if (usb_endpoint_dir_in(epd)) {
+				if (int_in && !*int_in) {
+					*int_in = epd;
+					break;
+				}
+			} else {
+				if (int_out && !*int_out) {
+					*int_out = epd;
+					break;
+				}
+			}
+
+			continue;
+		default:
+			continue;
+		}
+
+		if ((!bulk_in || *bulk_in) &&
+				(!bulk_out || *bulk_out) &&
+				(!int_in || *int_in) &&
+				(!int_out || *int_out)) {
+			return 0;
+		}
+	}
+
+	return -ENXIO;
+}
+EXPORT_SYMBOL_GPL(usb_find_common_endpoints);
+
+/**
  * usb_find_alt_setting() - Given a configuration, find the alternate setting
  * for the given interface.
  * @config: the configuration to search (not necessarily the current config).
@@ -91,6 +174,8 @@ struct usb_host_interface *usb_find_alt_setting(
 	struct usb_interface_cache *intf_cache = NULL;
 	int i;
 
+	if (!config)
+		return NULL;
 	for (i = 0; i < config->desc.bNumInterfaces; i++) {
 		if (config->intf_cache[i]->altsetting[0].desc.bInterfaceNumber
 				== iface_num) {
@@ -279,6 +364,8 @@ static void usb_release_dev(struct device *dev)
 
 	usb_destroy_configuration(udev);
 	usb_release_bos_descriptor(udev);
+	if (udev->parent)
+		of_node_put(dev->of_node);
 	usb_put_hcd(hcd);
 	kfree(udev->product);
 	kfree(udev->manufacturer);
@@ -440,7 +527,18 @@ struct usb_device *usb_alloc_dev(struct usb_device *parent,
 	dev->dev.bus = &usb_bus_type;
 	dev->dev.type = &usb_device_type;
 	dev->dev.groups = usb_device_groups;
+	/*
+	 * Fake a dma_mask/offset for the USB device:
+	 * We cannot really use the dma-mapping API (dma_alloc_* and
+	 * dma_map_*) for USB devices but instead need to use
+	 * usb_alloc_coherent and pass data in 'urb's, but some subsystems
+	 * manually look into the mask/offset pair to determine whether
+	 * they need bounce buffers.
+	 * Note: calling dma_set_mask() on a USB device would set the
+	 * mask for the entire HCD, so don't do that.
+	 */
 	dev->dev.dma_mask = bus->controller->dma_mask;
+	dev->dev.dma_pfn_offset = bus->controller->dma_pfn_offset;
 	set_dev_node(&dev->dev, dev_to_node(bus->controller));
 	dev->state = USB_STATE_ATTACHED;
 	dev->lpm_disable_count = 1;
@@ -466,7 +564,6 @@ struct usb_device *usb_alloc_dev(struct usb_device *parent,
 		dev->route = 0;
 
 		dev->dev.parent = bus->controller;
-		dev->dev.of_node = bus->controller->of_node;
 		dev_set_name(&dev->dev, "usb%d", bus->busnum);
 		root_hub = 1;
 	} else {
@@ -682,14 +779,14 @@ EXPORT_SYMBOL_GPL(usb_get_current_frame_number);
  */
 
 int __usb_get_extra_descriptor(char *buffer, unsigned size,
-			       unsigned char type, void **ptr)
+			       unsigned char type, void **ptr, size_t minsize)
 {
 	struct usb_descriptor_header *header;
 
 	while (size >= sizeof(struct usb_descriptor_header)) {
 		header = (struct usb_descriptor_header *)buffer;
 
-		if (header->bLength < 2) {
+		if (header->bLength < 2 || header->bLength > size) {
 			printk(KERN_ERR
 				"%s: bogus descriptor, type %d length %d\n",
 				usbcore_name,
@@ -698,7 +795,7 @@ int __usb_get_extra_descriptor(char *buffer, unsigned size,
 			return -1;
 		}
 
-		if (header->bDescriptorType == type) {
+		if (header->bDescriptorType == type && header->bLength >= minsize) {
 			*ptr = header;
 			return 0;
 		}

@@ -109,6 +109,7 @@ __parse_callchain_report_opt(const char *arg, bool allow_record_opt)
 	bool record_opt_set = false;
 	bool try_stack_size = false;
 
+	callchain_param.enabled = true;
 	symbol_conf.use_callchain = true;
 
 	if (!arg)
@@ -117,6 +118,7 @@ __parse_callchain_report_opt(const char *arg, bool allow_record_opt)
 	while ((tok = strtok((char *)arg, ",")) != NULL) {
 		if (!strncmp(tok, "none", strlen(tok))) {
 			callchain_param.mode = CHAIN_NONE;
+			callchain_param.enabled = false;
 			symbol_conf.use_callchain = false;
 			return 0;
 		}
@@ -191,7 +193,6 @@ int perf_callchain_config(const char *var, const char *value)
 
 	if (!strcmp(var, "record-mode"))
 		return parse_callchain_record_opt(value, &callchain_param);
-#ifdef HAVE_DWARF_UNWIND_SUPPORT
 	if (!strcmp(var, "dump-size")) {
 		unsigned long size = 0;
 		int ret;
@@ -201,7 +202,6 @@ int perf_callchain_config(const char *var, const char *value)
 
 		return ret;
 	}
-#endif
 	if (!strcmp(var, "print-type"))
 		return parse_callchain_mode(value);
 	if (!strcmp(var, "order"))
@@ -437,7 +437,7 @@ fill_node(struct callchain_node *node, struct callchain_cursor *cursor)
 		}
 		call->ip = cursor_node->ip;
 		call->ms.sym = cursor_node->sym;
-		call->ms.map = cursor_node->map;
+		call->ms.map = map__get(cursor_node->map);
 		list_add_tail(&call->list, &node->val);
 
 		callchain_cursor_advance(cursor);
@@ -462,6 +462,7 @@ add_child(struct callchain_node *parent,
 
 		list_for_each_entry_safe(call, tmp, &new->val, list) {
 			list_del(&call->list);
+			map__zput(call->ms.map);
 			free(call);
 		}
 		free(new);
@@ -730,6 +731,7 @@ merge_chain_branch(struct callchain_cursor *cursor,
 		callchain_cursor_append(cursor, list->ip,
 					list->ms.map, list->ms.sym);
 		list_del(&list->list);
+		map__zput(list->ms.map);
 		free(list);
 	}
 
@@ -778,7 +780,8 @@ int callchain_cursor_append(struct callchain_cursor *cursor,
 	}
 
 	node->ip = ip;
-	node->map = map;
+	map__zput(node->map);
+	node->map = map__get(map);
 	node->sym = sym;
 
 	cursor->nr++;
@@ -788,7 +791,8 @@ int callchain_cursor_append(struct callchain_cursor *cursor,
 	return 0;
 }
 
-int sample__resolve_callchain(struct perf_sample *sample, struct symbol **parent,
+int sample__resolve_callchain(struct perf_sample *sample,
+			      struct callchain_cursor *cursor, struct symbol **parent,
 			      struct perf_evsel *evsel, struct addr_location *al,
 			      int max_stack)
 {
@@ -796,8 +800,8 @@ int sample__resolve_callchain(struct perf_sample *sample, struct symbol **parent
 		return 0;
 
 	if (symbol_conf.use_callchain || symbol_conf.cumulate_callchain ||
-	    sort__has_parent) {
-		return thread__resolve_callchain(al->thread, evsel, sample,
+	    perf_hpp_list.parent) {
+		return thread__resolve_callchain(al->thread, cursor, evsel, sample,
 						 parent, al, max_stack);
 	}
 	return 0;
@@ -944,11 +948,13 @@ static void free_callchain_node(struct callchain_node *node)
 
 	list_for_each_entry_safe(list, tmp, &node->parent_val, list) {
 		list_del(&list->list);
+		map__zput(list->ms.map);
 		free(list);
 	}
 
 	list_for_each_entry_safe(list, tmp, &node->val, list) {
 		list_del(&list->list);
+		map__zput(list->ms.map);
 		free(list);
 	}
 
@@ -1012,6 +1018,7 @@ int callchain_node__make_parent_list(struct callchain_node *node)
 				goto out;
 			*new = *chain;
 			new->has_children = false;
+			map__get(new->ms.map);
 			list_add_tail(&new->list, &head);
 		}
 		parent = parent->parent;
@@ -1032,6 +1039,7 @@ int callchain_node__make_parent_list(struct callchain_node *node)
 out:
 	list_for_each_entry_safe(chain, new, &head, list) {
 		list_del(&chain->list);
+		map__zput(chain->ms.map);
 		free(chain);
 	}
 	return -ENOMEM;

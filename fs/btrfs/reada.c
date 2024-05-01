@@ -456,6 +456,8 @@ static struct reada_extent *reada_find_extent(struct btrfs_root *root,
 		}
 		have_zone = 1;
 	}
+	if (!have_zone)
+		radix_tree_delete(&fs_info->reada_tree, index);
 	spin_unlock(&fs_info->reada_lock);
 	btrfs_dev_replace_unlock(&fs_info->dev_replace, 0);
 
@@ -734,21 +736,19 @@ static int reada_start_machine_dev(struct btrfs_fs_info *fs_info,
 static void reada_start_machine_worker(struct btrfs_work *work)
 {
 	struct reada_machine_work *rmw;
-	struct btrfs_fs_info *fs_info;
 	int old_ioprio;
 
 	rmw = container_of(work, struct reada_machine_work, work);
-	fs_info = rmw->fs_info;
-
-	kfree(rmw);
 
 	old_ioprio = IOPRIO_PRIO_VALUE(task_nice_ioclass(current),
 				       task_nice_ioprio(current));
 	set_task_ioprio(current, BTRFS_IOPRIO_READA);
-	__reada_start_machine(fs_info);
+	__reada_start_machine(rmw->fs_info);
 	set_task_ioprio(current, old_ioprio);
 
-	atomic_dec(&fs_info->reada_works_cnt);
+	atomic_dec(&rmw->fs_info->reada_works_cnt);
+
+	kfree(rmw);
 }
 
 static void __reada_start_machine(struct btrfs_fs_info *fs_info)
@@ -759,16 +759,23 @@ static void __reada_start_machine(struct btrfs_fs_info *fs_info)
 	u64 total = 0;
 	int i;
 
+again:
 	do {
 		enqueued = 0;
+		mutex_lock(&fs_devices->device_list_mutex);
 		list_for_each_entry(device, &fs_devices->devices, dev_list) {
 			if (atomic_read(&device->reada_in_flight) <
 			    MAX_IN_FLIGHT)
 				enqueued += reada_start_machine_dev(fs_info,
 								    device);
 		}
+		mutex_unlock(&fs_devices->device_list_mutex);
 		total += enqueued;
 	} while (enqueued && total < 10000);
+	if (fs_devices->seed) {
+		fs_devices = fs_devices->seed;
+		goto again;
+	}
 
 	if (enqueued == 0)
 		return;
@@ -818,7 +825,7 @@ static void dump_devs(struct btrfs_fs_info *fs_info, int all)
 
 	spin_lock(&fs_info->reada_lock);
 	list_for_each_entry(device, &fs_devices->devices, dev_list) {
-		printk(KERN_DEBUG "dev %lld has %d in flight\n", device->devid,
+		btrfs_debug(fs_info, "dev %lld has %d in flight", device->devid,
 			atomic_read(&device->reada_in_flight));
 		index = 0;
 		while (1) {
@@ -827,17 +834,17 @@ static void dump_devs(struct btrfs_fs_info *fs_info, int all)
 						     (void **)&zone, index, 1);
 			if (ret == 0)
 				break;
-			printk(KERN_DEBUG "  zone %llu-%llu elems %llu locked "
-				"%d devs", zone->start, zone->end, zone->elems,
-				zone->locked);
+			pr_debug("  zone %llu-%llu elems %llu locked %d devs",
+				    zone->start, zone->end, zone->elems,
+				    zone->locked);
 			for (j = 0; j < zone->ndevs; ++j) {
-				printk(KERN_CONT " %lld",
+				pr_cont(" %lld",
 					zone->devs[j]->devid);
 			}
 			if (device->reada_curr_zone == zone)
-				printk(KERN_CONT " curr off %llu",
+				pr_cont(" curr off %llu",
 					device->reada_next - zone->start);
-			printk(KERN_CONT "\n");
+			pr_cont("\n");
 			index = (zone->end >> PAGE_SHIFT) + 1;
 		}
 		cnt = 0;
@@ -849,21 +856,20 @@ static void dump_devs(struct btrfs_fs_info *fs_info, int all)
 						     (void **)&re, index, 1);
 			if (ret == 0)
 				break;
-			printk(KERN_DEBUG
-				"  re: logical %llu size %u empty %d scheduled %d",
+			pr_debug("  re: logical %llu size %u empty %d scheduled %d",
 				re->logical, fs_info->tree_root->nodesize,
 				list_empty(&re->extctl), re->scheduled);
 
 			for (i = 0; i < re->nzones; ++i) {
-				printk(KERN_CONT " zone %llu-%llu devs",
+				pr_cont(" zone %llu-%llu devs",
 					re->zones[i]->start,
 					re->zones[i]->end);
 				for (j = 0; j < re->zones[i]->ndevs; ++j) {
-					printk(KERN_CONT " %lld",
+					pr_cont(" %lld",
 						re->zones[i]->devs[j]->devid);
 				}
 			}
-			printk(KERN_CONT "\n");
+			pr_cont("\n");
 			index = (re->logical >> PAGE_SHIFT) + 1;
 			if (++cnt > 15)
 				break;
@@ -883,20 +889,19 @@ static void dump_devs(struct btrfs_fs_info *fs_info, int all)
 			index = (re->logical >> PAGE_SHIFT) + 1;
 			continue;
 		}
-		printk(KERN_DEBUG
-			"re: logical %llu size %u list empty %d scheduled %d",
+		pr_debug("re: logical %llu size %u list empty %d scheduled %d",
 			re->logical, fs_info->tree_root->nodesize,
 			list_empty(&re->extctl), re->scheduled);
 		for (i = 0; i < re->nzones; ++i) {
-			printk(KERN_CONT " zone %llu-%llu devs",
+			pr_cont(" zone %llu-%llu devs",
 				re->zones[i]->start,
 				re->zones[i]->end);
 			for (j = 0; j < re->zones[i]->ndevs; ++j) {
-				printk(KERN_CONT " %lld",
+				pr_cont(" %lld",
 				       re->zones[i]->devs[j]->devid);
 			}
 		}
-		printk(KERN_CONT "\n");
+		pr_cont("\n");
 		index = (re->logical >> PAGE_SHIFT) + 1;
 	}
 	spin_unlock(&fs_info->reada_lock);

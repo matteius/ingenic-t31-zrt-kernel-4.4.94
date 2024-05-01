@@ -147,92 +147,6 @@ static struct bin_attribute sysfs_fw_dump_attr = {
 };
 
 static ssize_t
-qla2x00_sysfs_read_fw_dump_template(struct file *filp, struct kobject *kobj,
-			   struct bin_attribute *bin_attr,
-			   char *buf, loff_t off, size_t count)
-{
-	struct scsi_qla_host *vha = shost_priv(dev_to_shost(container_of(kobj,
-	    struct device, kobj)));
-	struct qla_hw_data *ha = vha->hw;
-
-	if (!ha->fw_dump_template || !ha->fw_dump_template_len)
-		return 0;
-
-	ql_dbg(ql_dbg_user, vha, 0x70e2,
-	    "chunk <- off=%llx count=%zx\n", off, count);
-	return memory_read_from_buffer(buf, count, &off,
-	    ha->fw_dump_template, ha->fw_dump_template_len);
-}
-
-static ssize_t
-qla2x00_sysfs_write_fw_dump_template(struct file *filp, struct kobject *kobj,
-			    struct bin_attribute *bin_attr,
-			    char *buf, loff_t off, size_t count)
-{
-	struct scsi_qla_host *vha = shost_priv(dev_to_shost(container_of(kobj,
-	    struct device, kobj)));
-	struct qla_hw_data *ha = vha->hw;
-	uint32_t size;
-
-	if (off == 0) {
-		if (ha->fw_dump)
-			vfree(ha->fw_dump);
-		if (ha->fw_dump_template)
-			vfree(ha->fw_dump_template);
-
-		ha->fw_dump = NULL;
-		ha->fw_dump_len = 0;
-		ha->fw_dump_template = NULL;
-		ha->fw_dump_template_len = 0;
-
-		size = qla27xx_fwdt_template_size(buf);
-		ql_dbg(ql_dbg_user, vha, 0x70d1,
-		    "-> allocating fwdt (%x bytes)...\n", size);
-		ha->fw_dump_template = vmalloc(size);
-		if (!ha->fw_dump_template) {
-			ql_log(ql_log_warn, vha, 0x70d2,
-			    "Failed allocate fwdt (%x bytes).\n", size);
-			return -ENOMEM;
-		}
-		ha->fw_dump_template_len = size;
-	}
-
-	if (off + count > ha->fw_dump_template_len) {
-		count = ha->fw_dump_template_len - off;
-		ql_dbg(ql_dbg_user, vha, 0x70d3,
-		    "chunk -> truncating to %zx bytes.\n", count);
-	}
-
-	ql_dbg(ql_dbg_user, vha, 0x70d4,
-	    "chunk -> off=%llx count=%zx\n", off, count);
-	memcpy(ha->fw_dump_template + off, buf, count);
-
-	if (off + count == ha->fw_dump_template_len) {
-		size = qla27xx_fwdt_calculate_dump_size(vha);
-		ql_dbg(ql_dbg_user, vha, 0x70d5,
-		    "-> allocating fwdump (%x bytes)...\n", size);
-		ha->fw_dump = vmalloc(size);
-		if (!ha->fw_dump) {
-			ql_log(ql_log_warn, vha, 0x70d6,
-			    "Failed allocate fwdump (%x bytes).\n", size);
-			return -ENOMEM;
-		}
-		ha->fw_dump_len = size;
-	}
-
-	return count;
-}
-static struct bin_attribute sysfs_fw_dump_template_attr = {
-	.attr = {
-		.name = "fw_dump_template",
-		.mode = S_IRUSR | S_IWUSR,
-	},
-	.size = 0,
-	.read = qla2x00_sysfs_read_fw_dump_template,
-	.write = qla2x00_sysfs_write_fw_dump_template,
-};
-
-static ssize_t
 qla2x00_sysfs_read_nvram(struct file *filp, struct kobject *kobj,
 			 struct bin_attribute *bin_attr,
 			 char *buf, loff_t off, size_t count)
@@ -329,12 +243,15 @@ qla2x00_sysfs_read_optrom(struct file *filp, struct kobject *kobj,
 	struct qla_hw_data *ha = vha->hw;
 	ssize_t rval = 0;
 
-	if (ha->optrom_state != QLA_SREADING)
-		return 0;
-
 	mutex_lock(&ha->optrom_mutex);
+
+	if (ha->optrom_state != QLA_SREADING)
+		goto out;
+
 	rval = memory_read_from_buffer(buf, count, &off, ha->optrom_buffer,
 	    ha->optrom_region_size);
+
+out:
 	mutex_unlock(&ha->optrom_mutex);
 
 	return rval;
@@ -349,14 +266,19 @@ qla2x00_sysfs_write_optrom(struct file *filp, struct kobject *kobj,
 	    struct device, kobj)));
 	struct qla_hw_data *ha = vha->hw;
 
-	if (ha->optrom_state != QLA_SWRITING)
+	mutex_lock(&ha->optrom_mutex);
+
+	if (ha->optrom_state != QLA_SWRITING) {
+		mutex_unlock(&ha->optrom_mutex);
 		return -EINVAL;
-	if (off > ha->optrom_region_size)
+	}
+	if (off > ha->optrom_region_size) {
+		mutex_unlock(&ha->optrom_mutex);
 		return -ERANGE;
+	}
 	if (off + count > ha->optrom_region_size)
 		count = ha->optrom_region_size - off;
 
-	mutex_lock(&ha->optrom_mutex);
 	memcpy(&ha->optrom_buffer[off], buf, count);
 	mutex_unlock(&ha->optrom_mutex);
 
@@ -396,6 +318,8 @@ qla2x00_sysfs_write_optrom_ctl(struct file *filp, struct kobject *kobj,
 		return -EINVAL;
 	if (start > ha->optrom_size)
 		return -EINVAL;
+	if (size > ha->optrom_size - start)
+		size = ha->optrom_size - start;
 
 	mutex_lock(&ha->optrom_mutex);
 	switch (val) {
@@ -421,8 +345,7 @@ qla2x00_sysfs_write_optrom_ctl(struct file *filp, struct kobject *kobj,
 		}
 
 		ha->optrom_region_start = start;
-		ha->optrom_region_size = start + size > ha->optrom_size ?
-		    ha->optrom_size - start : size;
+		ha->optrom_region_size = size;
 
 		ha->optrom_state = QLA_SREADING;
 		ha->optrom_buffer = vmalloc(ha->optrom_region_size);
@@ -495,8 +418,7 @@ qla2x00_sysfs_write_optrom_ctl(struct file *filp, struct kobject *kobj,
 		}
 
 		ha->optrom_region_start = start;
-		ha->optrom_region_size = start + size > ha->optrom_size ?
-		    ha->optrom_size - start : size;
+		ha->optrom_region_size = size;
 
 		ha->optrom_state = QLA_SWRITING;
 		ha->optrom_buffer = vmalloc(ha->optrom_region_size);
@@ -760,7 +682,8 @@ qla2x00_sysfs_write_reset(struct file *filp, struct kobject *kobj,
 			break;
 		} else {
 			/* Make sure FC side is not in reset */
-			qla2x00_wait_for_hba_online(vha);
+			WARN_ON_ONCE(qla2x00_wait_for_hba_online(vha) !=
+				     QLA_SUCCESS);
 
 			/* Issue MPI reset */
 			scsi_block_requests(vha->host);
@@ -973,7 +896,6 @@ static struct sysfs_entry {
 	int is4GBp_only;
 } bin_file_entries[] = {
 	{ "fw_dump", &sysfs_fw_dump_attr, },
-	{ "fw_dump_template", &sysfs_fw_dump_template_attr, 0x27 },
 	{ "nvram", &sysfs_nvram_attr, },
 	{ "optrom", &sysfs_optrom_attr, },
 	{ "optrom_ctl", &sysfs_optrom_ctl_attr, },
@@ -999,8 +921,6 @@ qla2x00_alloc_sysfs_attr(scsi_qla_host_t *vha)
 		if (iter->is4GBp_only == 2 && !IS_QLA25XX(vha->hw))
 			continue;
 		if (iter->is4GBp_only == 3 && !(IS_CNA_CAPABLE(vha->hw)))
-			continue;
-		if (iter->is4GBp_only == 0x27 && !IS_QLA27XX(vha->hw))
 			continue;
 
 		ret = sysfs_create_bin_file(&host->shost_gendev.kobj,
@@ -1858,6 +1778,9 @@ qla2x00_terminate_rport_io(struct fc_rport *rport)
 	if (!fcport)
 		return;
 
+	if (test_bit(UNLOADING, &fcport->vha->dpc_flags))
+		return;
+
 	if (test_bit(ABORT_ISP_ACTIVE, &fcport->vha->dpc_flags))
 		return;
 
@@ -1900,10 +1823,9 @@ qla2x00_get_fc_host_stats(struct Scsi_Host *shost)
 	int rval;
 	struct link_statistics *stats;
 	dma_addr_t stats_dma;
-	struct fc_host_statistics *pfc_host_stat;
+	struct fc_host_statistics *p = &vha->fc_host_stat;
 
-	pfc_host_stat = &vha->fc_host_stat;
-	memset(pfc_host_stat, -1, sizeof(struct fc_host_statistics));
+	memset(p, -1, sizeof(*p));
 
 	if (IS_QLAFX00(vha->hw))
 		goto done;
@@ -1918,17 +1840,17 @@ qla2x00_get_fc_host_stats(struct Scsi_Host *shost)
 		goto done;
 
 	stats = dma_alloc_coherent(&ha->pdev->dev,
-	    sizeof(struct link_statistics), &stats_dma, GFP_KERNEL);
-	if (stats == NULL) {
+	    sizeof(*stats), &stats_dma, GFP_KERNEL);
+	if (!stats) {
 		ql_log(ql_log_warn, vha, 0x707d,
 		    "Failed to allocate memory for stats.\n");
 		goto done;
 	}
-	memset(stats, 0, DMA_POOL_SIZE);
+	memset(stats, 0, sizeof(*stats));
 
 	rval = QLA_FUNCTION_FAILED;
 	if (IS_FWI2_CAPABLE(ha)) {
-		rval = qla24xx_get_isp_stats(base_vha, stats, stats_dma);
+		rval = qla24xx_get_isp_stats(base_vha, stats, stats_dma, 0);
 	} else if (atomic_read(&base_vha->loop_state) == LOOP_READY &&
 	    !ha->dpc_active) {
 		/* Must be in a 'READY' state for statistics retrieval. */
@@ -1939,47 +1861,74 @@ qla2x00_get_fc_host_stats(struct Scsi_Host *shost)
 	if (rval != QLA_SUCCESS)
 		goto done_free;
 
-	pfc_host_stat->link_failure_count = stats->link_fail_cnt;
-	pfc_host_stat->loss_of_sync_count = stats->loss_sync_cnt;
-	pfc_host_stat->loss_of_signal_count = stats->loss_sig_cnt;
-	pfc_host_stat->prim_seq_protocol_err_count = stats->prim_seq_err_cnt;
-	pfc_host_stat->invalid_tx_word_count = stats->inval_xmit_word_cnt;
-	pfc_host_stat->invalid_crc_count = stats->inval_crc_cnt;
+	p->link_failure_count = stats->link_fail_cnt;
+	p->loss_of_sync_count = stats->loss_sync_cnt;
+	p->loss_of_signal_count = stats->loss_sig_cnt;
+	p->prim_seq_protocol_err_count = stats->prim_seq_err_cnt;
+	p->invalid_tx_word_count = stats->inval_xmit_word_cnt;
+	p->invalid_crc_count = stats->inval_crc_cnt;
 	if (IS_FWI2_CAPABLE(ha)) {
-		pfc_host_stat->lip_count = stats->lip_cnt;
-		pfc_host_stat->tx_frames = stats->tx_frames;
-		pfc_host_stat->rx_frames = stats->rx_frames;
-		pfc_host_stat->dumped_frames = stats->discarded_frames;
-		pfc_host_stat->nos_count = stats->nos_rcvd;
-		pfc_host_stat->error_frames =
+		p->lip_count = stats->lip_cnt;
+		p->tx_frames = stats->tx_frames;
+		p->rx_frames = stats->rx_frames;
+		p->dumped_frames = stats->discarded_frames;
+		p->nos_count = stats->nos_rcvd;
+		p->error_frames =
 			stats->dropped_frames + stats->discarded_frames;
-		pfc_host_stat->rx_words = vha->qla_stats.input_bytes;
-		pfc_host_stat->tx_words = vha->qla_stats.output_bytes;
+		p->rx_words = vha->qla_stats.input_bytes;
+		p->tx_words = vha->qla_stats.output_bytes;
 	}
-	pfc_host_stat->fcp_control_requests = vha->qla_stats.control_requests;
-	pfc_host_stat->fcp_input_requests = vha->qla_stats.input_requests;
-	pfc_host_stat->fcp_output_requests = vha->qla_stats.output_requests;
-	pfc_host_stat->fcp_input_megabytes = vha->qla_stats.input_bytes >> 20;
-	pfc_host_stat->fcp_output_megabytes = vha->qla_stats.output_bytes >> 20;
-	pfc_host_stat->seconds_since_last_reset =
+	p->fcp_control_requests = vha->qla_stats.control_requests;
+	p->fcp_input_requests = vha->qla_stats.input_requests;
+	p->fcp_output_requests = vha->qla_stats.output_requests;
+	p->fcp_input_megabytes = vha->qla_stats.input_bytes >> 20;
+	p->fcp_output_megabytes = vha->qla_stats.output_bytes >> 20;
+	p->seconds_since_last_reset =
 		get_jiffies_64() - vha->qla_stats.jiffies_at_last_reset;
-	do_div(pfc_host_stat->seconds_since_last_reset, HZ);
+	do_div(p->seconds_since_last_reset, HZ);
 
 done_free:
 	dma_free_coherent(&ha->pdev->dev, sizeof(struct link_statistics),
 	    stats, stats_dma);
 done:
-	return pfc_host_stat;
+	return p;
 }
 
 static void
 qla2x00_reset_host_stats(struct Scsi_Host *shost)
 {
 	scsi_qla_host_t *vha = shost_priv(shost);
+	struct qla_hw_data *ha = vha->hw;
+	struct scsi_qla_host *base_vha = pci_get_drvdata(ha->pdev);
+	struct link_statistics *stats;
+	dma_addr_t stats_dma;
 
+	memset(&vha->qla_stats, 0, sizeof(vha->qla_stats));
 	memset(&vha->fc_host_stat, 0, sizeof(vha->fc_host_stat));
 
 	vha->qla_stats.jiffies_at_last_reset = get_jiffies_64();
+
+	if (IS_FWI2_CAPABLE(ha)) {
+		int rval;
+
+		stats = dma_alloc_coherent(&ha->pdev->dev,
+		    sizeof(*stats), &stats_dma, GFP_KERNEL);
+		if (!stats) {
+			ql_log(ql_log_warn, vha, 0x70d7,
+			    "Failed to allocate memory for stats.\n");
+			return;
+		}
+
+		/* reset firmware statistics */
+		rval = qla24xx_get_isp_stats(base_vha, stats, stats_dma, BIT_0);
+		if (rval != QLA_SUCCESS)
+			ql_log(ql_log_warn, vha, 0x70de,
+			       "Resetting ISP statistics failed: rval = %d\n",
+			       rval);
+
+		dma_free_coherent(&ha->pdev->dev, sizeof(*stats),
+		    stats, stats_dma);
+	}
 }
 
 static void
@@ -2218,8 +2167,6 @@ qla24xx_vport_delete(struct fc_vport *fc_vport)
 		ql_dbg(ql_dbg_user, vha, 0x7086,
 		    "Timer for the VP[%d] has stopped\n", vha->vp_idx);
 	}
-
-	BUG_ON(atomic_read(&vha->vref_count));
 
 	qla2x00_free_fcports(vha);
 

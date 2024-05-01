@@ -113,7 +113,7 @@ struct debug_store {
  * Per register state.
  */
 struct er_account {
-	raw_spinlock_t		lock;	/* per-core: protect structure */
+	raw_spinlock_t      lock;	/* per-core: protect structure */
 	u64                 config;	/* extra MSR config */
 	u64                 reg;	/* extra MSR number */
 	atomic_t            ref;	/* reference count */
@@ -194,12 +194,13 @@ struct cpu_hw_events {
 	 */
 	struct debug_store	*ds;
 	u64			pebs_enabled;
+	int			n_pebs;
+	int			n_large_pebs;
 
 	/*
 	 * Intel LBR bits
 	 */
 	int				lbr_users;
-	void				*lbr_context;
 	struct perf_branch_stack	lbr_stack;
 	struct perf_branch_entry	lbr_entries[MAX_LBR_ENTRIES];
 	struct er_account		*lbr_sel;
@@ -508,6 +509,8 @@ struct x86_pmu {
 	void		(*enable_all)(int added);
 	void		(*enable)(struct perf_event *);
 	void		(*disable)(struct perf_event *);
+	void		(*add)(struct perf_event *);
+	void		(*del)(struct perf_event *);
 	int		(*hw_config)(struct perf_event *event);
 	int		(*schedule_events)(struct cpu_hw_events *cpuc, int n, int *assign);
 	unsigned	eventsel;
@@ -545,7 +548,7 @@ struct x86_pmu {
 	struct x86_pmu_quirk *quirks;
 	int		perfctr_second_write;
 	bool		late_ack;
-	unsigned	(*limit_period)(struct perf_event *event, unsigned l);
+	u64		(*limit_period)(struct perf_event *event, u64 l);
 
 	/*
 	 * sysfs attrs
@@ -601,6 +604,7 @@ struct x86_pmu {
 	u64		lbr_sel_mask;		   /* LBR_SELECT valid bits */
 	const int	*lbr_sel_map;		   /* lbr_select mappings */
 	bool		lbr_double_abort;	   /* duplicated lbr aborts */
+	bool		lbr_pt_coexist;		   /* (LBR|BTS) may coexist with PT */
 
 	/*
 	 * Intel PT/LBR/BTS are exclusive
@@ -622,6 +626,11 @@ struct x86_pmu {
 	 * Intel host/guest support (KVM)
 	 */
 	struct perf_guest_switch_msr *(*guest_get_msrs)(int *nr);
+
+	/*
+	 * Check period value for PERF_EVENT_IOC_PERIOD ioctl.
+	 */
+	int (*check_period) (struct perf_event *event, u64 period);
 };
 
 struct x86_perf_task_context {
@@ -629,6 +638,7 @@ struct x86_perf_task_context {
 	u64 lbr_to[MAX_LBR_ENTRIES];
 	u64 lbr_info[MAX_LBR_ENTRIES];
 	int tos;
+	int valid_lbrs;
 	int lbr_callstack_users;
 	int lbr_stack_state;
 };
@@ -666,6 +676,14 @@ static struct perf_pmu_events_attr event_attr_##v = {			\
 	.id		= 0,						\
 	.event_str	= str,						\
 };
+
+#define EVENT_ATTR_STR_HT(_name, v, noht, ht)				\
+static struct perf_pmu_events_ht_attr event_attr_##v = {		\
+	.attr		= __ATTR(_name, 0444, events_ht_sysfs_show, NULL),\
+	.id		= 0,						\
+	.event_str_noht	= noht,						\
+	.event_str_ht	= ht,						\
+}
 
 extern struct x86_pmu x86_pmu __read_mostly;
 
@@ -753,9 +771,10 @@ void x86_pmu_stop(struct perf_event *event, int flags);
 
 static inline void x86_pmu_disable_event(struct perf_event *event)
 {
+	u64 disable_mask = __this_cpu_read(cpu_hw_events.perf_ctr_virt_mask);
 	struct hw_perf_event *hwc = &event->hw;
 
-	wrmsrl(hwc->config_base, hwc->config);
+	wrmsrl(hwc->config_base, hwc->config & ~disable_mask);
 }
 
 void x86_pmu_enable_event(struct perf_event *event);
@@ -802,6 +821,8 @@ struct attribute **merge_attr(struct attribute **a, struct attribute **b);
 
 ssize_t events_sysfs_show(struct device *dev, struct device_attribute *attr,
 			  char *page);
+ssize_t events_ht_sysfs_show(struct device *dev, struct device_attribute *attr,
+			  char *page);
 
 #ifdef CONFIG_CPU_SUP_AMD
 
@@ -818,13 +839,25 @@ static inline int amd_pmu_init(void)
 
 #ifdef CONFIG_CPU_SUP_INTEL
 
+static inline bool intel_pmu_has_bts_period(struct perf_event *event, u64 period)
+{
+	struct hw_perf_event *hwc = &event->hw;
+	unsigned int hw_event, bts_event;
+
+	if (event->attr.freq)
+		return false;
+
+	hw_event = hwc->config & INTEL_ARCH_EVENT_MASK;
+	bts_event = x86_pmu.event_map(PERF_COUNT_HW_BRANCH_INSTRUCTIONS);
+
+	return hw_event == bts_event && period == 1;
+}
+
 static inline bool intel_pmu_has_bts(struct perf_event *event)
 {
-	if (event->attr.config == PERF_COUNT_HW_BRANCH_INSTRUCTIONS &&
-	    !event->attr.freq && event->hw.sample_period == 1)
-		return true;
+	struct hw_perf_event *hwc = &event->hw;
 
-	return false;
+	return intel_pmu_has_bts_period(event, hwc->sample_period);
 }
 
 int intel_pmu_save_and_restart(struct perf_event *event);
@@ -833,7 +866,8 @@ struct event_constraint *
 x86_get_event_constraints(struct cpu_hw_events *cpuc, int idx,
 			  struct perf_event *event);
 
-struct intel_shared_regs *allocate_shared_regs(int cpu);
+extern int intel_cpuc_prepare(struct cpu_hw_events *cpuc, int cpu);
+extern void intel_cpuc_finish(struct cpu_hw_events *cpuc);
 
 int intel_pmu_init(void);
 
@@ -859,6 +893,8 @@ extern struct event_constraint intel_atom_pebs_event_constraints[];
 
 extern struct event_constraint intel_slm_pebs_event_constraints[];
 
+extern struct event_constraint intel_glm_pebs_event_constraints[];
+
 extern struct event_constraint intel_nehalem_pebs_event_constraints[];
 
 extern struct event_constraint intel_westmere_pebs_event_constraints[];
@@ -875,6 +911,10 @@ extern struct event_constraint intel_skl_pebs_event_constraints[];
 
 struct event_constraint *intel_pebs_constraints(struct perf_event *event);
 
+void intel_pmu_pebs_add(struct perf_event *event);
+
+void intel_pmu_pebs_del(struct perf_event *event);
+
 void intel_pmu_pebs_enable(struct perf_event *event);
 
 void intel_pmu_pebs_disable(struct perf_event *event);
@@ -889,11 +929,13 @@ void intel_ds_init(void);
 
 void intel_pmu_lbr_sched_task(struct perf_event_context *ctx, bool sched_in);
 
+u64 lbr_from_signext_quirk_wr(u64 val);
+
 void intel_pmu_lbr_reset(void);
 
-void intel_pmu_lbr_enable(struct perf_event *event);
+void intel_pmu_lbr_add(struct perf_event *event);
 
-void intel_pmu_lbr_disable(struct perf_event *event);
+void intel_pmu_lbr_del(struct perf_event *event);
 
 void intel_pmu_lbr_enable_all(bool pmi);
 
@@ -906,6 +948,8 @@ void intel_pmu_lbr_init_core(void);
 void intel_pmu_lbr_init_nhm(void);
 
 void intel_pmu_lbr_init_atom(void);
+
+void intel_pmu_lbr_init_slm(void);
 
 void intel_pmu_lbr_init_snb(void);
 
@@ -953,9 +997,13 @@ static inline int intel_pmu_init(void)
 	return 0;
 }
 
-static inline struct intel_shared_regs *allocate_shared_regs(int cpu)
+static inline int intel_cpuc_prepare(struct cpu_hw_events *cpuc, int cpu)
 {
-	return NULL;
+	return 0;
+}
+
+static inline void intel_cpuc_finish(struct cpu_hw_events *cpuc)
+{
 }
 
 static inline int is_ht_workaround_enabled(void)

@@ -17,7 +17,6 @@
 #include <linux/bitmap.h>
 #include <linux/delay.h>
 #include <linux/fs.h>
-#include <linux/kconfig.h>
 #include <linux/pm.h>
 #include <linux/slab.h>
 #include <linux/of.h>
@@ -553,7 +552,6 @@ int rmi_read_register_desc(struct rmi_device *d, u16 addr,
 		goto free_struct_buff;
 
 	reg = find_first_bit(rdesc->presense_map, RMI_REG_DESC_PRESENSE_BITS);
-	map_offset = 0;
 	for (i = 0; i < rdesc->num_registers; i++) {
 		struct rmi_register_desc_item *item = &rdesc->registers[i];
 		int reg_size = struct_buf[offset];
@@ -575,6 +573,8 @@ int rmi_read_register_desc(struct rmi_device *d, u16 addr,
 
 		item->reg = reg;
 		item->reg_size = reg_size;
+
+		map_offset = 0;
 
 		do {
 			for (b = 0; b < 7; b++) {
@@ -772,7 +772,7 @@ static int rmi_create_function(struct rmi_device *rmi_dev,
 
 	error = rmi_register_function(fn);
 	if (error)
-		goto err_put_fn;
+		return error;
 
 	if (pdt->function_number == 0x01)
 		data->f01_container = fn;
@@ -780,10 +780,6 @@ static int rmi_create_function(struct rmi_device *rmi_dev,
 	list_add_tail(&fn->node, &data->function_list);
 
 	return RMI_SCAN_CONTINUE;
-
-err_put_fn:
-	put_device(&fn->dev);
-	return error;
 }
 
 int rmi_driver_suspend(struct rmi_device *rmi_dev)
@@ -995,7 +991,8 @@ static int rmi_driver_probe(struct device *dev)
 	if (data->input) {
 		rmi_driver_set_input_name(rmi_dev, data->input);
 		if (!rmi_dev->xport->input) {
-			if (input_register_device(data->input)) {
+			retval = input_register_device(data->input);
+			if (retval) {
 				dev_err(dev, "%s: Failed to register input device.\n",
 					__func__);
 				goto err_destroy_functions;

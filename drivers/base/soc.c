@@ -6,7 +6,6 @@
  */
 
 #include <linux/sysfs.h>
-#include <linux/module.h>
 #include <linux/init.h>
 #include <linux/stat.h>
 #include <linux/slab.h>
@@ -146,6 +145,7 @@ out2:
 out1:
 	return ERR_PTR(ret);
 }
+EXPORT_SYMBOL_GPL(soc_device_register);
 
 /* Ensure soc_dev->attr is freed prior to calling soc_device_unregister. */
 void soc_device_unregister(struct soc_device *soc_dev)
@@ -154,17 +154,10 @@ void soc_device_unregister(struct soc_device *soc_dev)
 
 	device_unregister(&soc_dev->dev);
 }
+EXPORT_SYMBOL_GPL(soc_device_unregister);
 
 static int __init soc_bus_register(void)
 {
 	return bus_register(&soc_bus_type);
 }
 core_initcall(soc_bus_register);
-
-static void __exit soc_bus_unregister(void)
-{
-	ida_destroy(&soc_ida);
-
-	bus_unregister(&soc_bus_type);
-}
-module_exit(soc_bus_unregister);

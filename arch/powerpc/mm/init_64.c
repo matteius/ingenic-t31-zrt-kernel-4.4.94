@@ -42,6 +42,8 @@
 #include <linux/memblock.h>
 #include <linux/hugetlb.h>
 #include <linux/slab.h>
+#include <linux/of_fdt.h>
+#include <linux/libfdt.h>
 
 #include <asm/pgalloc.h>
 #include <asm/page.h>
@@ -66,11 +68,11 @@
 #include "mmu_decl.h"
 
 #ifdef CONFIG_PPC_STD_MMU_64
-#if PGTABLE_RANGE > USER_VSID_RANGE
+#if H_PGTABLE_RANGE > USER_VSID_RANGE
 #warning Limited user VSID range means pagetable space is wasted
 #endif
 
-#if (TASK_SIZE_USER64 < PGTABLE_RANGE) && (TASK_SIZE_USER64 < USER_VSID_RANGE)
+#if (TASK_SIZE_USER64 < H_PGTABLE_RANGE) && (TASK_SIZE_USER64 < USER_VSID_RANGE)
 #warning TASK_SIZE is smaller than it needs to be.
 #endif
 #endif /* CONFIG_PPC_STD_MMU_64 */
@@ -188,75 +190,6 @@ static int __meminit vmemmap_populated(unsigned long start, int page_size)
 
 	return 0;
 }
-
-/* On hash-based CPUs, the vmemmap is bolted in the hash table.
- *
- * On Book3E CPUs, the vmemmap is currently mapped in the top half of
- * the vmalloc space using normal page tables, though the size of
- * pages encoded in the PTEs can be different
- */
-
-#ifdef CONFIG_PPC_BOOK3E
-static int __meminit vmemmap_create_mapping(unsigned long start,
-					    unsigned long page_size,
-					    unsigned long phys)
-{
-	/* Create a PTE encoding without page size */
-	unsigned long i, flags = _PAGE_PRESENT | _PAGE_ACCESSED |
-		_PAGE_KERNEL_RW;
-
-	/* PTEs only contain page size encodings up to 32M */
-	BUG_ON(mmu_psize_defs[mmu_vmemmap_psize].enc > 0xf);
-
-	/* Encode the size in the PTE */
-	flags |= mmu_psize_defs[mmu_vmemmap_psize].enc << 8;
-
-	/* For each PTE for that area, map things. Note that we don't
-	 * increment phys because all PTEs are of the large size and
-	 * thus must have the low bits clear
-	 */
-	for (i = 0; i < page_size; i += PAGE_SIZE)
-		BUG_ON(map_kernel_page(start + i, phys, flags));
-
-	return 0;
-}
-
-#ifdef CONFIG_MEMORY_HOTPLUG
-static void vmemmap_remove_mapping(unsigned long start,
-				   unsigned long page_size)
-{
-}
-#endif
-#else /* CONFIG_PPC_BOOK3E */
-static int __meminit vmemmap_create_mapping(unsigned long start,
-					    unsigned long page_size,
-					    unsigned long phys)
-{
-	int rc = htab_bolt_mapping(start, start + page_size, phys,
-				   pgprot_val(PAGE_KERNEL),
-				   mmu_vmemmap_psize, mmu_kernel_ssize);
-	if (rc < 0) {
-		int rc2 = htab_remove_mapping(start, start + page_size,
-					      mmu_vmemmap_psize,
-					      mmu_kernel_ssize);
-		BUG_ON(rc2 && (rc2 != -ENOENT));
-	}
-	return rc;
-}
-
-#ifdef CONFIG_MEMORY_HOTPLUG
-static void vmemmap_remove_mapping(unsigned long start,
-				   unsigned long page_size)
-{
-	int rc = htab_remove_mapping(start, start + page_size,
-				     mmu_vmemmap_psize,
-				     mmu_kernel_ssize);
-	BUG_ON((rc < 0) && (rc != -ENOENT));
-	WARN_ON(rc == -ENOENT);
-}
-#endif
-
-#endif /* CONFIG_PPC_BOOK3E */
 
 struct vmemmap_backing *vmemmap_list;
 static struct vmemmap_backing *next;
@@ -480,3 +413,57 @@ struct page *realmode_pfn_to_page(unsigned long pfn)
 EXPORT_SYMBOL_GPL(realmode_pfn_to_page);
 
 #endif /* CONFIG_SPARSEMEM_VMEMMAP/CONFIG_FLATMEM */
+
+#ifdef CONFIG_PPC_STD_MMU_64
+static bool disable_radix;
+static int __init parse_disable_radix(char *p)
+{
+	disable_radix = true;
+	return 0;
+}
+early_param("disable_radix", parse_disable_radix);
+
+/*
+ * If we're running under a hypervisor, we currently can't do radix
+ * since we don't have the code to do the H_REGISTER_PROC_TBL hcall.
+ * We tell that we're running under a hypervisor by looking for the
+ * /chosen/ibm,architecture-vec-5 property.
+ */
+static void early_check_vec5(void)
+{
+	unsigned long root, chosen;
+	int size;
+	const u8 *vec5;
+
+	root = of_get_flat_dt_root();
+	chosen = of_get_flat_dt_subnode_by_name(root, "chosen");
+	if (chosen == -FDT_ERR_NOTFOUND)
+		return;
+	vec5 = of_get_flat_dt_prop(chosen, "ibm,architecture-vec-5", &size);
+	if (!vec5)
+		return;
+	cur_cpu_spec->mmu_features &= ~MMU_FTR_TYPE_RADIX;
+}
+
+void __init mmu_early_init_devtree(void)
+{
+	/* Disable radix mode based on kernel command line. */
+	/* We don't yet have the machinery to do radix as a guest. */
+	if (disable_radix || !(mfmsr() & MSR_HV))
+		cur_cpu_spec->mmu_features &= ~MMU_FTR_TYPE_RADIX;
+
+	/*
+	 * Check /chosen/ibm,architecture-vec-5 if running as a guest.
+	 * When running bare-metal, we can use radix if we like
+	 * even though the ibm,architecture-vec-5 property created by
+	 * skiboot doesn't have the necessary bits set.
+	 */
+	if (early_radix_enabled() && !(mfmsr() & MSR_HV))
+		early_check_vec5();
+
+	if (early_radix_enabled())
+		radix__early_init_devtree();
+	else
+		hash__early_init_devtree();
+}
+#endif /* CONFIG_PPC_STD_MMU_64 */

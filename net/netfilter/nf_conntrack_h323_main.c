@@ -736,7 +736,7 @@ static int callforward_do_filter(struct net *net,
 	const struct nf_afinfo *afinfo;
 	int ret = 0;
 
-	/* rcu_read_lock()ed by nf_hook_slow() */
+	/* rcu_read_lock()ed by nf_hook_thresh */
 	afinfo = nf_get_afinfo(family);
 	if (!afinfo)
 		return 0;
@@ -1225,6 +1225,7 @@ static struct nf_conntrack_helper nf_conntrack_helper_q931[] __read_mostly = {
 	{
 		.name			= "Q.931",
 		.me			= THIS_MODULE,
+		.data_len		= sizeof(struct nf_ct_h323_master),
 		.tuple.src.l3num	= AF_INET6,
 		.tuple.src.u.tcp.port	= cpu_to_be16(Q931_PORT),
 		.tuple.dst.protonum	= IPPROTO_TCP,
@@ -1270,19 +1271,6 @@ static struct nf_conntrack_expect *find_expect(struct nf_conn *ct,
 	if (exp && exp->master == ct)
 		return exp;
 	return NULL;
-}
-
-/****************************************************************************/
-static int set_expect_timeout(struct nf_conntrack_expect *exp,
-			      unsigned int timeout)
-{
-	if (!exp || !del_timer(&exp->timeout))
-		return 0;
-
-	exp->timeout.expires = jiffies + timeout * HZ;
-	add_timer(&exp->timeout);
-
-	return 1;
 }
 
 /****************************************************************************/
@@ -1486,7 +1474,8 @@ static int process_rcf(struct sk_buff *skb, struct nf_conn *ct,
 				 "timeout to %u seconds for",
 				 info->timeout);
 			nf_ct_dump_tuple(&exp->tuple);
-			set_expect_timeout(exp, info->timeout);
+			mod_timer_pending(&exp->timeout,
+					  jiffies + info->timeout * HZ);
 		}
 		spin_unlock_bh(&nf_conntrack_expect_lock);
 	}

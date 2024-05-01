@@ -1156,18 +1156,18 @@ static void ocrdma_get_attr(struct ocrdma_dev *dev,
 	attr->max_srq =
 		(rsp->max_srq_rpir_qps & OCRDMA_MBX_QUERY_CFG_MAX_SRQ_MASK) >>
 		OCRDMA_MBX_QUERY_CFG_MAX_SRQ_OFFSET;
-	attr->max_send_sge = ((rsp->max_write_send_sge &
+	attr->max_send_sge = ((rsp->max_recv_send_sge &
 			       OCRDMA_MBX_QUERY_CFG_MAX_SEND_SGE_MASK) >>
 			      OCRDMA_MBX_QUERY_CFG_MAX_SEND_SGE_SHIFT);
-	attr->max_recv_sge = (rsp->max_write_send_sge &
-			      OCRDMA_MBX_QUERY_CFG_MAX_SEND_SGE_MASK) >>
-	    OCRDMA_MBX_QUERY_CFG_MAX_SEND_SGE_SHIFT;
+	attr->max_recv_sge = (rsp->max_recv_send_sge &
+			      OCRDMA_MBX_QUERY_CFG_MAX_RECV_SGE_MASK) >>
+	    OCRDMA_MBX_QUERY_CFG_MAX_RECV_SGE_SHIFT;
 	attr->max_srq_sge = (rsp->max_srq_rqe_sge &
 			      OCRDMA_MBX_QUERY_CFG_MAX_SRQ_SGE_MASK) >>
 	    OCRDMA_MBX_QUERY_CFG_MAX_SRQ_SGE_OFFSET;
-	attr->max_rdma_sge = (rsp->max_write_send_sge &
-			      OCRDMA_MBX_QUERY_CFG_MAX_WRITE_SGE_MASK) >>
-	    OCRDMA_MBX_QUERY_CFG_MAX_WRITE_SGE_SHIFT;
+	attr->max_rdma_sge = (rsp->max_wr_rd_sge &
+			      OCRDMA_MBX_QUERY_CFG_MAX_RD_SGE_MASK) >>
+	    OCRDMA_MBX_QUERY_CFG_MAX_RD_SGE_SHIFT;
 	attr->max_ord_per_qp = (rsp->max_ird_ord_per_qp &
 				OCRDMA_MBX_QUERY_CFG_MAX_ORD_PER_QP_MASK) >>
 	    OCRDMA_MBX_QUERY_CFG_MAX_ORD_PER_QP_SHIFT;
@@ -2505,7 +2505,6 @@ static int ocrdma_set_av_params(struct ocrdma_qp *qp,
 	u32 vlan_id = 0xFFFF;
 	u8 mac_addr[6], hdr_type;
 	union {
-		struct sockaddr     _sockaddr;
 		struct sockaddr_in  _sockaddr_in;
 		struct sockaddr_in6 _sockaddr_in6;
 	} sgid_addr, dgid_addr;
@@ -2550,8 +2549,8 @@ static int ocrdma_set_av_params(struct ocrdma_qp *qp,
 
 	hdr_type = ib_gid_to_network_type(sgid_attr.gid_type, &sgid);
 	if (hdr_type == RDMA_NETWORK_IPV4) {
-		rdma_gid2ip(&sgid_addr._sockaddr, &sgid);
-		rdma_gid2ip(&dgid_addr._sockaddr, &ah_attr->grh.dgid);
+		rdma_gid2ip((struct sockaddr *)&sgid_addr, &sgid);
+		rdma_gid2ip((struct sockaddr *)&dgid_addr, &ah_attr->grh.dgid);
 		memcpy(&cmd->params.dgid[0],
 		       &dgid_addr._sockaddr_in.sin_addr.s_addr, 4);
 		memcpy(&cmd->params.sgid[0],

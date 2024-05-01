@@ -45,9 +45,6 @@
 #include "si2168.h"
 #include "si2157.h"
 
-/* Max transfer size done by I2C transfer functions */
-#define MAX_XFER_SIZE  80
-
 /* debug */
 static int dvb_usb_cxusb_debug;
 module_param_named(debug, dvb_usb_cxusb_debug, int, 0644);
@@ -61,23 +58,28 @@ DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 static int cxusb_ctrl_msg(struct dvb_usb_device *d,
 			  u8 cmd, u8 *wbuf, int wlen, u8 *rbuf, int rlen)
 {
-	int wo = (rbuf == NULL || rlen == 0); /* write-only */
-	u8 sndbuf[MAX_XFER_SIZE];
+	struct cxusb_state *st = d->priv;
+	int ret;
 
-	if (1 + wlen > sizeof(sndbuf)) {
-		warn("i2c wr: len=%d is too big!\n",
-		     wlen);
+	if (1 + wlen > MAX_XFER_SIZE) {
+		warn("i2c wr: len=%d is too big!\n", wlen);
 		return -EOPNOTSUPP;
 	}
 
-	memset(sndbuf, 0, 1+wlen);
+	if (rlen > MAX_XFER_SIZE) {
+		warn("i2c rd: len=%d is too big!\n", rlen);
+		return -EOPNOTSUPP;
+	}
 
-	sndbuf[0] = cmd;
-	memcpy(&sndbuf[1], wbuf, wlen);
-	if (wo)
-		return dvb_usb_generic_write(d, sndbuf, 1+wlen);
-	else
-		return dvb_usb_generic_rw(d, sndbuf, 1+wlen, rbuf, rlen, 0);
+	mutex_lock(&d->data_mutex);
+	st->data[0] = cmd;
+	memcpy(&st->data[1], wbuf, wlen);
+	ret = dvb_usb_generic_rw(d, st->data, 1 + wlen, st->data, rlen, 0);
+	if (!ret && rbuf && rlen)
+		memcpy(rbuf, st->data, rlen);
+
+	mutex_unlock(&d->data_mutex);
+	return ret;
 }
 
 /* GPIO */
@@ -435,7 +437,8 @@ static int cxusb_rc_query(struct dvb_usb_device *d, u32 *event, int *state)
 	u8 ircode[4];
 	int i;
 
-	cxusb_ctrl_msg(d, CMD_GET_IR_CODE, NULL, 0, ircode, 4);
+	if (cxusb_ctrl_msg(d, CMD_GET_IR_CODE, NULL, 0, ircode, 4) < 0)
+		return 0;
 
 	*event = 0;
 	*state = REMOTE_NO_KEY_PRESSED;
@@ -817,6 +820,8 @@ static int dvico_bluebird_xc2028_callback(void *ptr, int component,
 		break;
 	case XC2028_RESET_CLK:
 		deb_info("%s: XC2028_RESET_CLK %d\n", __func__, arg);
+		break;
+	case XC2028_I2C_FLUSH:
 		break;
 	default:
 		deb_info("%s: unknown command %d, arg %d\n", __func__,
@@ -1786,7 +1791,7 @@ static struct dvb_usb_device_properties cxusb_bluebird_lgz201_properties = {
 
 	.size_of_priv     = sizeof(struct cxusb_state),
 
-	.num_adapters = 2,
+	.num_adapters = 1,
 	.adapter = {
 		{
 		.num_frontends = 1,

@@ -1536,18 +1536,38 @@ static  int wm8350_codec_probe(struct snd_soc_codec *codec)
 	wm8350_clear_bits(wm8350, WM8350_JACK_DETECT,
 			  WM8350_JDL_ENA | WM8350_JDR_ENA);
 
-	wm8350_register_irq(wm8350, WM8350_IRQ_CODEC_JCK_DET_L,
+	ret = wm8350_register_irq(wm8350, WM8350_IRQ_CODEC_JCK_DET_L,
 			    wm8350_hpl_jack_handler, 0, "Left jack detect",
 			    priv);
-	wm8350_register_irq(wm8350, WM8350_IRQ_CODEC_JCK_DET_R,
+	if (ret != 0)
+		goto err;
+
+	ret = wm8350_register_irq(wm8350, WM8350_IRQ_CODEC_JCK_DET_R,
 			    wm8350_hpr_jack_handler, 0, "Right jack detect",
 			    priv);
-	wm8350_register_irq(wm8350, WM8350_IRQ_CODEC_MICSCD,
+	if (ret != 0)
+		goto free_jck_det_l;
+
+	ret = wm8350_register_irq(wm8350, WM8350_IRQ_CODEC_MICSCD,
 			    wm8350_mic_handler, 0, "Microphone short", priv);
-	wm8350_register_irq(wm8350, WM8350_IRQ_CODEC_MICD,
+	if (ret != 0)
+		goto free_jck_det_r;
+
+	ret = wm8350_register_irq(wm8350, WM8350_IRQ_CODEC_MICD,
 			    wm8350_mic_handler, 0, "Microphone detect", priv);
+	if (ret != 0)
+		goto free_micscd;
 
 	return 0;
+
+free_micscd:
+	wm8350_free_irq(wm8350, WM8350_IRQ_CODEC_MICSCD, priv);
+free_jck_det_r:
+	wm8350_free_irq(wm8350, WM8350_IRQ_CODEC_JCK_DET_R, priv);
+free_jck_det_l:
+	wm8350_free_irq(wm8350, WM8350_IRQ_CODEC_JCK_DET_L, priv);
+err:
+	return ret;
 }
 
 static int  wm8350_codec_remove(struct snd_soc_codec *codec)
@@ -1587,19 +1607,21 @@ static struct regmap *wm8350_get_regmap(struct device *dev)
 	return wm8350->regmap;
 }
 
-static struct snd_soc_codec_driver soc_codec_dev_wm8350 = {
+static const struct snd_soc_codec_driver soc_codec_dev_wm8350 = {
 	.probe =	wm8350_codec_probe,
 	.remove =	wm8350_codec_remove,
 	.get_regmap =	wm8350_get_regmap,
 	.set_bias_level = wm8350_set_bias_level,
 	.suspend_bias_off = true,
 
-	.controls = wm8350_snd_controls,
-	.num_controls = ARRAY_SIZE(wm8350_snd_controls),
-	.dapm_widgets = wm8350_dapm_widgets,
-	.num_dapm_widgets = ARRAY_SIZE(wm8350_dapm_widgets),
-	.dapm_routes = wm8350_dapm_routes,
-	.num_dapm_routes = ARRAY_SIZE(wm8350_dapm_routes),
+	.component_driver = {
+		.controls		= wm8350_snd_controls,
+		.num_controls		= ARRAY_SIZE(wm8350_snd_controls),
+		.dapm_widgets		= wm8350_dapm_widgets,
+		.num_dapm_widgets	= ARRAY_SIZE(wm8350_dapm_widgets),
+		.dapm_routes		= wm8350_dapm_routes,
+		.num_dapm_routes	= ARRAY_SIZE(wm8350_dapm_routes),
+	},
 };
 
 static int wm8350_probe(struct platform_device *pdev)

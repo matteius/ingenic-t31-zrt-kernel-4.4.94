@@ -62,12 +62,14 @@ static void mlx5e_timestamp_overflow(struct work_struct *work)
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct mlx5e_tstamp *tstamp = container_of(dwork, struct mlx5e_tstamp,
 						   overflow_work);
+	struct mlx5e_priv *priv = container_of(tstamp, struct mlx5e_priv, tstamp);
 	unsigned long flags;
 
 	write_lock_irqsave(&tstamp->lock, flags);
 	timecounter_read(&tstamp->clock);
 	write_unlock_irqrestore(&tstamp->lock, flags);
-	schedule_delayed_work(&tstamp->overflow_work, tstamp->overflow_period);
+	queue_delayed_work(priv->wq, &tstamp->overflow_work,
+			   msecs_to_jiffies(tstamp->overflow_period * 1000));
 }
 
 int mlx5e_hwstamp_set(struct net_device *dev, struct ifreq *ifr)
@@ -93,6 +95,8 @@ int mlx5e_hwstamp_set(struct net_device *dev, struct ifreq *ifr)
 	/* RX HW timestamp */
 	switch (config.rx_filter) {
 	case HWTSTAMP_FILTER_NONE:
+		/* Reset CQE compression to Admin default */
+		mlx5e_modify_rx_cqe_compression(priv, priv->params.rx_cqe_compress_admin);
 		break;
 	case HWTSTAMP_FILTER_ALL:
 	case HWTSTAMP_FILTER_SOME:
@@ -108,6 +112,8 @@ int mlx5e_hwstamp_set(struct net_device *dev, struct ifreq *ifr)
 	case HWTSTAMP_FILTER_PTP_V2_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_SYNC:
 	case HWTSTAMP_FILTER_PTP_V2_DELAY_REQ:
+		/* Disable CQE compression */
+		mlx5e_modify_rx_cqe_compression(priv, false);
 		config.rx_filter = HWTSTAMP_FILTER_ALL;
 		break;
 	default:
@@ -227,6 +233,7 @@ static void mlx5e_timestamp_init_config(struct mlx5e_tstamp *tstamp)
 void mlx5e_timestamp_init(struct mlx5e_priv *priv)
 {
 	struct mlx5e_tstamp *tstamp = &priv->tstamp;
+	u64 overflow_cycles;
 	u64 ns;
 	u64 frac = 0;
 	u32 dev_freq;
@@ -251,15 +258,22 @@ void mlx5e_timestamp_init(struct mlx5e_priv *priv)
 
 	/* Calculate period in seconds to call the overflow watchdog - to make
 	 * sure counter is checked at least once every wrap around.
+	 * The period is calculated as the minimum between max HW cycles count
+	 * (The clock source mask) and max amount of cycles that can be
+	 * multiplied by clock multiplier where the result doesn't exceed
+	 * 64bits.
 	 */
-	ns = cyclecounter_cyc2ns(&tstamp->cycles, tstamp->cycles.mask,
+	overflow_cycles = div64_u64(~0ULL >> 1, tstamp->cycles.mult);
+	overflow_cycles = min(overflow_cycles, tstamp->cycles.mask >> 1);
+
+	ns = cyclecounter_cyc2ns(&tstamp->cycles, overflow_cycles,
 				 frac, &frac);
-	do_div(ns, NSEC_PER_SEC / 2 / HZ);
+	do_div(ns, NSEC_PER_SEC / HZ);
 	tstamp->overflow_period = ns;
 
 	INIT_DELAYED_WORK(&tstamp->overflow_work, mlx5e_timestamp_overflow);
 	if (tstamp->overflow_period)
-		schedule_delayed_work(&tstamp->overflow_work, 0);
+		queue_delayed_work(priv->wq, &tstamp->overflow_work, 0);
 	else
 		mlx5_core_warn(priv->mdev, "invalid overflow period, overflow_work is not scheduled\n");
 
@@ -269,7 +283,7 @@ void mlx5e_timestamp_init(struct mlx5e_priv *priv)
 
 	tstamp->ptp = ptp_clock_register(&tstamp->ptp_info,
 					 &priv->mdev->pdev->dev);
-	if (IS_ERR_OR_NULL(tstamp->ptp)) {
+	if (IS_ERR(tstamp->ptp)) {
 		mlx5_core_warn(priv->mdev, "ptp_clock_register failed %ld\n",
 			       PTR_ERR(tstamp->ptp));
 		tstamp->ptp = NULL;

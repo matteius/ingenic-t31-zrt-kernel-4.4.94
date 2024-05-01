@@ -13,6 +13,7 @@
 
 #include <drm/drmP.h>
 
+#include "sti_drv.h"
 #include "sti_vtg.h"
 
 #define VTG_MODE_MASTER         0
@@ -65,14 +66,14 @@
 #define HDMI_DELAY          (5)
 
 /* Delay introduced by the DVO in nb of pixel */
-#define DVO_DELAY           (2)
+#define DVO_DELAY           (7)
 
 /* delay introduced by the Arbitrary Waveform Generator in nb of pixels */
 #define AWG_DELAY_HD        (-9)
 #define AWG_DELAY_ED        (-8)
 #define AWG_DELAY_SD        (-7)
 
-LIST_HEAD(vtg_lookup);
+static LIST_HEAD(vtg_lookup);
 
 /*
  * STI VTG register offset structure
@@ -428,16 +429,21 @@ static int vtg_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 	vtg->regs = devm_ioremap_nocache(dev, res->start, resource_size(res));
+	if (!vtg->regs) {
+		DRM_ERROR("failed to remap I/O memory\n");
+		return -ENOMEM;
+	}
 
 	np = of_parse_phandle(pdev->dev.of_node, "st,slave", 0);
 	if (np) {
 		vtg->slave = of_vtg_find(np);
+		of_node_put(np);
 
 		if (!vtg->slave)
 			return -EPROBE_DEFER;
 	} else {
 		vtg->irq = platform_get_irq(pdev, 0);
-		if (IS_ERR_VALUE(vtg->irq)) {
+		if (vtg->irq < 0) {
 			DRM_ERROR("Failed to get VTG interrupt\n");
 			return vtg->irq;
 		}
@@ -447,7 +453,7 @@ static int vtg_probe(struct platform_device *pdev)
 		ret = devm_request_threaded_irq(dev, vtg->irq, vtg_irq,
 				vtg_irq_thread, IRQF_ONESHOT,
 				dev_name(dev), vtg);
-		if (IS_ERR_VALUE(ret)) {
+		if (ret < 0) {
 			DRM_ERROR("Failed to register VTG interrupt\n");
 			return ret;
 		}

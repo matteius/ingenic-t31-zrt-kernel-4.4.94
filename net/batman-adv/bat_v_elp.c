@@ -19,6 +19,7 @@
 #include "main.h"
 
 #include <linux/atomic.h>
+#include <linux/bitops.h>
 #include <linux/byteorder/generic.h>
 #include <linux/errno.h>
 #include <linux/etherdevice.h>
@@ -29,6 +30,7 @@
 #include <linux/kernel.h>
 #include <linux/kref.h>
 #include <linux/netdevice.h>
+#include <linux/nl80211.h>
 #include <linux/random.h>
 #include <linux/rculist.h>
 #include <linux/rcupdate.h>
@@ -43,6 +45,7 @@
 #include "bat_algo.h"
 #include "bat_v_ogm.h"
 #include "hard-interface.h"
+#include "log.h"
 #include "originator.h"
 #include "packet.h"
 #include "routing.h"
@@ -99,8 +102,12 @@ static u32 batadv_v_elp_get_throughput(struct batadv_hardif_neigh_node *neigh)
 				 */
 				return 0;
 			}
-			if (!ret)
-				return sinfo.expected_throughput / 100;
+			if (ret)
+				goto default_throughput;
+			if (!(sinfo.filled & BIT(NL80211_STA_INFO_EXPECTED_THROUGHPUT)))
+				goto default_throughput;
+
+			return sinfo.expected_throughput / 100;
 		}
 
 		/* unsupported WiFi driver version */
@@ -184,6 +191,7 @@ batadv_v_elp_wifi_neigh_probe(struct batadv_hardif_neigh_node *neigh)
 	struct sk_buff *skb;
 	int probe_len, i;
 	int elp_skb_len;
+	void *tmp;
 
 	/* this probing routine is for Wifi neighbours only */
 	if (!batadv_is_wifi_netdev(hard_iface->net_dev))
@@ -215,7 +223,8 @@ batadv_v_elp_wifi_neigh_probe(struct batadv_hardif_neigh_node *neigh)
 		 * the packet to be exactly of that size to make the link
 		 * throughput estimation effective.
 		 */
-		skb_put(skb, probe_len - hard_iface->bat_v.elp_skb->len);
+		tmp = skb_put(skb, probe_len - hard_iface->bat_v.elp_skb->len);
+		memset(tmp, 0, probe_len - hard_iface->bat_v.elp_skb->len);
 
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 			   "Sending unicast (probe) ELP packet on interface %s to %pM\n",
@@ -242,6 +251,7 @@ static void batadv_v_elp_periodic_work(struct work_struct *work)
 	struct batadv_priv *bat_priv;
 	struct sk_buff *skb;
 	u32 elp_interval;
+	bool ret;
 
 	bat_v = container_of(work, struct batadv_hard_iface_bat_v, elp_wq.work);
 	hard_iface = container_of(bat_v, struct batadv_hard_iface, bat_v);
@@ -303,8 +313,11 @@ static void batadv_v_elp_periodic_work(struct work_struct *work)
 		 * may sleep and that is not allowed in an rcu protected
 		 * context. Therefore schedule a task for that.
 		 */
-		queue_work(batadv_event_workqueue,
-			   &hardif_neigh->bat_v.metric_work);
+		ret = queue_work(batadv_event_workqueue,
+				 &hardif_neigh->bat_v.metric_work);
+
+		if (!ret)
+			batadv_hardif_neigh_put(hardif_neigh);
 	}
 	rcu_read_unlock();
 
@@ -322,21 +335,23 @@ out:
  */
 int batadv_v_elp_iface_enable(struct batadv_hard_iface *hard_iface)
 {
+	static const size_t tvlv_padding = sizeof(__be32);
 	struct batadv_elp_packet *elp_packet;
 	unsigned char *elp_buff;
 	u32 random_seqno;
 	size_t size;
 	int res = -ENOMEM;
 
-	size = ETH_HLEN + NET_IP_ALIGN + BATADV_ELP_HLEN;
+	size = ETH_HLEN + NET_IP_ALIGN + BATADV_ELP_HLEN + tvlv_padding;
 	hard_iface->bat_v.elp_skb = dev_alloc_skb(size);
 	if (!hard_iface->bat_v.elp_skb)
 		goto out;
 
 	skb_reserve(hard_iface->bat_v.elp_skb, ETH_HLEN + NET_IP_ALIGN);
-	elp_buff = skb_push(hard_iface->bat_v.elp_skb, BATADV_ELP_HLEN);
+	elp_buff = skb_put(hard_iface->bat_v.elp_skb,
+			   BATADV_ELP_HLEN + tvlv_padding);
 	elp_packet = (struct batadv_elp_packet *)elp_buff;
-	memset(elp_packet, 0, BATADV_ELP_HLEN);
+	memset(elp_packet, 0, BATADV_ELP_HLEN + tvlv_padding);
 
 	elp_packet->packet_type = BATADV_ELP;
 	elp_packet->version = BATADV_COMPAT_VERSION;
@@ -344,7 +359,6 @@ int batadv_v_elp_iface_enable(struct batadv_hard_iface *hard_iface)
 	/* randomize initial seqno to avoid collision */
 	get_random_bytes(&random_seqno, sizeof(random_seqno));
 	atomic_set(&hard_iface->bat_v.elp_seqno, random_seqno);
-	atomic_set(&hard_iface->bat_v.elp_interval, 500);
 
 	/* assume full-duplex by default */
 	hard_iface->bat_v.flags |= BATADV_FULL_DUPLEX;
@@ -377,6 +391,27 @@ void batadv_v_elp_iface_disable(struct batadv_hard_iface *hard_iface)
 }
 
 /**
+ * batadv_v_elp_iface_activate - update the ELP buffer belonging to the given
+ *  hard-interface
+ * @primary_iface: the new primary interface
+ * @hard_iface: interface holding the to-be-updated buffer
+ */
+void batadv_v_elp_iface_activate(struct batadv_hard_iface *primary_iface,
+				 struct batadv_hard_iface *hard_iface)
+{
+	struct batadv_elp_packet *elp_packet;
+	struct sk_buff *skb;
+
+	if (!hard_iface->bat_v.elp_skb)
+		return;
+
+	skb = hard_iface->bat_v.elp_skb;
+	elp_packet = (struct batadv_elp_packet *)skb->data;
+	ether_addr_copy(elp_packet->orig,
+			primary_iface->net_dev->dev_addr);
+}
+
+/**
  * batadv_v_elp_primary_iface_set - change internal data to reflect the new
  *  primary interface
  * @primary_iface: the new primary interface
@@ -384,8 +419,6 @@ void batadv_v_elp_iface_disable(struct batadv_hard_iface *hard_iface)
 void batadv_v_elp_primary_iface_set(struct batadv_hard_iface *primary_iface)
 {
 	struct batadv_hard_iface *hard_iface;
-	struct batadv_elp_packet *elp_packet;
-	struct sk_buff *skb;
 
 	/* update orig field of every elp iface belonging to this mesh */
 	rcu_read_lock();
@@ -393,13 +426,7 @@ void batadv_v_elp_primary_iface_set(struct batadv_hard_iface *primary_iface)
 		if (primary_iface->soft_iface != hard_iface->soft_iface)
 			continue;
 
-		if (!hard_iface->bat_v.elp_skb)
-			continue;
-
-		skb = hard_iface->bat_v.elp_skb;
-		elp_packet = (struct batadv_elp_packet *)skb->data;
-		ether_addr_copy(elp_packet->orig,
-				primary_iface->net_dev->dev_addr);
+		batadv_v_elp_iface_activate(primary_iface, hard_iface);
 	}
 	rcu_read_unlock();
 }
@@ -430,7 +457,8 @@ static void batadv_v_elp_neigh_update(struct batadv_priv *bat_priv,
 	if (!orig_neigh)
 		return;
 
-	neigh = batadv_neigh_node_new(orig_neigh, if_incoming, neigh_addr);
+	neigh = batadv_neigh_node_get_or_create(orig_neigh,
+						if_incoming, neigh_addr);
 	if (!neigh)
 		goto orig_free;
 
@@ -490,7 +518,7 @@ int batadv_v_elp_packet_recv(struct sk_buff *skb,
 	/* did we receive a B.A.T.M.A.N. V ELP packet on an interface
 	 * that does not have B.A.T.M.A.N. V ELP enabled ?
 	 */
-	if (strcmp(bat_priv->bat_algo_ops->name, "BATMAN_V") != 0)
+	if (strcmp(bat_priv->algo_ops->name, "BATMAN_V") != 0)
 		return NET_RX_DROP;
 
 	elp_packet = (struct batadv_elp_packet *)skb->data;

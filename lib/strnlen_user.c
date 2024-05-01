@@ -27,7 +27,7 @@
 static inline long do_strnlen_user(const char __user *src, unsigned long count, unsigned long max)
 {
 	const struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;
-	long align, res = 0;
+	unsigned long align, res = 0;
 	unsigned long c;
 
 	/*
@@ -41,12 +41,11 @@ static inline long do_strnlen_user(const char __user *src, unsigned long count, 
 	 * Do everything aligned. But that means that we
 	 * need to also expand the maximum..
 	 */
-	align = (sizeof(long) - 1) & (unsigned long)src;
+	align = (sizeof(unsigned long) - 1) & (unsigned long)src;
 	src -= align;
 	max += align;
 
-	if (unlikely(unsafe_get_user(c,(unsigned long __user *)src)))
-		return 0;
+	unsafe_get_user(c, (unsigned long __user *)src, efault);
 	c |= aligned_byte_mask(align);
 
 	for (;;) {
@@ -61,8 +60,7 @@ static inline long do_strnlen_user(const char __user *src, unsigned long count, 
 		if (unlikely(max <= sizeof(unsigned long)))
 			break;
 		max -= sizeof(unsigned long);
-		if (unlikely(unsafe_get_user(c,(unsigned long __user *)(src+res))))
-			return 0;
+		unsafe_get_user(c, (unsigned long __user *)(src+res), efault);
 	}
 	res -= align;
 
@@ -77,6 +75,7 @@ static inline long do_strnlen_user(const char __user *src, unsigned long count, 
 	 * Nope: we hit the address space limit, and we still had more
 	 * characters the caller would have wanted. That's 0.
 	 */
+efault:
 	return 0;
 }
 

@@ -246,7 +246,7 @@ config XEN_ACPI_HOTPLUG_CPU
 
 config XEN_ACPI_PROCESSOR
 	tristate "Xen ACPI processor"
-	depends on XEN && X86 && ACPI_PROCESSOR && CPU_FREQ
+	depends on XEN && XEN_DOM0 && X86 && ACPI_PROCESSOR && CPU_FREQ
 	default m
 	help
           This ACPI processor uploads Power Management information to the Xen
@@ -275,7 +275,7 @@ config XEN_HAVE_PVMMU
 
 config XEN_EFI
 	def_bool y
-	depends on X86_64 && EFI
+	depends on (ARM || ARM64 || X86_64) && EFI
 
 config XEN_AUTO_XLATE
 	def_bool y

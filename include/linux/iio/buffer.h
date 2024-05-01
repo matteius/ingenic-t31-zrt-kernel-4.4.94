@@ -61,7 +61,7 @@ struct iio_buffer_access_funcs {
 	int (*request_update)(struct iio_buffer *buffer);
 
 	int (*set_bytes_per_datum)(struct iio_buffer *buffer, size_t bpd);
-	int (*set_length)(struct iio_buffer *buffer, int length);
+	int (*set_length)(struct iio_buffer *buffer, unsigned int length);
 
 	int (*enable)(struct iio_buffer *buffer, struct iio_dev *indio_dev);
 	int (*disable)(struct iio_buffer *buffer, struct iio_dev *indio_dev);
@@ -83,10 +83,12 @@ struct iio_buffer_access_funcs {
  * @access:		[DRIVER] buffer access functions associated with the
  *			implementation.
  * @scan_el_dev_attr_list:[INTERN] list of scan element related attributes.
+ * @buffer_group:	[INTERN] attributes of the buffer group
  * @scan_el_group:	[DRIVER] attribute group for those attributes not
  *			created from the iio_chan_info array.
  * @pollq:		[INTERN] wait queue to allow for polling on the buffer.
  * @stufftoread:	[INTERN] flag to indicate new data.
+ * @attrs:		[INTERN] standard attributes of the buffer
  * @demux_list:		[INTERN] list of operations required to demux the scan.
  * @demux_bounce:	[INTERN] buffer for doing gather from incoming scan.
  * @buffer_list:	[INTERN] entry in the devices list of current buffers.
@@ -94,8 +96,8 @@ struct iio_buffer_access_funcs {
  * @watermark:		[INTERN] number of datums to wait for poll/read.
  */
 struct iio_buffer {
-	int					length;
-	int					bytes_per_datum;
+	unsigned int				length;
+	size_t					bytes_per_datum;
 	struct attribute_group			*scan_el_attrs;
 	long					*scan_mask;
 	bool					scan_timestamp;

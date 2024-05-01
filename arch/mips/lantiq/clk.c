@@ -4,7 +4,7 @@
  *  by the Free Software Foundation.
  *
  * Copyright (C) 2010 Thomas Langer <thomas.langer@lantiq.com>
- * Copyright (C) 2010 John Crispin <blogic@openwrt.org>
+ * Copyright (C) 2010 John Crispin <john@phrozen.org>
  */
 #include <linux/io.h>
 #include <linux/export.h>
@@ -52,6 +52,7 @@ struct clk *clk_get_io(void)
 {
 	return &cpu_clk_generic[2];
 }
+EXPORT_SYMBOL_GPL(clk_get_io);
 
 struct clk *clk_get_ppe(void)
 {
@@ -164,6 +165,12 @@ struct clk *of_clk_get_from_provider(struct of_phandle_args *clkspec)
 {
 	return NULL;
 }
+
+int clk_set_parent(struct clk *clk, struct clk *parent)
+{
+	return 0;
+}
+EXPORT_SYMBOL(clk_set_parent);
 
 static inline u32 get_counter_resolution(void)
 {

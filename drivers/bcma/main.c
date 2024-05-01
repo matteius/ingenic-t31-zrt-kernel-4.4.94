@@ -209,6 +209,8 @@ static void bcma_of_fill_device(struct platform_device *parent,
 		core->dev.of_node = node;
 
 	core->irq = bcma_of_get_irq(parent, core, 0);
+
+	of_dma_configure(&core->dev, node);
 }
 
 unsigned int bcma_core_irq(struct bcma_device *core, int num)
@@ -237,6 +239,7 @@ EXPORT_SYMBOL(bcma_core_irq);
 
 void bcma_prepare_core(struct bcma_bus *bus, struct bcma_device *core)
 {
+	device_initialize(&core->dev);
 	core->dev.release = bcma_release_core_dev;
 	core->dev.bus = &bcma_bus_type;
 	dev_set_name(&core->dev, "bcma%d:%d", bus->num, core->core_index);
@@ -248,12 +251,12 @@ void bcma_prepare_core(struct bcma_bus *bus, struct bcma_device *core)
 		core->irq = bus->host_pci->irq;
 		break;
 	case BCMA_HOSTTYPE_SOC:
-		core->dev.dma_mask = &core->dev.coherent_dma_mask;
-		if (bus->host_pdev) {
+		if (IS_ENABLED(CONFIG_OF) && bus->host_pdev) {
 			core->dma_dev = &bus->host_pdev->dev;
 			core->dev.parent = &bus->host_pdev->dev;
 			bcma_of_fill_device(bus->host_pdev, core);
 		} else {
+			core->dev.dma_mask = &core->dev.coherent_dma_mask;
 			core->dma_dev = &core->dev;
 		}
 		break;
@@ -300,11 +303,10 @@ static void bcma_register_core(struct bcma_bus *bus, struct bcma_device *core)
 {
 	int err;
 
-	err = device_register(&core->dev);
+	err = device_add(&core->dev);
 	if (err) {
 		bcma_err(bus, "Could not register dev for core 0x%03X\n",
 			 core->id.id);
-		put_device(&core->dev);
 		return;
 	}
 	core->dev_registered = true;
@@ -395,7 +397,7 @@ void bcma_unregister_cores(struct bcma_bus *bus)
 	/* Now noone uses internally-handled cores, we can free them */
 	list_for_each_entry_safe(core, tmp, &bus->cores, list) {
 		list_del(&core->list);
-		kfree(core);
+		put_device(&core->dev);
 	}
 }
 
@@ -631,8 +633,11 @@ static int bcma_device_probe(struct device *dev)
 					       drv);
 	int err = 0;
 
+	get_device(dev);
 	if (adrv->probe)
 		err = adrv->probe(core);
+	if (err)
+		put_device(dev);
 
 	return err;
 }
@@ -645,6 +650,7 @@ static int bcma_device_remove(struct device *dev)
 
 	if (adrv->remove)
 		adrv->remove(core);
+	put_device(dev);
 
 	return 0;
 }

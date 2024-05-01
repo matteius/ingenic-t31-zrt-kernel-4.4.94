@@ -29,6 +29,7 @@
 #include <linux/types.h>
 #include <linux/ptrace.h>
 #include <linux/percpu.h>
+#include <linux/module.h>
 #include <asm/probes.h>
 #include <asm/code-patching.h>
 
@@ -40,8 +41,7 @@ struct kprobe;
 typedef ppc_opcode_t kprobe_opcode_t;
 #define MAX_INSN_SIZE 1
 
-#ifdef CONFIG_PPC64
-#if defined(_CALL_ELF) && _CALL_ELF == 2
+#ifdef PPC64_ELF_ABI_v2
 /* PPC64 ABIv2 needs local entry point */
 #define kprobe_lookup_name(name, addr)					\
 {									\
@@ -49,7 +49,7 @@ typedef ppc_opcode_t kprobe_opcode_t;
 	if (addr)							\
 		addr = (kprobe_opcode_t *)ppc_function_entry(addr);	\
 }
-#else
+#elif defined(PPC64_ELF_ABI_v1)
 /*
  * 64bit powerpc ABIv1 uses function descriptors:
  * - Check for the dot variant of the symbol first.
@@ -61,7 +61,7 @@ typedef ppc_opcode_t kprobe_opcode_t;
 #define kprobe_lookup_name(name, addr)					\
 {									\
 	char dot_name[MODULE_NAME_LEN + 1 + KSYM_NAME_LEN];		\
-	char *modsym;							\
+	const char *modsym;							\
 	bool dot_appended = false;					\
 	if ((modsym = strchr(name, ':')) != NULL) {			\
 		modsym++;						\
@@ -92,8 +92,7 @@ typedef ppc_opcode_t kprobe_opcode_t;
 		addr = (kprobe_opcode_t *)kallsyms_lookup_name(name);	\
 	}								\
 }
-#endif /* defined(_CALL_ELF) && _CALL_ELF == 2 */
-#endif /* CONFIG_PPC64 */
+#endif
 
 #define flush_insn_slot(p)	do { } while (0)
 #define kretprobe_blacklist_size 0

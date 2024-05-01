@@ -209,7 +209,7 @@ acpi_ds_detect_named_opcodes(struct acpi_walk_state *walk_state,
  ******************************************************************************/
 
 acpi_status
-acpi_ds_method_error(acpi_status status, struct acpi_walk_state * walk_state)
+acpi_ds_method_error(acpi_status status, struct acpi_walk_state *walk_state)
 {
 	u32 aml_offset;
 
@@ -547,7 +547,7 @@ acpi_ds_call_control_method(struct acpi_thread_state *thread,
 	info = ACPI_ALLOCATE_ZEROED(sizeof(struct acpi_evaluate_info));
 	if (!info) {
 		status = AE_NO_MEMORY;
-		goto cleanup;
+		goto pop_walk_state;
 	}
 
 	info->parameters = &this_walk_state->operands[0];
@@ -559,7 +559,7 @@ acpi_ds_call_control_method(struct acpi_thread_state *thread,
 
 	ACPI_FREE(info);
 	if (ACPI_FAILURE(status)) {
-		goto cleanup;
+		goto pop_walk_state;
 	}
 
 	/*
@@ -590,6 +590,12 @@ acpi_ds_call_control_method(struct acpi_thread_state *thread,
 	}
 
 	return_ACPI_STATUS(status);
+
+pop_walk_state:
+
+	/* On error, pop the walk state to be deleted from thread */
+
+	acpi_ds_pop_walk_state(thread);
 
 cleanup:
 
@@ -725,6 +731,43 @@ acpi_ds_terminate_control_method(union acpi_operand_object *method_desc,
 		acpi_ds_method_data_delete_all(walk_state);
 
 		/*
+		 * Delete any namespace objects created anywhere within the
+		 * namespace by the execution of this method. Unless:
+		 * 1) This method is a module-level executable code method, in which
+		 *    case we want make the objects permanent.
+		 * 2) There are other threads executing the method, in which case we
+		 *    will wait until the last thread has completed.
+		 */
+		if (!(method_desc->method.info_flags & ACPI_METHOD_MODULE_LEVEL)
+		    && (method_desc->method.thread_count == 1)) {
+
+			/* Delete any direct children of (created by) this method */
+
+			(void)acpi_ex_exit_interpreter();
+			acpi_ns_delete_namespace_subtree(walk_state->
+							 method_node);
+			(void)acpi_ex_enter_interpreter();
+
+			/*
+			 * Delete any objects that were created by this method
+			 * elsewhere in the namespace (if any were created).
+			 * Use of the ACPI_METHOD_MODIFIED_NAMESPACE optimizes the
+			 * deletion such that we don't have to perform an entire
+			 * namespace walk for every control method execution.
+			 */
+			if (method_desc->method.
+			    info_flags & ACPI_METHOD_MODIFIED_NAMESPACE) {
+				(void)acpi_ex_exit_interpreter();
+				acpi_ns_delete_namespace_by_owner(method_desc->
+								  method.
+								  owner_id);
+				(void)acpi_ex_enter_interpreter();
+				method_desc->method.info_flags &=
+				    ~ACPI_METHOD_MODIFIED_NAMESPACE;
+			}
+		}
+
+		/*
 		 * If method is serialized, release the mutex and restore the
 		 * current sync level for this thread
 		 */
@@ -741,39 +784,6 @@ acpi_ds_terminate_control_method(union acpi_operand_object *method_desc,
 				acpi_os_release_mutex(method_desc->method.
 						      mutex->mutex.os_mutex);
 				method_desc->method.mutex->mutex.thread_id = 0;
-			}
-		}
-
-		/*
-		 * Delete any namespace objects created anywhere within the
-		 * namespace by the execution of this method. Unless:
-		 * 1) This method is a module-level executable code method, in which
-		 *    case we want make the objects permanent.
-		 * 2) There are other threads executing the method, in which case we
-		 *    will wait until the last thread has completed.
-		 */
-		if (!(method_desc->method.info_flags & ACPI_METHOD_MODULE_LEVEL)
-		    && (method_desc->method.thread_count == 1)) {
-
-			/* Delete any direct children of (created by) this method */
-
-			acpi_ns_delete_namespace_subtree(walk_state->
-							 method_node);
-
-			/*
-			 * Delete any objects that were created by this method
-			 * elsewhere in the namespace (if any were created).
-			 * Use of the ACPI_METHOD_MODIFIED_NAMESPACE optimizes the
-			 * deletion such that we don't have to perform an entire
-			 * namespace walk for every control method execution.
-			 */
-			if (method_desc->method.
-			    info_flags & ACPI_METHOD_MODIFIED_NAMESPACE) {
-				acpi_ns_delete_namespace_by_owner(method_desc->
-								  method.
-								  owner_id);
-				method_desc->method.info_flags &=
-				    ~ACPI_METHOD_MODIFIED_NAMESPACE;
 			}
 		}
 	}

@@ -11,12 +11,14 @@
 #ifndef _ASM_PROCESSOR_H
 #define _ASM_PROCESSOR_H
 
+#include <linux/atomic.h>
 #include <linux/cpumask.h>
 #include <linux/threads.h>
 
 #include <asm/cachectl.h>
 #include <asm/cpu.h>
 #include <asm/cpu-info.h>
+#include <asm/dsemul.h>
 #include <asm/mipsregs.h>
 #include <asm/prefetch.h>
 
@@ -63,7 +65,11 @@ extern unsigned int vced_count, vcei_count;
  * 8192EB ...
  */
 #define TASK_SIZE32	0x7fff8000UL
-#define TASK_SIZE64	0x10000000000UL
+#ifdef CONFIG_MIPS_VA_BITS_48
+#define TASK_SIZE64     (0x1UL << ((cpu_data[0].vmbits>48)?48:cpu_data[0].vmbits))
+#else
+#define TASK_SIZE64     0x10000000000UL
+#endif
 #define TASK_SIZE (test_thread_flag(TIF_32BIT_ADDR) ? TASK_SIZE32 : TASK_SIZE64)
 #define STACK_TOP_MAX	TASK_SIZE64
 
@@ -74,7 +80,11 @@ extern unsigned int vced_count, vcei_count;
 
 #endif
 
-#define STACK_TOP	(TASK_SIZE & PAGE_MASK)
+/*
+ * One page above the stack is used for branch delay slot "emulation".
+ * See dsemul.c for details.
+ */
+#define STACK_TOP	((TASK_SIZE & PAGE_MASK) - PAGE_SIZE)
 
 /*
  * This decides where the kernel will search for a free chunk of vm
@@ -82,12 +92,6 @@ extern unsigned int vced_count, vcei_count;
  */
 #define TASK_UNMAPPED_BASE PAGE_ALIGN(TASK_SIZE / 3)
 
-#ifdef CONFIG_MACH_XBURST
-#define NUM_MXU_REGS    16
-struct xburst_mxu_struct {
-        unsigned int regs[NUM_MXU_REGS];
-};
-#endif
 
 #define NUM_FPU_REGS	32
 
@@ -137,7 +141,7 @@ struct mips_fpu_struct {
 
 #define NUM_DSP_REGS   6
 
-typedef __u32 dspreg_t;
+typedef unsigned long dspreg_t;
 
 struct mips_dsp_state {
 	dspreg_t	dspr[NUM_DSP_REGS];
@@ -160,20 +164,8 @@ struct mips3264_watch_reg_state {
 union mips_watch_reg_state {
 	struct mips3264_watch_reg_state mips3264;
 };
-#if defined(CONFIG_XBURST_MXUV2)
-typedef union {
-	u64 val64[2];
-} vpr_t;
 
-struct xburst_cop2_state {
-	u32 mxu_csr;
-	vpr_t vr[32];
-};
-
-#define COP2_INIT						\
-	.cp2			= {0,},
-
-#elif defined(CONFIG_CPU_CAVIUM_OCTEON)
+#if defined(CONFIG_CPU_CAVIUM_OCTEON)
 
 struct octeon_cop2_state {
 	/* DMFC2 rt, 0x0201 */
@@ -270,6 +262,12 @@ struct thread_struct {
 
 	/* Saved fpu/fpu emulator stuff. */
 	struct mips_fpu_struct fpu FPU_ALIGN;
+	/* Assigned branch delay slot 'emulation' frame */
+	atomic_t bd_emu_frame;
+	/* PC of the branch from a branch delay slot 'emulation' */
+	unsigned long bd_emu_branch_pc;
+	/* PC to continue from following a branch delay slot 'emulation' */
+	unsigned long bd_emu_cont_pc;
 #ifdef CONFIG_MIPS_MT_FPAFF
 	/* Emulated instruction count */
 	unsigned long emulated_fp;
@@ -280,11 +278,6 @@ struct thread_struct {
 	/* Saved state of the DSP ASE, if available. */
 	struct mips_dsp_state dsp;
 
-#ifdef CONFIG_MACH_XBURST
-	/* Saved registers of the MXU, if available. */
-	struct xburst_mxu_struct mxu;
-#endif
-
 	/* Saved watch register state, if available. */
 	union mips_watch_reg_state watch;
 
@@ -293,9 +286,7 @@ struct thread_struct {
 	unsigned long cp0_baduaddr;	/* Last kernel fault accessing USEG */
 	unsigned long error_code;
 	unsigned long trap_nr;
-#if defined(CONFIG_XBURST_MXUV2)
-	struct xburst_cop2_state cp2;
-#elif defined(CONFIG_CPU_CAVIUM_OCTEON)
+#ifdef CONFIG_CPU_CAVIUM_OCTEON
 	struct octeon_cop2_state cp2 __attribute__ ((__aligned__(128)));
 	struct octeon_cvmseg_state cvmseg __attribute__ ((__aligned__(128)));
 #endif
@@ -344,6 +335,10 @@ struct thread_struct {
 	 * FPU affinity state (null if not FPAFF)		\
 	 */							\
 	FPAFF_INIT						\
+	/* Delay slot emulation */				\
+	.bd_emu_frame = ATOMIC_INIT(BD_EMUFRAME_NONE),		\
+	.bd_emu_branch_pc = 0,					\
+	.bd_emu_cont_pc = 0,					\
 	/*							\
 	 * Saved DSP stuff					\
 	 */							\
@@ -379,6 +374,10 @@ extern unsigned long thread_saved_pc(struct task_struct *tsk);
  * Do necessary setup to start up a newly executed thread.
  */
 extern void start_thread(struct pt_regs * regs, unsigned long pc, unsigned long sp);
+
+static inline void flush_thread(void)
+{
+}
 
 unsigned long get_wchan(struct task_struct *p);
 

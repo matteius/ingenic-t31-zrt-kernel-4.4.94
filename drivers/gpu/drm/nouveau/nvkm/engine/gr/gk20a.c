@@ -143,23 +143,24 @@ gk20a_gr_av_to_method(struct gf100_gr *gr, const char *fw_name,
 
 	nent = (fuc.size / sizeof(struct gk20a_fw_av));
 
-	pack = vzalloc((sizeof(*pack) * max_classes) +
-		       (sizeof(*init) * (nent + 1)));
+	pack = vzalloc((sizeof(*pack) * (max_classes + 1)) +
+		       (sizeof(*init) * (nent + max_classes + 1)));
 	if (!pack) {
 		ret = -ENOMEM;
 		goto end;
 	}
 
-	init = (void *)(pack + max_classes);
+	init = (void *)(pack + max_classes + 1);
 
-	for (i = 0; i < nent; i++) {
-		struct gf100_gr_init *ent = &init[i];
+	for (i = 0; i < nent; i++, init++) {
 		struct gk20a_fw_av *av = &((struct gk20a_fw_av *)fuc.data)[i];
 		u32 class = av->addr & 0xffff;
 		u32 addr = (av->addr & 0xffff0000) >> 14;
 
 		if (prevclass != class) {
-			pack[classidx].init = ent;
+			if (prevclass) /* Add terminator to the method list. */
+				init++;
+			pack[classidx].init = init;
 			pack[classidx].type = class;
 			prevclass = class;
 			if (++classidx >= max_classes) {
@@ -169,10 +170,10 @@ gk20a_gr_av_to_method(struct gf100_gr *gr, const char *fw_name,
 			}
 		}
 
-		ent->addr = addr;
-		ent->data = av->data;
-		ent->count = 1;
-		ent->pitch = 1;
+		init->addr = addr;
+		init->data = av->data;
+		init->count = 1;
+		init->pitch = 1;
 	}
 
 	*ppack = pack;
@@ -239,9 +240,6 @@ gk20a_gr_init(struct gf100_gr *gr)
 		return ret;
 
 	/* MMU debug buffer */
-	nvkm_wr32(device, 0x100cc8, nvkm_memory_addr(gr->unk4188b4) >> 8);
-	nvkm_wr32(device, 0x100ccc, nvkm_memory_addr(gr->unk4188b8) >> 8);
-
 	if (gr->func->init_gpc_mmu)
 		gr->func->init_gpc_mmu(gr);
 
@@ -267,13 +265,15 @@ gk20a_gr_init(struct gf100_gr *gr)
 
 	for (gpc = 0; gpc < gr->gpc_nr; gpc++) {
 		nvkm_wr32(device, GPC_UNIT(gpc, 0x0914),
-			  gr->magic_not_rop_nr << 8 | gr->tpc_nr[gpc]);
+			  gr->screen_tile_row_offset << 8 | gr->tpc_nr[gpc]);
 		nvkm_wr32(device, GPC_UNIT(gpc, 0x0910), 0x00040000 |
 			  gr->tpc_total);
 		nvkm_wr32(device, GPC_UNIT(gpc, 0x0918), magicgpc918);
 	}
 
 	nvkm_wr32(device, GPC_BCAST(0x3fd4), magicgpc918);
+
+	gr->func->init_rop_active_fbps(gr);
 
 	/* Enable FIFO access */
 	nvkm_wr32(device, 0x400500, 0x00010001);
@@ -312,7 +312,9 @@ gk20a_gr_init(struct gf100_gr *gr)
 static const struct gf100_gr_func
 gk20a_gr = {
 	.init = gk20a_gr_init,
+	.init_rop_active_fbps = gk104_gr_init_rop_active_fbps,
 	.set_hww_esr_report_mask = gk20a_gr_set_hww_esr_report_mask,
+	.rops = gf100_gr_rops,
 	.ppc_nr = 1,
 	.grctx = &gk20a_grctx,
 	.sclass = {
@@ -359,7 +361,6 @@ gk20a_gr_new(struct nvkm_device *device, int index, struct nvkm_gr **pgr)
 	ret = gk20a_gr_av_to_method(gr, "sw_method_init", &gr->fuc_method);
 	if (ret)
 		return ret;
-
 
 	return 0;
 }

@@ -45,6 +45,11 @@
 / {
 	model = "Rockchip RK3036 Evaluation board";
 	compatible = "rockchip,rk3036-evb", "rockchip,rk3036";
+
+	memory {
+		device_type = "memory";
+		reg = <0x60000000 0x40000000>;
+	};
 };
 
 &emac {
@@ -64,7 +69,7 @@
 &i2c1 {
 	status = "okay";
 
-	hym8563: hym8563@51 {
+	hym8563: rtc@51 {
 		compatible = "haoyu,hym8563";
 		reg = <0x51>;
 		#clock-cells = <0>;

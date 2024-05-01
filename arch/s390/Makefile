@@ -46,6 +46,8 @@ cflags-$(CONFIG_MARCH_Z196_TUNE)	+= -mtune=z196
 cflags-$(CONFIG_MARCH_ZEC12_TUNE)	+= -mtune=zEC12
 cflags-$(CONFIG_MARCH_Z13_TUNE)	+= -mtune=z13
 
+cflags-y += -Wa,-I$(srctree)/arch/$(ARCH)/include
+
 #KBUILD_IMAGE is necessary for make rpm
 KBUILD_IMAGE	:=arch/s390/boot/image
 
@@ -75,6 +77,16 @@ endif
 
 ifeq ($(call cc-option-yn,-mwarn-dynamicstack),y)
 cflags-$(CONFIG_WARN_DYNAMIC_STACK) += -mwarn-dynamicstack
+endif
+
+ifdef CONFIG_EXPOLINE
+  ifeq ($(call cc-option-yn,$(CC_FLAGS_MARCH) -mindirect-branch=thunk),y)
+    CC_FLAGS_EXPOLINE := -mindirect-branch=thunk
+    CC_FLAGS_EXPOLINE += -mfunction-return=thunk
+    CC_FLAGS_EXPOLINE += -mindirect-branch-table
+    export CC_FLAGS_EXPOLINE
+    cflags-y += $(CC_FLAGS_EXPOLINE) -DCC_USING_EXPOLINE
+  endif
 endif
 
 ifdef CONFIG_FUNCTION_TRACER

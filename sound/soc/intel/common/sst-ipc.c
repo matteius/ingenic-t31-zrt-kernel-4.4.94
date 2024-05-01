@@ -111,7 +111,7 @@ static int ipc_tx_message(struct sst_generic_ipc *ipc, u64 header,
 	list_add_tail(&msg->list, &ipc->tx_list);
 	spin_unlock_irqrestore(&ipc->dsp->spinlock, flags);
 
-	queue_kthread_work(&ipc->kworker, &ipc->kwork);
+	kthread_queue_work(&ipc->kworker, &ipc->kwork);
 
 	if (wait)
 		return tx_wait_done(ipc, msg, rx_data);
@@ -211,6 +211,8 @@ struct ipc_message *sst_ipc_reply_find_msg(struct sst_generic_ipc *ipc,
 
 	if (ipc->ops.reply_msg_match != NULL)
 		header = ipc->ops.reply_msg_match(header, &mask);
+	else
+		mask = (u64)-1;
 
 	if (list_empty(&ipc->rx_list)) {
 		dev_err(ipc->dev, "error: rx list empty but received 0x%llx\n",
@@ -281,7 +283,7 @@ int sst_ipc_init(struct sst_generic_ipc *ipc)
 		return -ENOMEM;
 
 	/* start the IPC message thread */
-	init_kthread_worker(&ipc->kworker);
+	kthread_init_worker(&ipc->kworker);
 	ipc->tx_thread = kthread_run(kthread_worker_fn,
 					&ipc->kworker, "%s",
 					dev_name(ipc->dev));
@@ -292,7 +294,7 @@ int sst_ipc_init(struct sst_generic_ipc *ipc)
 		return ret;
 	}
 
-	init_kthread_work(&ipc->kwork, ipc_tx_msgs);
+	kthread_init_work(&ipc->kwork, ipc_tx_msgs);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(sst_ipc_init);

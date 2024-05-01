@@ -1013,7 +1013,7 @@ static void em28xx_v4l2_create_entities(struct em28xx *dev)
 
 static int queue_setup(struct vb2_queue *vq,
 		       unsigned int *nbuffers, unsigned int *nplanes,
-		       unsigned int sizes[], void *alloc_ctxs[])
+		       unsigned int sizes[], struct device *alloc_devs[])
 {
 	struct em28xx *dev = vb2_get_drv_priv(vq);
 	struct em28xx_v4l2 *v4l2 = dev->v4l2;
@@ -1061,6 +1061,8 @@ int em28xx_start_analog_streaming(struct vb2_queue *vq, unsigned int count)
 	int rc = 0;
 
 	em28xx_videodbg("%s\n", __func__);
+
+	dev->v4l2->field_count = 0;
 
 	/* Make sure streaming is not already in progress for this type
 	   of filehandle (e.g. video, vbi) */
@@ -1204,7 +1206,7 @@ buffer_queue(struct vb2_buffer *vb)
 	spin_unlock_irqrestore(&dev->slock, flags);
 }
 
-static struct vb2_ops em28xx_video_qops = {
+static const struct vb2_ops em28xx_video_qops = {
 	.queue_setup    = queue_setup,
 	.buf_prepare    = buffer_prepare,
 	.buf_queue      = buffer_queue,
@@ -1435,9 +1437,9 @@ static int vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 
 	fmt = format_by_fourcc(f->fmt.pix.pixelformat);
 	if (!fmt) {
-		em28xx_videodbg("Fourcc format (%08x) invalid.\n",
-				f->fmt.pix.pixelformat);
-		return -EINVAL;
+		fmt = &format[0];
+		em28xx_videodbg("Fourcc format (%08x) invalid. Using default (%08x).\n",
+				f->fmt.pix.pixelformat, fmt->fourcc);
 	}
 
 	if (dev->board.is_em2800) {

@@ -189,7 +189,7 @@ long cifs_ioctl(struct file *filep, unsigned int command, unsigned long arg)
 	xid = get_xid();
 
 	cifs_sb = CIFS_SB(inode->i_sb);
-
+	cifs_dbg(FYI, "cifs ioctl 0x%x\n", command);
 	switch (command) {
 		case FS_IOC_GETFLAGS:
 			if (pSMBFile == NULL)
@@ -206,7 +206,7 @@ long cifs_ioctl(struct file *filep, unsigned int command, unsigned long arg)
 					rc = put_user(ExtAttrBits &
 						FS_FL_USER_VISIBLE,
 						(int __user *)arg);
-				if (rc != EOPNOTSUPP)
+				if (rc != -EOPNOTSUPP)
 					break;
 			}
 #endif /* CONFIG_CIFS_POSIX */
@@ -235,7 +235,7 @@ long cifs_ioctl(struct file *filep, unsigned int command, unsigned long arg)
 			 *		       pSMBFile->fid.netfid,
 			 *		       extAttrBits,
 			 *		       &ExtAttrMask);
-			 * if (rc != EOPNOTSUPP)
+			 * if (rc != -EOPNOTSUPP)
 			 *	break;
 			 */
 
@@ -264,14 +264,30 @@ long cifs_ioctl(struct file *filep, unsigned int command, unsigned long arg)
 				rc = -EOPNOTSUPP;
 			break;
 		case CIFS_IOC_GET_MNT_INFO:
+			if (pSMBFile == NULL)
+				break;
 			tcon = tlink_tcon(pSMBFile->tlink);
 			rc = smb_mnt_get_fsinfo(xid, tcon, (void __user *)arg);
+			break;
+		case CIFS_ENUMERATE_SNAPSHOTS:
+			if (pSMBFile == NULL)
+				break;
+			if (arg == 0) {
+				rc = -EINVAL;
+				goto cifs_ioc_exit;
+			}
+			tcon = tlink_tcon(pSMBFile->tlink);
+			if (tcon->ses->server->ops->enum_snapshots)
+				rc = tcon->ses->server->ops->enum_snapshots(xid, tcon,
+						pSMBFile, (void __user *)arg);
+			else
+				rc = -EOPNOTSUPP;
 			break;
 		default:
 			cifs_dbg(FYI, "unsupported ioctl\n");
 			break;
 	}
-
+cifs_ioc_exit:
 	free_xid(xid);
 	return rc;
 }

@@ -153,6 +153,10 @@ static void ar5523_cmd_rx_cb(struct urb *urb)
 			ar5523_err(ar, "Invalid reply to WDCMSG_TARGET_START");
 			return;
 		}
+		if (!cmd->odata) {
+			ar5523_err(ar, "Unexpected WDCMSG_TARGET_START reply");
+			return;
+		}
 		memcpy(cmd->odata, hdr + 1, sizeof(u32));
 		cmd->olen = sizeof(u32);
 		cmd->res = 0;
@@ -237,6 +241,11 @@ static void ar5523_cmd_tx_cb(struct urb *urb)
 	}
 }
 
+static void ar5523_cancel_tx_cmd(struct ar5523 *ar)
+{
+	usb_kill_urb(ar->tx_cmd.urb_tx);
+}
+
 static int ar5523_cmd(struct ar5523 *ar, u32 code, const void *idata,
 		      int ilen, void *odata, int olen, int flags)
 {
@@ -255,7 +264,8 @@ static int ar5523_cmd(struct ar5523 *ar, u32 code, const void *idata,
 
 	if (flags & AR5523_CMD_FLAG_MAGIC)
 		hdr->magic = cpu_to_be32(1 << 24);
-	memcpy(hdr + 1, idata, ilen);
+	if (ilen)
+		memcpy(hdr + 1, idata, ilen);
 
 	cmd->odata = odata;
 	cmd->olen = olen;
@@ -275,6 +285,7 @@ static int ar5523_cmd(struct ar5523 *ar, u32 code, const void *idata,
 	}
 
 	if (!wait_for_completion_timeout(&cmd->done, 2 * HZ)) {
+		ar5523_cancel_tx_cmd(ar);
 		cmd->odata = NULL;
 		ar5523_err(ar, "timeout waiting for command %02x reply\n",
 			   code);
@@ -706,10 +717,8 @@ static int ar5523_alloc_rx_bufs(struct ar5523 *ar)
 
 		data->ar = ar;
 		data->urb = usb_alloc_urb(0, GFP_KERNEL);
-		if (!data->urb) {
-			ar5523_err(ar, "could not allocate rx data urb\n");
+		if (!data->urb)
 			goto err;
-		}
 		list_add_tail(&data->list, &ar->rx_data_free);
 		atomic_inc(&ar->rx_data_free_cnt);
 	}
@@ -824,7 +833,6 @@ static void ar5523_tx_work_locked(struct ar5523 *ar)
 
 		urb = usb_alloc_urb(0, GFP_KERNEL);
 		if (!urb) {
-			ar5523_err(ar, "Failed to allocate TX urb\n");
 			ieee80211_free_txskb(ar->hw, skb);
 			continue;
 		}
@@ -949,10 +957,8 @@ static int ar5523_alloc_tx_cmd(struct ar5523 *ar)
 	init_completion(&cmd->done);
 
 	cmd->urb_tx = usb_alloc_urb(0, GFP_KERNEL);
-	if (!cmd->urb_tx) {
-		ar5523_err(ar, "could not allocate urb\n");
+	if (!cmd->urb_tx)
 		return -ENOMEM;
-	}
 	cmd->buf_tx = usb_alloc_coherent(ar->dev, AR5523_MAX_TXCMDSZ,
 					 GFP_KERNEL,
 					 &cmd->urb_tx->transfer_dma);
@@ -1471,12 +1477,12 @@ static int ar5523_init_modes(struct ar5523 *ar)
 	memcpy(ar->channels, ar5523_channels, sizeof(ar5523_channels));
 	memcpy(ar->rates, ar5523_rates, sizeof(ar5523_rates));
 
-	ar->band.band = IEEE80211_BAND_2GHZ;
+	ar->band.band = NL80211_BAND_2GHZ;
 	ar->band.channels = ar->channels;
 	ar->band.n_channels = ARRAY_SIZE(ar5523_channels);
 	ar->band.bitrates = ar->rates;
 	ar->band.n_bitrates = ARRAY_SIZE(ar5523_rates);
-	ar->hw->wiphy->bands[IEEE80211_BAND_2GHZ] = &ar->band;
+	ar->hw->wiphy->bands[NL80211_BAND_2GHZ] = &ar->band;
 	return 0;
 }
 
@@ -1773,6 +1779,8 @@ static struct usb_device_id ar5523_id_table[] = {
 	AR5523_DEVICE_UX(0x0846, 0x4300),	/* Netgear / WG111U */
 	AR5523_DEVICE_UG(0x0846, 0x4250),	/* Netgear / WG111T */
 	AR5523_DEVICE_UG(0x0846, 0x5f00),	/* Netgear / WPN111 */
+	AR5523_DEVICE_UG(0x083a, 0x4506),	/* SMC / EZ Connect
+						   SMCWUSBT-G2 */
 	AR5523_DEVICE_UG(0x157e, 0x3006),	/* Umedia / AR5523_1 */
 	AR5523_DEVICE_UX(0x157e, 0x3205),	/* Umedia / AR5523_2 */
 	AR5523_DEVICE_UG(0x157e, 0x3006),	/* Umedia / TEW444UBEU */

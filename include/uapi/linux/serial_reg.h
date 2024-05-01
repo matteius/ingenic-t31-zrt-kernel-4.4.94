@@ -61,6 +61,7 @@
  * ST16C654:	 8  16  56  60		 8  16  32  56	PORT_16654
  * TI16C750:	 1  16  32  56		xx  xx  xx  xx	PORT_16750
  * TI16C752:	 8  16  56  60		 8  16  32  56
+ * OX16C950:	16  32 112 120		16  32  64 112	PORT_16C950
  * Tegra:	 1   4   8  14		16   8   4   1	PORT_TEGRA
  */
 #define UART_FCR_R_TRIG_00	0x00
@@ -375,6 +376,14 @@
 
 #define UART_EXAR_TXTRG		0x0a	/* Tx FIFO trigger level write-only */
 #define UART_EXAR_RXTRG		0x0b	/* Rx FIFO trigger level write-only */
+
+/*
+ * These are definitions for the Altera ALTR_16550_F32/F64/F128
+ * Normalized from 0x100 to 0x40 because of shift by 2 (32 bit regs).
+ */
+#define UART_ALTR_AFR		0x40	/* Additional Features Register */
+#define UART_ALTR_EN_TXFIFO_LW	0x01	/* Enable the TX FIFO Low Watermark */
+#define UART_ALTR_TX_LOW	0x41	/* Tx FIFO Low Watermark */
 
 #endif /* _LINUX_SERIAL_REG_H */
 

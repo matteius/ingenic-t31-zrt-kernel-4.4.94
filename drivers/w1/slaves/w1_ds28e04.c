@@ -39,7 +39,7 @@ static int w1_strong_pullup = 1;
 module_param_named(strong_pullup, w1_strong_pullup, int, 0);
 
 /* enable/disable CRC checking on DS28E04-100 memory accesses */
-static char w1_enable_crccheck = 1;
+static bool w1_enable_crccheck = true;
 
 #define W1_EEPROM_SIZE		512
 #define W1_PAGE_COUNT		16
@@ -346,32 +346,18 @@ static BIN_ATTR_RW(pio, 1);
 static ssize_t crccheck_show(struct device *dev, struct device_attribute *attr,
 			     char *buf)
 {
-	if (put_user(w1_enable_crccheck + 0x30, buf))
-		return -EFAULT;
-
-	return sizeof(w1_enable_crccheck);
+	return sysfs_emit(buf, "%d\n", w1_enable_crccheck);
 }
 
 static ssize_t crccheck_store(struct device *dev, struct device_attribute *attr,
 			      const char *buf, size_t count)
 {
-	char val;
+	int err = kstrtobool(buf, &w1_enable_crccheck);
 
-	if (count != 1 || !buf)
-		return -EINVAL;
+	if (err)
+		return err;
 
-	if (get_user(val, buf))
-		return -EFAULT;
-
-	/* convert to decimal */
-	val = val - 0x30;
-	if (val != 0 && val != 1)
-		return -EINVAL;
-
-	/* set the new value */
-	w1_enable_crccheck = val;
-
-	return sizeof(w1_enable_crccheck);
+	return count;
 }
 
 static DEVICE_ATTR_RW(crccheck);
@@ -427,16 +413,4 @@ static struct w1_family w1_family_1C = {
 	.fid = W1_FAMILY_DS28E04,
 	.fops = &w1_f1C_fops,
 };
-
-static int __init w1_f1C_init(void)
-{
-	return w1_register_family(&w1_family_1C);
-}
-
-static void __exit w1_f1C_fini(void)
-{
-	w1_unregister_family(&w1_family_1C);
-}
-
-module_init(w1_f1C_init);
-module_exit(w1_f1C_fini);
+module_w1_family(w1_family_1C);

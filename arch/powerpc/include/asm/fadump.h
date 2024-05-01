@@ -45,10 +45,6 @@
 
 #define memblock_num_regions(memblock_type)	(memblock.memblock_type.cnt)
 
-#ifndef ELF_CORE_EFLAGS
-#define ELF_CORE_EFLAGS 0
-#endif
-
 /* Firmware provided dump sections */
 #define FADUMP_CPU_STATE_DATA	0x0001
 #define FADUMP_HPTE_REGION	0x0002
@@ -193,9 +189,6 @@ struct fadump_crash_info_header {
 	struct pt_regs	regs;
 	struct cpumask	online_mask;
 };
-
-/* Crash memory ranges */
-#define INIT_CRASHMEM_RANGES	(INIT_MEMBLOCK_REGIONS + 2)
 
 struct fad_crash_memory_ranges {
 	unsigned long long	base;

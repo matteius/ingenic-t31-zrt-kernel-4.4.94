@@ -1378,6 +1378,15 @@ int dlm_mig_lockres_handler(struct o2net_msg *msg, u32 len, void *data,
 	if (!dlm_grab(dlm))
 		return -EINVAL;
 
+	if (!dlm_joined(dlm)) {
+		mlog(ML_ERROR, "Domain %s not joined! "
+			  "lockres %.*s, master %u\n",
+			  dlm->name, mres->lockname_len,
+			  mres->lockname, mres->master);
+		dlm_put(dlm);
+		return -EINVAL;
+	}
+
 	BUG_ON(!(mres->flags & (DLM_MRES_RECOVERY|DLM_MRES_MIGRATION)));
 
 	real_master = mres->master;
@@ -2343,6 +2352,7 @@ static void dlm_do_local_recovery_cleanup(struct dlm_ctxt *dlm, u8 dead_node)
 	struct dlm_lock_resource *res;
 	int i;
 	struct hlist_head *bucket;
+	struct hlist_node *tmp;
 	struct dlm_lock *lock;
 
 
@@ -2365,7 +2375,7 @@ static void dlm_do_local_recovery_cleanup(struct dlm_ctxt *dlm, u8 dead_node)
 	 */
 	for (i = 0; i < DLM_HASH_BUCKETS; i++) {
 		bucket = dlm_lockres_hash(dlm, i);
-		hlist_for_each_entry(res, bucket, hash_node) {
+		hlist_for_each_entry_safe(res, tmp, bucket, hash_node) {
  			/* always prune any $RECOVERY entries for dead nodes,
  			 * otherwise hangs can occur during later recovery */
 			if (dlm_is_recovery_lock(res->lockname.name,
@@ -2386,8 +2396,17 @@ static void dlm_do_local_recovery_cleanup(struct dlm_ctxt *dlm, u8 dead_node)
 						break;
 					}
 				}
-				dlm_lockres_clear_refmap_bit(dlm, res,
-						dead_node);
+
+				if ((res->owner == dead_node) &&
+							(res->state & DLM_LOCK_RES_DROPPING_REF)) {
+					dlm_lockres_get(res);
+					__dlm_do_purge_lockres(dlm, res);
+					spin_unlock(&res->spinlock);
+					wake_up(&res->wq);
+					dlm_lockres_put(res);
+					continue;
+				} else if (res->owner == dlm->node_num)
+					dlm_lockres_clear_refmap_bit(dlm, res, dead_node);
 				spin_unlock(&res->spinlock);
 				continue;
 			}
@@ -2398,14 +2417,18 @@ static void dlm_do_local_recovery_cleanup(struct dlm_ctxt *dlm, u8 dead_node)
 				if (res->state & DLM_LOCK_RES_DROPPING_REF) {
 					mlog(0, "%s:%.*s: owned by "
 						"dead node %u, this node was "
-						"dropping its ref when it died. "
-						"continue, dropping the flag.\n",
+						"dropping its ref when master died. "
+						"continue, purging the lockres.\n",
 						dlm->name, res->lockname.len,
 						res->lockname.name, dead_node);
+					dlm_lockres_get(res);
+					__dlm_do_purge_lockres(dlm, res);
+					spin_unlock(&res->spinlock);
+					wake_up(&res->wq);
+					dlm_lockres_put(res);
+					continue;
 				}
-				res->state &= ~DLM_LOCK_RES_DROPPING_REF;
-				dlm_move_lockres_to_recovery_list(dlm,
-						res);
+				dlm_move_lockres_to_recovery_list(dlm, res);
 			} else if (res->owner == dlm->node_num) {
 				dlm_free_dead_locks(dlm, res, dead_node);
 				__dlm_lockres_calc_usage(dlm, res);

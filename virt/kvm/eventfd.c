@@ -119,7 +119,11 @@ irqfd_shutdown(struct work_struct *work)
 {
 	struct kvm_kernel_irqfd *irqfd =
 		container_of(work, struct kvm_kernel_irqfd, shutdown);
+	struct kvm *kvm = irqfd->kvm;
 	u64 cnt;
+
+	/* Make sure irqfd has been initalized in assign path. */
+	synchronize_srcu(&kvm->irq_srcu);
 
 	/*
 	 * Synchronize with the wait-queue and unhook ourselves to prevent
@@ -387,7 +391,6 @@ kvm_irqfd_assign(struct kvm *kvm, struct kvm_irqfd *args)
 
 	idx = srcu_read_lock(&kvm->irq_srcu);
 	irqfd_update(kvm, irqfd);
-	srcu_read_unlock(&kvm->irq_srcu, idx);
 
 	list_add_tail(&irqfd->list, &kvm->irqfds.items);
 
@@ -402,23 +405,27 @@ kvm_irqfd_assign(struct kvm *kvm, struct kvm_irqfd *args)
 	if (events & POLLIN)
 		schedule_work(&irqfd->inject);
 
+#ifdef CONFIG_HAVE_KVM_IRQ_BYPASS
+	if (kvm_arch_has_irq_bypass()) {
+		irqfd->consumer.token = (void *)irqfd->eventfd;
+		irqfd->consumer.add_producer = kvm_arch_irq_bypass_add_producer;
+		irqfd->consumer.del_producer = kvm_arch_irq_bypass_del_producer;
+		irqfd->consumer.stop = kvm_arch_irq_bypass_stop;
+		irqfd->consumer.start = kvm_arch_irq_bypass_start;
+		ret = irq_bypass_register_consumer(&irqfd->consumer);
+		if (ret)
+			pr_info("irq bypass consumer (token %p) registration fails: %d\n",
+				irqfd->consumer.token, ret);
+	}
+#endif
+
+	srcu_read_unlock(&kvm->irq_srcu, idx);
+
 	/*
 	 * do not drop the file until the irqfd is fully initialized, otherwise
 	 * we might race against the POLLHUP
 	 */
 	fdput(f);
-#ifdef CONFIG_HAVE_KVM_IRQ_BYPASS
-	irqfd->consumer.token = (void *)irqfd->eventfd;
-	irqfd->consumer.add_producer = kvm_arch_irq_bypass_add_producer;
-	irqfd->consumer.del_producer = kvm_arch_irq_bypass_del_producer;
-	irqfd->consumer.stop = kvm_arch_irq_bypass_stop;
-	irqfd->consumer.start = kvm_arch_irq_bypass_start;
-	ret = irq_bypass_register_consumer(&irqfd->consumer);
-	if (ret)
-		pr_info("irq bypass consumer (token %p) registration fails: %d\n",
-				irqfd->consumer.token, ret);
-#endif
-
 	return 0;
 
 fail:
@@ -622,12 +629,12 @@ void kvm_irq_routing_update(struct kvm *kvm)
 
 /*
  * create a host-wide workqueue for issuing deferred shutdown requests
- * aggregated from all vm* instances. We need our own isolated single-thread
- * queue to prevent deadlock against flushing the normal work-queue.
+ * aggregated from all vm* instances. We need our own isolated
+ * queue to ease flushing work items when a VM exits.
  */
 int kvm_irqfd_init(void)
 {
-	irqfd_cleanup_wq = create_singlethread_workqueue("kvm-irqfd-cleanup");
+	irqfd_cleanup_wq = alloc_workqueue("kvm-irqfd-cleanup", 0, 0);
 	if (!irqfd_cleanup_wq)
 		return -ENOMEM;
 
@@ -868,7 +875,8 @@ kvm_deassign_ioeventfd_idx(struct kvm *kvm, enum kvm_bus bus_idx,
 			continue;
 
 		kvm_io_bus_unregister_dev(kvm, bus_idx, &p->dev);
-		kvm->buses[bus_idx]->ioeventfd_count--;
+		if (kvm->buses[bus_idx])
+			kvm->buses[bus_idx]->ioeventfd_count--;
 		ioeventfd_release(p);
 		ret = 0;
 		break;

@@ -516,7 +516,7 @@ static int memord(const void *d1, size_t s1, const void *d2, size_t s2)
 {
 	if (s1 < s2)
 		return 1;
-	if (s2 > s1)
+	if (s1 > s2)
 		return -1;
 
 	return memcmp(d1, d2, s1);
@@ -1298,7 +1298,7 @@ static void h_24x7_event_read(struct perf_event *event)
 			__this_cpu_write(hv_24x7_txn_err, ret);
 		} else {
 			/*
-			 * Assoicate the event with the HCALL request index,
+			 * Associate the event with the HCALL request index,
 			 * so ->commit_txn() can quickly find/update count.
 			 */
 			i = request_buffer->num_requests - 1;
@@ -1306,16 +1306,6 @@ static void h_24x7_event_read(struct perf_event *event)
 			h24x7hw = &get_cpu_var(hv_24x7_hw);
 			h24x7hw->events[i] = event;
 			put_cpu_var(h24x7hw);
-			/*
-			 * Clear the event count so we can compute the _change_
-			 * in the 24x7 raw counter value at the end of the txn.
-			 *
-			 * Note that we could alternatively read the 24x7 value
-			 * now and save its value in event->hw.prev_count. But
-			 * that would require issuing a hcall, which would then
-			 * defeat the purpose of using the txn interface.
-			 */
-			local64_set(&event->count, 0);
 		}
 
 		put_cpu_var(hv_24x7_reqb);

@@ -199,7 +199,7 @@ static noinline_for_stack char *translate_scan(struct _adapter *padapter,
 	iwe.cmd = SIOCGIWMODE;
 	memcpy((u8 *)&cap, r8712_get_capability_from_ie(pnetwork->network.IEs),
 		2);
-	cap = le16_to_cpu(cap);
+	le16_to_cpus(&cap);
 	if (cap & (WLAN_CAPABILITY_IBSS | WLAN_CAPABILITY_BSS)) {
 		if (cap & WLAN_CAPABILITY_BSS)
 			iwe.u.mode = (u32)IW_MODE_MASTER;
@@ -399,7 +399,7 @@ static int wpa_set_encryption(struct net_device *dev, struct ieee_param *param,
 		if (wep_key_len > 0) {
 			wep_key_len = wep_key_len <= 5 ? 5 : 13;
 			pwep = kzalloc(sizeof(*pwep), GFP_ATOMIC);
-			if (pwep == NULL)
+			if (!pwep)
 				return -ENOMEM;
 			pwep->KeyLength = wep_key_len;
 			pwep->Length = wep_key_len +
@@ -932,7 +932,7 @@ static int r871x_wx_set_priv(struct net_device *dev,
 	struct iw_point *dwrq = (struct iw_point *)awrq;
 
 	len = dwrq->length;
-	ext = memdup_user(dwrq->pointer, len);
+	ext = strndup_user(dwrq->pointer, len);
 	if (IS_ERR(ext))
 		return PTR_ERR(ext);
 
@@ -1060,8 +1060,8 @@ static int r8711_wx_set_wap(struct net_device *dev,
 	while (1) {
 		if (end_of_queue_search(phead, pmlmepriv->pscanned))
 			break;
-		pnetwork = LIST_CONTAINOR(pmlmepriv->pscanned,
-			   struct wlan_network, list);
+		pnetwork = container_of(pmlmepriv->pscanned,
+					struct wlan_network, list);
 		pmlmepriv->pscanned = pmlmepriv->pscanned->next;
 		dst_bssid = pnetwork->network.MacAddress;
 		if (!memcmp(dst_bssid, temp->sa_data, ETH_ALEN)) {
@@ -1216,7 +1216,7 @@ static int r8711_wx_get_scan(struct net_device *dev,
 			ret = -E2BIG;
 			break;
 		}
-		pnetwork = LIST_CONTAINOR(plist, struct wlan_network, list);
+		pnetwork = container_of(plist, struct wlan_network, list);
 		ev = translate_scan(padapter, a, pnetwork, ev, stop);
 		plist = plist->next;
 	}
@@ -1271,8 +1271,8 @@ static int r8711_wx_set_essid(struct net_device *dev,
 		while (1) {
 			if (end_of_queue_search(phead, pmlmepriv->pscanned))
 				break;
-			pnetwork = LIST_CONTAINOR(pmlmepriv->pscanned,
-				   struct wlan_network, list);
+			pnetwork = container_of(pmlmepriv->pscanned,
+						struct wlan_network, list);
 			pmlmepriv->pscanned = pmlmepriv->pscanned->next;
 			dst_ssid = pnetwork->network.Ssid.Ssid;
 			if ((!memcmp(dst_ssid, src_ssid, ndis_ssid.SsidLength))
@@ -1793,7 +1793,7 @@ static int r871x_wx_set_enc_ext(struct net_device *dev,
 
 	param_len = sizeof(struct ieee_param) + pext->key_len;
 	param = kzalloc(param_len, GFP_ATOMIC);
-	if (param == NULL)
+	if (!param)
 		return -ENOMEM;
 	param->cmd = IEEE_CMD_SET_ENCRYPTION;
 	eth_broadcast_addr(param->sta_addr);
@@ -1976,9 +1976,9 @@ static int r871x_get_ap_info(struct net_device *dev,
 	if (pdata->length >= 32) {
 		if (copy_from_user(data, pdata->pointer, 32))
 			return -EINVAL;
-                data[32] = 0;
+		data[32] = 0;
 	} else {
-		 return -EINVAL;
+		return -EINVAL;
 	}
 	spin_lock_irqsave(&(pmlmepriv->scanned_queue.lock), irqL);
 	phead = &queue->queue;
@@ -1986,7 +1986,7 @@ static int r871x_get_ap_info(struct net_device *dev,
 	while (1) {
 		if (end_of_queue_search(phead, plist))
 			break;
-		pnetwork = LIST_CONTAINOR(plist, struct wlan_network, list);
+		pnetwork = container_of(plist, struct wlan_network, list);
 		if (!mac_pton(data, bssid)) {
 			netdev_info(dev, "r8712u: Invalid BSSID '%s'.\n",
 				    (u8 *)data);

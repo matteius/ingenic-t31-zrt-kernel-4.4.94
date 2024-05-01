@@ -170,6 +170,7 @@ static int fun_chip_init(struct fsl_upm_nand *fun,
 	fun->chip.read_buf = fun_read_buf;
 	fun->chip.write_buf = fun_write_buf;
 	fun->chip.ecc.mode = NAND_ECC_SOFT;
+	fun->chip.ecc.algo = NAND_ECC_HAMMING;
 	if (fun->mchip_count > 1)
 		fun->chip.select_chip = fun_select_chip;
 
@@ -325,7 +326,7 @@ static int fun_remove(struct platform_device *ofdev)
 	struct mtd_info *mtd = nand_to_mtd(&fun->chip);
 	int i;
 
-	nand_release(mtd);
+	nand_release(&fun->chip);
 	kfree(mtd->name);
 
 	for (i = 0; i < fun->mchip_count; i++) {

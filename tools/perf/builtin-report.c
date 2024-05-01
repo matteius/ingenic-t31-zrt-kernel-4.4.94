@@ -8,7 +8,7 @@
 #include "builtin.h"
 
 #include "util/util.h"
-#include "util/cache.h"
+#include "util/config.h"
 
 #include "util/annotate.h"
 #include "util/color.h"
@@ -47,7 +47,6 @@ struct report {
 	struct perf_tool	tool;
 	struct perf_session	*session;
 	bool			use_tui, use_gtk, use_stdio;
-	bool			dont_use_callchains;
 	bool			show_full_info;
 	bool			show_threads;
 	bool			inverted_callchain;
@@ -88,6 +87,10 @@ static int report__config(const char *var, const char *value, void *cb)
 	}
 	if (!strcmp(var, "report.queue-size")) {
 		rep->queue_size = perf_config_u64(var, value);
+		return 0;
+	}
+	if (!strcmp(var, "report.sort_order")) {
+		default_sort_order = strdup(value);
 		return 0;
 	}
 
@@ -235,7 +238,7 @@ static int report__setup_sample_type(struct report *rep)
 		sample_type |= PERF_SAMPLE_BRANCH_STACK;
 
 	if (!is_pipe && !(sample_type & PERF_SAMPLE_CALLCHAIN)) {
-		if (sort__has_parent) {
+		if (perf_hpp_list.parent) {
 			ui__error("Selected --sort parent, but no "
 				    "callchain data. Did you call "
 				    "'perf record' without -g?\n");
@@ -247,7 +250,7 @@ static int report__setup_sample_type(struct report *rep)
 				  "you call 'perf record' without -g?\n");
 			return -1;
 		}
-	} else if (!rep->dont_use_callchains &&
+	} else if (!callchain_param.enabled &&
 		   callchain_param.mode != CHAIN_NONE &&
 		   !symbol_conf.use_callchain) {
 			symbol_conf.use_callchain = true;
@@ -338,8 +341,7 @@ static size_t hists__fprintf_nr_sample_events(struct hists *hists, struct report
 	if (evname != NULL)
 		ret += fprintf(fp, " of event '%s'", evname);
 
-	if (symbol_conf.show_ref_callgraph &&
-	    strstr(evname, "call-graph=no")) {
+	if (symbol_conf.show_ref_callgraph && evname && strstr(evname, "call-graph=no")) {
 		ret += fprintf(fp, ", show reference callgraph");
 	}
 
@@ -362,7 +364,7 @@ static int perf_evlist__tty_browse_hists(struct perf_evlist *evlist,
 	struct perf_evsel *pos;
 
 	fprintf(stdout, "#\n# Total Lost Samples: %" PRIu64 "\n#\n", evlist->stats.total_lost_samples);
-	evlist__for_each(evlist, pos) {
+	evlist__for_each_entry(evlist, pos) {
 		struct hists *hists = evsel__hists(pos);
 		const char *evname = perf_evsel__name(pos);
 
@@ -371,7 +373,8 @@ static int perf_evlist__tty_browse_hists(struct perf_evlist *evlist,
 			continue;
 
 		hists__fprintf_nr_sample_events(hists, rep, evname, stdout);
-		hists__fprintf(hists, true, 0, 0, rep->min_percent, stdout);
+		hists__fprintf(hists, true, 0, 0, rep->min_percent, stdout,
+			       symbol_conf.use_callchain);
 		fprintf(stdout, "\n\n");
 	}
 
@@ -478,7 +481,7 @@ static int report__collapse_hists(struct report *rep)
 
 	ui_progress__init(&prog, rep->nr_entries, "Merging related events...");
 
-	evlist__for_each(rep->session->evlist, pos) {
+	evlist__for_each_entry(rep->session->evlist, pos) {
 		struct hists *hists = evsel__hists(pos);
 
 		if (pos->idx == 0)
@@ -511,7 +514,7 @@ static void report__output_resort(struct report *rep)
 
 	ui_progress__init(&prog, rep->nr_entries, "Sorting events for output...");
 
-	evlist__for_each(rep->session->evlist, pos)
+	evlist__for_each_entry(rep->session->evlist, pos)
 		perf_evsel__output_resort(pos, &prog);
 
 	ui_progress__finish();
@@ -552,7 +555,7 @@ static int __cmd_report(struct report *rep)
 
 	report__warn_kptr_restrict(rep);
 
-	evlist__for_each(session->evlist, pos)
+	evlist__for_each_entry(session->evlist, pos)
 		rep->nr_entries += evsel__hists(pos)->nr_entries;
 
 	if (use_browser == 0) {
@@ -583,7 +586,7 @@ static int __cmd_report(struct report *rep)
 	 * might be changed during the collapse phase.
 	 */
 	rep->nr_entries = 0;
-	evlist__for_each(session->evlist, pos)
+	evlist__for_each_entry(session->evlist, pos)
 		rep->nr_entries += evsel__hists(pos)->nr_entries;
 
 	if (rep->nr_entries == 0) {
@@ -599,13 +602,15 @@ static int __cmd_report(struct report *rep)
 static int
 report_parse_callchain_opt(const struct option *opt, const char *arg, int unset)
 {
-	struct report *rep = (struct report *)opt->value;
+	struct callchain_param *callchain = opt->value;
 
+	callchain->enabled = !unset;
 	/*
 	 * --no-call-graph
 	 */
 	if (unset) {
-		rep->dont_use_callchains = true;
+		symbol_conf.use_callchain = false;
+		callchain->mode = CHAIN_NONE;
 		return 0;
 	}
 
@@ -665,6 +670,7 @@ int cmd_report(int argc, const char **argv, const char *prefix __maybe_unused)
 	struct stat st;
 	bool has_br_stack = false;
 	int branch_mode = -1;
+	int last_key = 0;
 	bool branch_call_mode = false;
 	char callchain_default_opt[] = CALLCHAIN_DEFAULT_OPT;
 	const char * const report_usage[] = {
@@ -734,7 +740,7 @@ int cmd_report(int argc, const char **argv, const char *prefix __maybe_unused)
 		   "regex filter to identify parent, see: '--sort parent'"),
 	OPT_BOOLEAN('x', "exclude-other", &symbol_conf.exclude_other,
 		    "Only display entries with parent-match"),
-	OPT_CALLBACK_DEFAULT('g', "call-graph", &report,
+	OPT_CALLBACK_DEFAULT('g', "call-graph", &callchain_param,
 			     "print_type,threshold[,print_limit],order,sort_key[,branch],value",
 			     report_callchain_help, &report_parse_callchain_opt,
 			     callchain_default_opt),
@@ -743,7 +749,7 @@ int cmd_report(int argc, const char **argv, const char *prefix __maybe_unused)
 	OPT_INTEGER(0, "max-stack", &report.max_stack,
 		    "Set the maximum stack depth when parsing the callchain, "
 		    "anything beyond the specified depth will be ignored. "
-		    "Default: " __stringify(PERF_MAX_STACK_DEPTH)),
+		    "Default: kernel.perf_event_max_stack or " __stringify(PERF_MAX_STACK_DEPTH)),
 	OPT_BOOLEAN('G', "inverted", &report.inverted_callchain,
 		    "alias for inverted call graph"),
 	OPT_CALLBACK(0, "ignore-callees", NULL, "regex",
@@ -769,8 +775,9 @@ int cmd_report(int argc, const char **argv, const char *prefix __maybe_unused)
 		   "columns '.' is reserved."),
 	OPT_BOOLEAN('U', "hide-unresolved", &symbol_conf.hide_unresolved,
 		    "Only display entries resolved to a symbol"),
-	OPT_STRING(0, "symfs", &symbol_conf.symfs, "directory",
-		    "Look for files with symbols relative to this directory"),
+	OPT_CALLBACK(0, "symfs", NULL, "directory",
+		     "Look for files with symbols relative to this directory",
+		     symbol__config_symfs),
 	OPT_STRING('C', "cpu", &report.cpu_list, "cpu",
 		   "list of cpus to profile"),
 	OPT_BOOLEAN('I', "show-info", &report.show_full_info,
@@ -814,6 +821,9 @@ int cmd_report(int argc, const char **argv, const char *prefix __maybe_unused)
 		    "Show raw trace event output (do not use print fmt or plugins)"),
 	OPT_BOOLEAN(0, "hierarchy", &symbol_conf.report_hierarchy,
 		    "Show entries in a hierarchy"),
+	OPT_CALLBACK_DEFAULT(0, "stdio-color", NULL, "mode",
+			     "'always' (default), 'never' or 'auto' only applicable to --stdio mode",
+			     stdio__config_color, "always"),
 	OPT_END()
 	};
 	struct perf_data_file file = {
@@ -925,7 +935,6 @@ repeat:
 
 	if (symbol_conf.report_hierarchy) {
 		/* disable incompatible options */
-		symbol_conf.event_group = false;
 		symbol_conf.cumulate_callchain = false;
 
 		if (field_order) {
@@ -935,7 +944,7 @@ repeat:
 			goto error;
 		}
 
-		sort__need_collapse = true;
+		perf_hpp_list.need_collapse = true;
 	}
 
 	/* Force tty output for header output and per-thread stat. */
@@ -947,7 +956,8 @@ repeat:
 	else
 		use_browser = 0;
 
-	if (setup_sorting(session->evlist) < 0) {
+	if ((last_key != K_SWITCH_INPUT_DATA) &&
+	    (setup_sorting(session->evlist) < 0)) {
 		if (sort_order)
 			parse_options_usage(report_usage, options, "s", 1);
 		if (field_order)
@@ -974,9 +984,9 @@ repeat:
 	 * implementation.
 	 */
 	if (ui__has_annotation()) {
-		symbol_conf.priv_size = sizeof(struct annotation);
-		machines__set_symbol_filter(&session->machines,
-					    symbol__annotate_init);
+		ret = symbol__annotation_init();
+		if (ret < 0)
+			goto error;
 		/*
  		 * For searching by name on the "Browse map details".
  		 * providing it only in verbose mode not to bloat too
@@ -1002,6 +1012,7 @@ repeat:
 	ret = __cmd_report(&report);
 	if (ret == K_SWITCH_INPUT_DATA) {
 		perf_session__delete(session);
+		last_key = K_SWITCH_INPUT_DATA;
 		goto repeat;
 	} else
 		ret = 0;

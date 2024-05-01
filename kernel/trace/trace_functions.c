@@ -43,7 +43,7 @@ static int allocate_ftrace_ops(struct trace_array *tr)
 
 	/* Currently only the non stack verision is supported */
 	ops->func = function_trace_call;
-	ops->flags = FTRACE_OPS_FL_RECURSION_SAFE;
+	ops->flags = FTRACE_OPS_FL_RECURSION_SAFE | FTRACE_OPS_FL_PID;
 
 	tr->ops = ops;
 	ops->private = tr;
@@ -137,7 +137,7 @@ function_trace_call(unsigned long ip, unsigned long parent_ip,
 	pc = preempt_count();
 	preempt_disable_notrace();
 
-	bit = trace_test_and_set_recursion(TRACE_FTRACE_START, TRACE_FTRACE_MAX);
+	bit = trace_test_and_set_recursion(TRACE_FTRACE_START);
 	if (bit < 0)
 		goto out;
 

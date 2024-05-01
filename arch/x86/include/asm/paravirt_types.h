@@ -42,6 +42,7 @@
 #include <asm/desc_defs.h>
 #include <asm/kmap_types.h>
 #include <asm/pgtable_types.h>
+#include <asm/nospec-branch.h>
 
 struct page;
 struct thread_struct;
@@ -69,14 +70,8 @@ struct pv_info {
 	u16 extra_user_64bit_cs;  /* __USER_CS if none */
 #endif
 
-	int paravirt_enabled;
-	unsigned int features;	  /* valid only if paravirt_enabled is set */
 	const char *name;
 };
-
-#define paravirt_has(x) paravirt_has_feature(PV_SUPPORTED_##x)
-/* Supported features */
-#define PV_SUPPORTED_RTC        (1<<0)
 
 struct pv_init_ops {
 	/*
@@ -114,7 +109,6 @@ struct pv_cpu_ops {
 	unsigned long (*read_cr0)(void);
 	void (*write_cr0)(unsigned long);
 
-	unsigned long (*read_cr4_safe)(void);
 	unsigned long (*read_cr4)(void);
 	void (*write_cr4)(unsigned long);
 
@@ -155,10 +149,16 @@ struct pv_cpu_ops {
 	void (*cpuid)(unsigned int *eax, unsigned int *ebx,
 		      unsigned int *ecx, unsigned int *edx);
 
-	/* MSR, PMC and TSR operations.
-	   err = 0/-EFAULT.  wrmsr returns 0/-EFAULT. */
-	u64 (*read_msr)(unsigned int msr, int *err);
-	int (*write_msr)(unsigned int msr, unsigned low, unsigned high);
+	/* Unsafe MSR operations.  These will warn or panic on failure. */
+	u64 (*read_msr)(unsigned int msr);
+	void (*write_msr)(unsigned int msr, unsigned low, unsigned high);
+
+	/*
+	 * Safe MSR operations.
+	 * read sets err to 0 or -EIO.  write returns 0 or -EIO.
+	 */
+	u64 (*read_msr_safe)(unsigned int msr, int *err);
+	int (*write_msr_safe)(unsigned int msr, unsigned low, unsigned high);
 
 	u64 (*read_pmc)(int counter);
 
@@ -301,23 +301,16 @@ struct pv_mmu_ops {
 struct arch_spinlock;
 #ifdef CONFIG_SMP
 #include <asm/spinlock_types.h>
-#else
-typedef u16 __ticket_t;
 #endif
 
 struct qspinlock;
 
 struct pv_lock_ops {
-#ifdef CONFIG_QUEUED_SPINLOCKS
 	void (*queued_spin_lock_slowpath)(struct qspinlock *lock, u32 val);
 	struct paravirt_callee_save queued_spin_unlock;
 
 	void (*wait)(u8 *ptr, u8 val);
 	void (*kick)(int cpu);
-#else /* !CONFIG_QUEUED_SPINLOCKS */
-	struct paravirt_callee_save lock_spinning;
-	void (*unlock_kick)(struct arch_spinlock *lock, __ticket_t ticket);
-#endif /* !CONFIG_QUEUED_SPINLOCKS */
 };
 
 /* This contains all the paravirt structures: we get a convenient
@@ -399,7 +392,9 @@ int paravirt_disable_iospace(void);
  * offset into the paravirt_patch_template structure, and can therefore be
  * freely converted back into a structure offset.
  */
-#define PARAVIRT_CALL	"call *%c[paravirt_opptr];"
+#define PARAVIRT_CALL					\
+	ANNOTATE_RETPOLINE_SAFE				\
+	"call *%c[paravirt_opptr];"
 
 /*
  * These macros are intended to wrap calls through one of the paravirt

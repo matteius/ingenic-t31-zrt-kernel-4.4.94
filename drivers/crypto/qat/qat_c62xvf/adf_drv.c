@@ -125,7 +125,8 @@ static int adf_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	struct adf_hw_device_data *hw_data;
 	char name[ADF_DEVICE_NAME_LENGTH];
 	unsigned int i, bar_nr;
-	int ret, bar_mask;
+	unsigned long bar_mask;
+	int ret;
 
 	switch (ent->device) {
 	case ADF_C62XIOV_PCI_DEVICE_ID:
@@ -215,8 +216,7 @@ static int adf_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	/* Find and map all the device's BARS */
 	i = 0;
 	bar_mask = pci_select_bars(pdev, IORESOURCE_MEM);
-	for_each_set_bit(bar_nr, (const unsigned long *)&bar_mask,
-			 ADF_PCI_MAX_BARS * 2) {
+	for_each_set_bit(bar_nr, &bar_mask, ADF_PCI_MAX_BARS * 2) {
 		struct adf_bar *bar = &accel_pci_dev->pci_bars[i++];
 
 		bar->base_addr = pci_resource_start(pdev, bar_nr);
@@ -241,6 +241,8 @@ static int adf_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	ret = adf_dev_init(accel_dev);
 	if (ret)
 		goto out_err_dev_shutdown;
+
+	set_bit(ADF_STATUS_PF_RUNNING, &accel_dev->status);
 
 	ret = adf_dev_start(accel_dev);
 	if (ret)
@@ -270,9 +272,7 @@ static void adf_remove(struct pci_dev *pdev)
 		pr_err("QAT: Driver removal failed\n");
 		return;
 	}
-	if (adf_dev_stop(accel_dev))
-		dev_err(&GET_DEV(accel_dev), "Failed to stop QAT accel dev\n");
-
+	adf_dev_stop(accel_dev);
 	adf_dev_shutdown(accel_dev);
 	adf_cleanup_accel(accel_dev);
 	adf_cleanup_pci_dev(accel_dev);

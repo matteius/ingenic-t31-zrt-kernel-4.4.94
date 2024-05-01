@@ -532,21 +532,25 @@ static int gsc_src_set_fmt(struct device *dev, u32 fmt)
 			GSC_IN_CHROMA_ORDER_CRCB);
 		break;
 	case DRM_FORMAT_NV21:
+		cfg |= (GSC_IN_CHROMA_ORDER_CRCB | GSC_IN_YUV420_2P);
+		break;
 	case DRM_FORMAT_NV61:
-		cfg |= (GSC_IN_CHROMA_ORDER_CRCB |
-			GSC_IN_YUV420_2P);
+		cfg |= (GSC_IN_CHROMA_ORDER_CRCB | GSC_IN_YUV422_2P);
 		break;
 	case DRM_FORMAT_YUV422:
 		cfg |= GSC_IN_YUV422_3P;
 		break;
 	case DRM_FORMAT_YUV420:
+		cfg |= (GSC_IN_CHROMA_ORDER_CBCR | GSC_IN_YUV420_3P);
+		break;
 	case DRM_FORMAT_YVU420:
-		cfg |= GSC_IN_YUV420_3P;
+		cfg |= (GSC_IN_CHROMA_ORDER_CRCB | GSC_IN_YUV420_3P);
 		break;
 	case DRM_FORMAT_NV12:
+		cfg |= (GSC_IN_CHROMA_ORDER_CBCR | GSC_IN_YUV420_2P);
+		break;
 	case DRM_FORMAT_NV16:
-		cfg |= (GSC_IN_CHROMA_ORDER_CBCR |
-			GSC_IN_YUV420_2P);
+		cfg |= (GSC_IN_CHROMA_ORDER_CBCR | GSC_IN_YUV422_2P);
 		break;
 	default:
 		dev_err(ippdrv->dev, "invalid target yuv order 0x%x.\n", fmt);
@@ -806,18 +810,25 @@ static int gsc_dst_set_fmt(struct device *dev, u32 fmt)
 			GSC_OUT_CHROMA_ORDER_CRCB);
 		break;
 	case DRM_FORMAT_NV21:
-	case DRM_FORMAT_NV61:
 		cfg |= (GSC_OUT_CHROMA_ORDER_CRCB | GSC_OUT_YUV420_2P);
 		break;
+	case DRM_FORMAT_NV61:
+		cfg |= (GSC_OUT_CHROMA_ORDER_CRCB | GSC_OUT_YUV422_2P);
+		break;
 	case DRM_FORMAT_YUV422:
+		cfg |= GSC_OUT_YUV422_3P;
+		break;
 	case DRM_FORMAT_YUV420:
+		cfg |= (GSC_OUT_CHROMA_ORDER_CBCR | GSC_OUT_YUV420_3P);
+		break;
 	case DRM_FORMAT_YVU420:
-		cfg |= GSC_OUT_YUV420_3P;
+		cfg |= (GSC_OUT_CHROMA_ORDER_CRCB | GSC_OUT_YUV420_3P);
 		break;
 	case DRM_FORMAT_NV12:
+		cfg |= (GSC_OUT_CHROMA_ORDER_CBCR | GSC_OUT_YUV420_2P);
+		break;
 	case DRM_FORMAT_NV16:
-		cfg |= (GSC_OUT_CHROMA_ORDER_CBCR |
-			GSC_OUT_YUV420_2P);
+		cfg |= (GSC_OUT_CHROMA_ORDER_CBCR | GSC_OUT_YUV422_2P);
 		break;
 	default:
 		dev_err(ippdrv->dev, "invalid target yuv order 0x%x.\n", fmt);
@@ -1760,34 +1771,7 @@ static int gsc_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM_SLEEP
-static int gsc_suspend(struct device *dev)
-{
-	struct gsc_context *ctx = get_gsc_context(dev);
-
-	DRM_DEBUG_KMS("id[%d]\n", ctx->id);
-
-	if (pm_runtime_suspended(dev))
-		return 0;
-
-	return gsc_clk_ctrl(ctx, false);
-}
-
-static int gsc_resume(struct device *dev)
-{
-	struct gsc_context *ctx = get_gsc_context(dev);
-
-	DRM_DEBUG_KMS("id[%d]\n", ctx->id);
-
-	if (!pm_runtime_suspended(dev))
-		return gsc_clk_ctrl(ctx, true);
-
-	return 0;
-}
-#endif
-
-#ifdef CONFIG_PM
-static int gsc_runtime_suspend(struct device *dev)
+static int __maybe_unused gsc_runtime_suspend(struct device *dev)
 {
 	struct gsc_context *ctx = get_gsc_context(dev);
 
@@ -1796,7 +1780,7 @@ static int gsc_runtime_suspend(struct device *dev)
 	return  gsc_clk_ctrl(ctx, false);
 }
 
-static int gsc_runtime_resume(struct device *dev)
+static int __maybe_unused gsc_runtime_resume(struct device *dev)
 {
 	struct gsc_context *ctx = get_gsc_context(dev);
 
@@ -1804,10 +1788,10 @@ static int gsc_runtime_resume(struct device *dev)
 
 	return  gsc_clk_ctrl(ctx, true);
 }
-#endif
 
 static const struct dev_pm_ops gsc_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(gsc_suspend, gsc_resume)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
 	SET_RUNTIME_PM_OPS(gsc_runtime_suspend, gsc_runtime_resume, NULL)
 };
 

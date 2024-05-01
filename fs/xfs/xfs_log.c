@@ -435,8 +435,7 @@ xfs_log_reserve(
 	int		 	cnt,
 	struct xlog_ticket	**ticp,
 	__uint8_t	 	client,
-	bool			permanent,
-	uint		 	t_type)
+	bool			permanent)
 {
 	struct xlog		*log = mp->m_log;
 	struct xlog_ticket	*tic;
@@ -456,7 +455,6 @@ xfs_log_reserve(
 	if (!tic)
 		return -ENOMEM;
 
-	tic->t_trans_type = t_type;
 	*ticp = tic;
 
 	xlog_grant_push_ail(log, tic->t_cnt ? tic->t_unit_res * tic->t_cnt
@@ -745,15 +743,45 @@ xfs_log_mount_finish(
 	struct xfs_mount	*mp)
 {
 	int	error = 0;
+	bool	readonly = (mp->m_flags & XFS_MOUNT_RDONLY);
 
 	if (mp->m_flags & XFS_MOUNT_NORECOVERY) {
 		ASSERT(mp->m_flags & XFS_MOUNT_RDONLY);
 		return 0;
+	} else if (readonly) {
+		/* Allow unlinked processing to proceed */
+		mp->m_flags &= ~XFS_MOUNT_RDONLY;
 	}
 
+	/*
+	 * During the second phase of log recovery, we need iget and
+	 * iput to behave like they do for an active filesystem.
+	 * xfs_fs_drop_inode needs to be able to prevent the deletion
+	 * of inodes before we're done replaying log items on those
+	 * inodes.  Turn it off immediately after recovery finishes
+	 * so that we don't leak the quota inodes if subsequent mount
+	 * activities fail.
+	 *
+	 * We let all inodes involved in redo item processing end up on
+	 * the LRU instead of being evicted immediately so that if we do
+	 * something to an unlinked inode, the irele won't cause
+	 * premature truncation and freeing of the inode, which results
+	 * in log recovery failure.  We have to evict the unreferenced
+	 * lru inodes after clearing MS_ACTIVE because we don't
+	 * otherwise clean up the lru if there's a subsequent failure in
+	 * xfs_mountfs, which leads to us leaking the inodes if nothing
+	 * else (e.g. quotacheck) references the inodes before the
+	 * mount failure occurs.
+	 */
+	mp->m_super->s_flags |= MS_ACTIVE;
 	error = xlog_recover_finish(mp->m_log);
 	if (!error)
 		xfs_log_work_queue(mp);
+	mp->m_super->s_flags &= ~MS_ACTIVE;
+	evict_inodes(mp->m_super);
+
+	if (readonly)
+		mp->m_flags |= XFS_MOUNT_RDONLY;
 
 	return error;
 }
@@ -790,7 +818,7 @@ xfs_log_mount_cancel(
  * As far as I know, there weren't any dependencies on the old behaviour.
  */
 
-int
+static int
 xfs_log_unmount_write(xfs_mount_t *mp)
 {
 	struct xlog	 *log = mp->m_log;
@@ -803,11 +831,14 @@ xfs_log_unmount_write(xfs_mount_t *mp)
 	int		 error;
 
 	/*
-	 * Don't write out unmount record on read-only mounts.
+	 * Don't write out unmount record on norecovery mounts or ro devices.
 	 * Or, if we are doing a forced umount (typically because of IO errors).
 	 */
-	if (mp->m_flags & XFS_MOUNT_RDONLY)
+	if (mp->m_flags & XFS_MOUNT_NORECOVERY ||
+	    xfs_readonly_buftarg(log->l_mp->m_logdev_targp)) {
+		ASSERT(mp->m_flags & XFS_MOUNT_RDONLY);
 		return 0;
+	}
 
 	error = _xfs_log_force(mp, XFS_LOG_SYNC, NULL);
 	ASSERT(error || !(XLOG_FORCED_SHUTDOWN(log)));
@@ -823,8 +854,7 @@ xfs_log_unmount_write(xfs_mount_t *mp)
 	} while (iclog != first_iclog);
 #endif
 	if (! (XLOG_FORCED_SHUTDOWN(log))) {
-		error = xfs_log_reserve(mp, 600, 1, &tic,
-					XFS_LOG, 0, XLOG_UNMOUNT_REC_TYPE);
+		error = xfs_log_reserve(mp, 600, 1, &tic, XFS_LOG, 0);
 		if (!error) {
 			/* the data section must be 32 bit size aligned */
 			struct {
@@ -1039,7 +1069,7 @@ xfs_log_space_wake(
  * there's no point in running a dummy transaction at this point because we
  * can't start trying to idle the log until both the CIL and AIL are empty.
  */
-int
+static int
 xfs_log_need_covered(xfs_mount_t *mp)
 {
 	struct xlog	*log = mp->m_log;
@@ -1180,7 +1210,7 @@ xlog_space_left(
  * The log manager needs its own routine, in order to control what
  * happens with the buffer after the write completes.
  */
-void
+static void
 xlog_iodone(xfs_buf_t *bp)
 {
 	struct xlog_in_core	*iclog = bp->b_fspriv;
@@ -1296,7 +1326,7 @@ void
 xfs_log_work_queue(
 	struct xfs_mount        *mp)
 {
-	queue_delayed_work(mp->m_log_workqueue, &mp->m_log->l_work,
+	queue_delayed_work(mp->m_sync_workqueue, &mp->m_log->l_work,
 				msecs_to_jiffies(xfs_syncd_centisecs * 10));
 }
 
@@ -1305,7 +1335,7 @@ xfs_log_work_queue(
  * disk. If there is nothing dirty, then we might need to cover the log to
  * indicate that the filesystem is idle.
  */
-void
+static void
 xfs_log_worker(
 	struct work_struct	*work)
 {
@@ -1418,7 +1448,7 @@ xlog_alloc_log(
 	 */
 	error = -ENOMEM;
 	bp = xfs_buf_alloc(mp->m_logdev_targp, XFS_BUF_DADDR_NULL,
-			   BTOBB(log->l_iclog_size), 0);
+			   BTOBB(log->l_iclog_size), XBF_NO_IOACCT);
 	if (!bp)
 		goto out_free_log;
 
@@ -1457,7 +1487,8 @@ xlog_alloc_log(
 		prev_iclog = iclog;
 
 		bp = xfs_buf_get_uncached(mp->m_logdev_targp,
-						BTOBB(log->l_iclog_size), 0);
+					  BTOBB(log->l_iclog_size),
+					  XBF_NO_IOACCT);
 		if (!bp)
 			goto out_free_iclog;
 
@@ -1509,6 +1540,8 @@ out_free_iclog:
 		if (iclog->ic_bp)
 			xfs_buf_free(iclog->ic_bp);
 		kmem_free(iclog);
+		if (prev_iclog == log->l_iclog)
+			break;
 	}
 	spinlock_destroy(&log->l_icloglock);
 	xfs_buf_free(log->l_xbuf);
@@ -2032,58 +2065,8 @@ xlog_print_tic_res(
 	    REG_TYPE_STR(ICREATE, "inode create")
 	};
 #undef REG_TYPE_STR
-#define TRANS_TYPE_STR(type)	[XFS_TRANS_##type] = #type
-	static char *trans_type_str[XFS_TRANS_TYPE_MAX] = {
-	    TRANS_TYPE_STR(SETATTR_NOT_SIZE),
-	    TRANS_TYPE_STR(SETATTR_SIZE),
-	    TRANS_TYPE_STR(INACTIVE),
-	    TRANS_TYPE_STR(CREATE),
-	    TRANS_TYPE_STR(CREATE_TRUNC),
-	    TRANS_TYPE_STR(TRUNCATE_FILE),
-	    TRANS_TYPE_STR(REMOVE),
-	    TRANS_TYPE_STR(LINK),
-	    TRANS_TYPE_STR(RENAME),
-	    TRANS_TYPE_STR(MKDIR),
-	    TRANS_TYPE_STR(RMDIR),
-	    TRANS_TYPE_STR(SYMLINK),
-	    TRANS_TYPE_STR(SET_DMATTRS),
-	    TRANS_TYPE_STR(GROWFS),
-	    TRANS_TYPE_STR(STRAT_WRITE),
-	    TRANS_TYPE_STR(DIOSTRAT),
-	    TRANS_TYPE_STR(WRITEID),
-	    TRANS_TYPE_STR(ADDAFORK),
-	    TRANS_TYPE_STR(ATTRINVAL),
-	    TRANS_TYPE_STR(ATRUNCATE),
-	    TRANS_TYPE_STR(ATTR_SET),
-	    TRANS_TYPE_STR(ATTR_RM),
-	    TRANS_TYPE_STR(ATTR_FLAG),
-	    TRANS_TYPE_STR(CLEAR_AGI_BUCKET),
-	    TRANS_TYPE_STR(SB_CHANGE),
-	    TRANS_TYPE_STR(DUMMY1),
-	    TRANS_TYPE_STR(DUMMY2),
-	    TRANS_TYPE_STR(QM_QUOTAOFF),
-	    TRANS_TYPE_STR(QM_DQALLOC),
-	    TRANS_TYPE_STR(QM_SETQLIM),
-	    TRANS_TYPE_STR(QM_DQCLUSTER),
-	    TRANS_TYPE_STR(QM_QINOCREATE),
-	    TRANS_TYPE_STR(QM_QUOTAOFF_END),
-	    TRANS_TYPE_STR(FSYNC_TS),
-	    TRANS_TYPE_STR(GROWFSRT_ALLOC),
-	    TRANS_TYPE_STR(GROWFSRT_ZERO),
-	    TRANS_TYPE_STR(GROWFSRT_FREE),
-	    TRANS_TYPE_STR(SWAPEXT),
-	    TRANS_TYPE_STR(CHECKPOINT),
-	    TRANS_TYPE_STR(ICREATE),
-	    TRANS_TYPE_STR(CREATE_TMPFILE)
-	};
-#undef TRANS_TYPE_STR
 
 	xfs_warn(mp, "xlog_write: reservation summary:");
-	xfs_warn(mp, "  trans type  = %s (%u)",
-		 ((ticket->t_trans_type <= 0 ||
-		   ticket->t_trans_type > XFS_TRANS_TYPE_MAX) ?
-		  "bad-trans-type" : trans_type_str[ticket->t_trans_type]),
-		 ticket->t_trans_type);
 	xfs_warn(mp, "  unit res    = %d bytes",
 		 ticket->t_unit_res);
 	xfs_warn(mp, "  current res = %d bytes",
@@ -2651,7 +2634,6 @@ xlog_state_do_callback(
 	int		   funcdidcallbacks; /* flag: function did callbacks */
 	int		   repeats;	/* for issuing console warnings if
 					 * looping too many times */
-	int		   wake = 0;
 
 	spin_lock(&log->l_icloglock);
 	first_iclog = iclog = log->l_iclog;
@@ -2853,11 +2835,9 @@ xlog_state_do_callback(
 #endif
 
 	if (log->l_iclog->ic_state & (XLOG_STATE_ACTIVE|XLOG_STATE_IOERROR))
-		wake = 1;
-	spin_unlock(&log->l_icloglock);
-
-	if (wake)
 		wake_up_all(&log->l_flush_wait);
+
+	spin_unlock(&log->l_icloglock);
 }
 
 
@@ -3356,8 +3336,6 @@ maybe_sleep:
 		 */
 		if (iclog->ic_state & XLOG_STATE_IOERROR)
 			return -EIO;
-		if (log_flushed)
-			*log_flushed = 1;
 	} else {
 
 no_sleep:
@@ -3376,12 +3354,8 @@ xfs_log_force(
 	xfs_mount_t	*mp,
 	uint		flags)
 {
-	int	error;
-
-	trace_xfs_log_force(mp, 0);
-	error = _xfs_log_force(mp, flags, NULL);
-	if (error)
-		xfs_warn(mp, "%s: error %d returned.", __func__, error);
+	trace_xfs_log_force(mp, 0, _RET_IP_);
+	_xfs_log_force(mp, flags, NULL);
 }
 
 /*
@@ -3465,8 +3439,6 @@ try_again:
 
 				xlog_wait(&iclog->ic_prev->ic_write_wait,
 							&log->l_icloglock);
-				if (log_flushed)
-					*log_flushed = 1;
 				already_slept = 1;
 				goto try_again;
 			}
@@ -3500,9 +3472,6 @@ try_again:
 			 */
 			if (iclog->ic_state & XLOG_STATE_IOERROR)
 				return -EIO;
-
-			if (log_flushed)
-				*log_flushed = 1;
 		} else {		/* just return */
 			spin_unlock(&log->l_icloglock);
 		}
@@ -3525,12 +3494,8 @@ xfs_log_force_lsn(
 	xfs_lsn_t	lsn,
 	uint		flags)
 {
-	int	error;
-
-	trace_xfs_log_force(mp, lsn);
-	error = _xfs_log_force_lsn(mp, lsn, flags, NULL);
-	if (error)
-		xfs_warn(mp, "%s: error %d returned.", __func__, error);
+	trace_xfs_log_force(mp, lsn, _RET_IP_);
+	_xfs_log_force_lsn(mp, lsn, flags, NULL);
 }
 
 /*
@@ -3709,7 +3674,6 @@ xlog_ticket_alloc(
 	tic->t_tid		= prandom_u32();
 	tic->t_clientid		= client;
 	tic->t_flags		= XLOG_TIC_INITED;
-	tic->t_trans_type	= 0;
 	if (permanent)
 		tic->t_flags |= XLOG_TIC_PERM_RESERV;
 
@@ -4035,7 +3999,9 @@ xfs_log_force_umount(
 	 * item committed callback functions will do this again under lock to
 	 * avoid races.
 	 */
+	spin_lock(&log->l_cilp->xc_push_lock);
 	wake_up_all(&log->l_cilp->xc_commit_wait);
+	spin_unlock(&log->l_cilp->xc_push_lock);
 	xlog_state_do_callback(log, XFS_LI_ABORTED, NULL);
 
 #ifdef XFSERRORDEBUG

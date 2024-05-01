@@ -191,11 +191,12 @@ ad_actor_sys_prio
 ad_actor_system
 
 	In an AD system, this specifies the mac-address for the actor in
-	protocol packet exchanges (LACPDUs). The value cannot be NULL or
-	multicast. It is preferred to have the local-admin bit set for this
-	mac but driver does not enforce it. If the value is not given then
-	system defaults to using the masters' mac address as actors' system
-	address.
+	protocol packet exchanges (LACPDUs). The value cannot be a multicast
+	address. If the all-zeroes MAC is specified, bonding will internally
+	use the MAC of the bond itself. It is preferred to have the
+	local-admin bit set for this mac but driver does not enforce it. If
+	the value is not given then system defaults to using the masters'
+	mac address as actors' system address.
 
 	This parameter has effect only in 802.3ad mode and is available through
 	SysFs interface.
@@ -1880,8 +1881,8 @@ or more peers on the local network.
 
 	The ARP monitor relies on the device driver itself to verify
 that traffic is flowing.  In particular, the driver must keep up to
-date the last receive time, dev->last_rx, and transmit start time,
-dev->trans_start.  If these are not updated by the driver, then the
+date the last receive time, dev->last_rx.  Drivers that use NETIF_F_LLTX
+flag must also update netdev_queue->trans_start.  If they do not, then the
 ARP monitor will immediately fail any slaves using that driver, and
 those slaves will stay down.  If networking monitoring (tcpdump, etc)
 shows the ARP requests and replies on the network, then it may be that

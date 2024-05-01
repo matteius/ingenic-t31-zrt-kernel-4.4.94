@@ -29,9 +29,11 @@ pte_t huge_ptep_get_and_clear(struct mm_struct *mm,
 static inline int prepare_hugepage_range(struct file *file,
 			unsigned long addr, unsigned long len)
 {
-	if (len & ~HPAGE_MASK)
+	struct hstate *h = hstate_file(file);
+
+	if (len & ~huge_page_mask(h))
 		return -EINVAL;
-	if (addr & ~HPAGE_MASK)
+	if (addr & ~huge_page_mask(h))
 		return -EINVAL;
 	return 0;
 }
@@ -41,7 +43,10 @@ static inline int prepare_hugepage_range(struct file *file,
 static inline void huge_pte_clear(struct mm_struct *mm, unsigned long addr,
 				  pte_t *ptep)
 {
-	pte_val(*ptep) = _SEGMENT_ENTRY_EMPTY;
+	if ((pte_val(*ptep) & _REGION_ENTRY_TYPE_MASK) == _REGION_ENTRY_TYPE_R3)
+		pte_val(*ptep) = _REGION3_ENTRY_EMPTY;
+	else
+		pte_val(*ptep) = _SEGMENT_ENTRY_EMPTY;
 }
 
 static inline void huge_ptep_clear_flush(struct vm_area_struct *vma,

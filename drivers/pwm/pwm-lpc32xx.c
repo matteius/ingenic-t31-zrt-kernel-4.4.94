@@ -25,6 +25,7 @@ struct lpc32xx_pwm_chip {
 };
 
 #define PWM_ENABLE	BIT(31)
+#define PWM_PIN_LEVEL	BIT(30)
 
 #define to_lpc32xx_pwm_chip(_chip) \
 	container_of(_chip, struct lpc32xx_pwm_chip, chip)
@@ -103,6 +104,7 @@ static int lpc32xx_pwm_probe(struct platform_device *pdev)
 	struct lpc32xx_pwm_chip *lpc32xx;
 	struct resource *res;
 	int ret;
+	u32 val;
 
 	lpc32xx = devm_kzalloc(&pdev->dev, sizeof(*lpc32xx), GFP_KERNEL);
 	if (!lpc32xx)
@@ -121,6 +123,11 @@ static int lpc32xx_pwm_probe(struct platform_device *pdev)
 	lpc32xx->chip.ops = &lpc32xx_pwm_ops;
 	lpc32xx->chip.npwm = 1;
 	lpc32xx->chip.base = -1;
+
+	/* If PWM is disabled, configure the output to the default value */
+	val = readl(lpc32xx->base + (lpc32xx->chip.pwms[0].hwpwm << 2));
+	val &= ~PWM_PIN_LEVEL;
+	writel(val, lpc32xx->base + (lpc32xx->chip.pwms[0].hwpwm << 2));
 
 	ret = pwmchip_add(&lpc32xx->chip);
 	if (ret < 0) {

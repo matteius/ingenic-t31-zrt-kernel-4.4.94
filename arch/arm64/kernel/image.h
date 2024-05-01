@@ -74,6 +74,12 @@
 #ifdef CONFIG_EFI
 
 /*
+ * Use ABSOLUTE() to avoid ld.lld treating this as a relative symbol:
+ * https://github.com/ClangBuiltLinux/linux/issues/561
+ */
+__efistub_stext_offset = ABSOLUTE(stext - _text);
+
+/*
  * Prevent the symbol aliases below from being emitted into the kallsyms
  * table, by forcing them to be absolute symbols (which are conveniently
  * ignored by scripts/kallsyms) rather than section relative symbols.
@@ -112,6 +118,7 @@ __efistub___memset		= KALLSYMS_HIDE(__pi_memset);
 __efistub__text			= KALLSYMS_HIDE(_text);
 __efistub__end			= KALLSYMS_HIDE(_end);
 __efistub__edata		= KALLSYMS_HIDE(_edata);
+__efistub_screen_info		= KALLSYMS_HIDE(screen_info);
 
 #endif
 

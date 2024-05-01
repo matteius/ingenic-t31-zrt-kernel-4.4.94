@@ -19,9 +19,9 @@ static void pci_stop_dev(struct pci_dev *dev)
 	pci_pme_active(dev, false);
 
 	if (dev->is_added) {
+		device_release_driver(&dev->dev);
 		pci_proc_detach_device(dev);
 		pci_remove_sysfs_dev_files(dev);
-		device_release_driver(&dev->dev);
 		dev->is_added = 0;
 	}
 
@@ -40,6 +40,7 @@ static void pci_destroy_dev(struct pci_dev *dev)
 	list_del(&dev->bus_list);
 	up_write(&pci_bus_sem);
 
+	pci_bridge_d3_device_removed(dev);
 	pci_free_resources(dev);
 	put_device(&dev->dev);
 }

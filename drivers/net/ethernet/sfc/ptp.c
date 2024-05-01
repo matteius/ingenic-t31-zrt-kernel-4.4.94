@@ -494,7 +494,7 @@ static int efx_ptp_get_attributes(struct efx_nic *efx)
 	} else if (rc == -EINVAL) {
 		fmt = MC_CMD_PTP_OUT_GET_ATTRIBUTES_SECONDS_NANOSECONDS;
 	} else if (rc == -EPERM) {
-		netif_info(efx, probe, efx->net_dev, "no PTP support\n");
+		pci_info(efx->pci_dev, "no PTP support\n");
 		return rc;
 	} else {
 		efx_mcdi_display_error(efx, MC_CMD_PTP, sizeof(inbuf),
@@ -613,7 +613,7 @@ static int efx_ptp_disable(struct efx_nic *efx)
 	 * should only have been called during probe.
 	 */
 	if (rc == -ENOSYS || rc == -EPERM)
-		netif_info(efx, probe, efx->net_dev, "no PTP support\n");
+		pci_info(efx->pci_dev, "no PTP support\n");
 	else if (rc)
 		efx_mcdi_display_error(efx, MC_CMD_PTP,
 				       MC_CMD_PTP_IN_DISABLE_LEN,
@@ -1269,13 +1269,13 @@ int efx_ptp_probe(struct efx_nic *efx, struct efx_channel *channel)
 		if (IS_ERR(ptp->phc_clock)) {
 			rc = PTR_ERR(ptp->phc_clock);
 			goto fail3;
-		}
-
-		INIT_WORK(&ptp->pps_work, efx_ptp_pps_worker);
-		ptp->pps_workwq = create_singlethread_workqueue("sfc_pps");
-		if (!ptp->pps_workwq) {
-			rc = -ENOMEM;
-			goto fail4;
+		} else if (ptp->phc_clock) {
+			INIT_WORK(&ptp->pps_work, efx_ptp_pps_worker);
+			ptp->pps_workwq = create_singlethread_workqueue("sfc_pps");
+			if (!ptp->pps_workwq) {
+				rc = -ENOMEM;
+				goto fail4;
+			}
 		}
 	}
 	ptp->nic_ts_enabled = false;
@@ -1306,7 +1306,7 @@ static int efx_ptp_probe_channel(struct efx_channel *channel)
 {
 	struct efx_nic *efx = channel->efx;
 
-	channel->irq_moderation = 0;
+	channel->irq_moderation_us = 0;
 	channel->rx_queue.core_index = 0;
 
 	return efx_ptp_probe(efx, channel);
@@ -1320,7 +1320,8 @@ void efx_ptp_remove(struct efx_nic *efx)
 	(void)efx_ptp_disable(efx);
 
 	cancel_work_sync(&efx->ptp_data->work);
-	cancel_work_sync(&efx->ptp_data->pps_work);
+	if (efx->ptp_data->pps_workwq)
+		cancel_work_sync(&efx->ptp_data->pps_work);
 
 	skb_queue_purge(&efx->ptp_data->rxq);
 	skb_queue_purge(&efx->ptp_data->txq);

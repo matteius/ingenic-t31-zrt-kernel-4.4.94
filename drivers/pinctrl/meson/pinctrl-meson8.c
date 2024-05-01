@@ -736,7 +736,9 @@ static const char * const gpio_groups[] = {
 	"BOOT_5", "BOOT_6", "BOOT_7", "BOOT_8", "BOOT_9",
 	"BOOT_10", "BOOT_11", "BOOT_12", "BOOT_13", "BOOT_14",
 	"BOOT_15", "BOOT_16", "BOOT_17", "BOOT_18",
+};
 
+static const char * const gpio_aobus_groups[] = {
 	"GPIOAO_0", "GPIOAO_1", "GPIOAO_2", "GPIOAO_3",
 	"GPIOAO_4", "GPIOAO_5", "GPIOAO_6", "GPIOAO_7",
 	"GPIOAO_8", "GPIOAO_9", "GPIOAO_10", "GPIOAO_11",
@@ -908,6 +910,7 @@ static struct meson_pmx_func meson8_cbus_functions[] = {
 };
 
 static struct meson_pmx_func meson8_aobus_functions[] = {
+	FUNCTION(gpio_aobus),
 	FUNCTION(uart_ao),
 	FUNCTION(remote),
 	FUNCTION(i2c_slave_ao),
@@ -931,38 +934,28 @@ static struct meson_bank meson8_aobus_banks[] = {
 	BANK("AO",   PIN(GPIOAO_0, AO_OFF), PIN(GPIO_TEST_N, AO_OFF), 0,  0,  0, 16,  0,  0,  0, 16,  1,  0),
 };
 
-static struct meson_domain_data meson8_cbus_domain_data = {
-	.name		= "cbus-banks",
-	.banks		= meson8_cbus_banks,
-	.num_banks	= ARRAY_SIZE(meson8_cbus_banks),
-	.pin_base	= 0,
-	.num_pins	= 120,
-};
-
-static struct meson_domain_data meson8_aobus_domain_data = {
-	.name		= "ao-bank",
-	.banks		= meson8_aobus_banks,
-	.num_banks	= ARRAY_SIZE(meson8_aobus_banks),
-	.pin_base	= 120,
-	.num_pins	= 16,
-};
-
 struct meson_pinctrl_data meson8_cbus_pinctrl_data = {
+	.name		= "cbus-banks",
+	.pin_base	= 0,
 	.pins		= meson8_cbus_pins,
 	.groups		= meson8_cbus_groups,
 	.funcs		= meson8_cbus_functions,
-	.domain_data	= &meson8_cbus_domain_data,
+	.banks		= meson8_cbus_banks,
 	.num_pins	= ARRAY_SIZE(meson8_cbus_pins),
 	.num_groups	= ARRAY_SIZE(meson8_cbus_groups),
 	.num_funcs	= ARRAY_SIZE(meson8_cbus_functions),
+	.num_banks	= ARRAY_SIZE(meson8_cbus_banks),
 };
 
 struct meson_pinctrl_data meson8_aobus_pinctrl_data = {
+	.name		= "ao-bank",
+	.pin_base	= 120,
 	.pins		= meson8_aobus_pins,
 	.groups		= meson8_aobus_groups,
 	.funcs		= meson8_aobus_functions,
-	.domain_data	= &meson8_aobus_domain_data,
+	.banks		= meson8_aobus_banks,
 	.num_pins	= ARRAY_SIZE(meson8_aobus_pins),
 	.num_groups	= ARRAY_SIZE(meson8_aobus_groups),
 	.num_funcs	= ARRAY_SIZE(meson8_aobus_functions),
+	.num_banks	= ARRAY_SIZE(meson8_aobus_banks),
 };

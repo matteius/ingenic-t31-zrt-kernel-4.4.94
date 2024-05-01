@@ -51,11 +51,27 @@ void __trace_note_message(struct blk_trace *, const char *fmt, ...);
  **/
 #define blk_add_trace_msg(q, fmt, ...)					\
 	do {								\
-		struct blk_trace *bt = (q)->blk_trace;			\
+		struct blk_trace *bt;					\
+									\
+		rcu_read_lock();					\
+		bt = rcu_dereference((q)->blk_trace);			\
 		if (unlikely(bt))					\
 			__trace_note_message(bt, fmt, ##__VA_ARGS__);	\
+		rcu_read_unlock();					\
 	} while (0)
 #define BLK_TN_MAX_MSG		128
+
+static inline bool blk_trace_note_message_enabled(struct request_queue *q)
+{
+	struct blk_trace *bt;
+	bool ret;
+
+	rcu_read_lock();
+	bt = rcu_dereference(q->blk_trace);
+	ret = bt && (bt->act_mask & BLK_TC_NOTIFY);
+	rcu_read_unlock();
+	return ret;
+}
 
 extern void blk_add_driver_data(struct request_queue *q, struct request *rq,
 				void *data, size_t len);
@@ -79,6 +95,7 @@ extern struct attribute_group blk_trace_attr_group;
 # define blk_trace_remove(q)				(-ENOTTY)
 # define blk_add_trace_msg(q, fmt, ...)			do { } while (0)
 # define blk_trace_remove_sysfs(dev)			do { } while (0)
+# define blk_trace_note_message_enabled(q)		(false)
 static inline int blk_trace_init_sysfs(struct device *dev)
 {
 	return 0;
@@ -109,7 +126,7 @@ static inline int blk_cmd_buf_len(struct request *rq)
 }
 
 extern void blk_dump_cmd(char *buf, struct request *rq);
-extern void blk_fill_rwbs(char *rwbs, u32 rw, int bytes);
+extern void blk_fill_rwbs(char *rwbs, int op, u32 rw, int bytes);
 
 #endif /* CONFIG_EVENT_TRACING && CONFIG_BLOCK */
 

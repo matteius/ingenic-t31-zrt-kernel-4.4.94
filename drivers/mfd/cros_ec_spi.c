@@ -366,7 +366,6 @@ static int cros_ec_spi_receive_response(struct cros_ec_device *ec_dev,
 static int cros_ec_pkt_xfer_spi(struct cros_ec_device *ec_dev,
 				struct cros_ec_command *ec_msg)
 {
-	struct ec_host_request *request;
 	struct ec_host_response *response;
 	struct cros_ec_spi *ec_spi = ec_dev->priv;
 	struct spi_transfer trans, trans_delay;
@@ -378,7 +377,6 @@ static int cros_ec_pkt_xfer_spi(struct cros_ec_device *ec_dev,
 	int ret = 0, final_ret;
 
 	len = cros_ec_prepare_tx(ec_dev, ec_msg);
-	request = (struct ec_host_request *)ec_dev->dout;
 	dev_dbg(ec_dev->dev, "prepared, len=%d\n", len);
 
 	/* If it's too soon to do another transaction, wait */
@@ -666,6 +664,7 @@ static int cros_ec_spi_probe(struct spi_device *spi)
 			   sizeof(struct ec_response_get_protocol_info);
 	ec_dev->dout_size = sizeof(struct ec_host_request);
 
+	ec_spi->last_transfer_ns = ktime_get_ns();
 
 	err = cros_ec_register(ec_dev);
 	if (err) {

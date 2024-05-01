@@ -464,7 +464,7 @@ static int arc_serial_poll_getchar(struct uart_port *port)
 }
 #endif
 
-static struct uart_ops arc_serial_pops = {
+static const struct uart_ops arc_serial_pops = {
 	.tx_empty	= arc_serial_tx_empty,
 	.set_mctrl	= arc_serial_set_mctrl,
 	.get_mctrl	= arc_serial_get_mctrl,
@@ -595,6 +595,11 @@ static int arc_serial_probe(struct platform_device *pdev)
 	dev_id = of_alias_get_id(np, "serial");
 	if (dev_id < 0)
 		dev_id = 0;
+
+	if (dev_id >= ARRAY_SIZE(arc_uart_ports)) {
+		dev_err(&pdev->dev, "serial%d out of range\n", dev_id);
+		return -EINVAL;
+	}
 
 	uart = &arc_uart_ports[dev_id];
 	port = &uart->port;

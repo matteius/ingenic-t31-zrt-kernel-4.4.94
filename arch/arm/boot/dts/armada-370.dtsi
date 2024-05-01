@@ -108,7 +108,7 @@
 
 			pcie@2,0 {
 				device_type = "pci";
-				assigned-addresses = <0x82002800 0 0x80000 0 0x2000>;
+				assigned-addresses = <0x82001000 0 0x80000 0 0x2000>;
 				reg = <0x1000 0 0 0 0>;
 				#address-cells = <3>;
 				#size-cells = <2>;
@@ -132,24 +132,6 @@
 				cache-level = <2>;
 				cache-unified;
 				wt-override;
-			};
-
-			/*
-			 * Default SPI pinctrl setting, can be overwritten on
-			 * board level if a different configuration is used.
-			 */
-			spi0: spi@10600 {
-				compatible = "marvell,armada-370-spi",
-						"marvell,orion-spi";
-				pinctrl-0 = <&spi0_pins1>;
-				pinctrl-names = "default";
-			};
-
-			spi1: spi@10680 {
-				compatible = "marvell,armada-370-spi",
-						"marvell,orion-spi";
-				pinctrl-0 = <&spi1_pins>;
-				pinctrl-names = "default";
 			};
 
 			i2c0: i2c@11000 {
@@ -446,4 +428,20 @@
 			       "mpp27", "mpp28", "mpp29", "mpp30";
 		marvell,function = "ge1";
 	};
+};
+
+/*
+ * Default SPI pinctrl setting, can be overwritten on
+ * board level if a different configuration is used.
+ */
+&spi0 {
+	compatible = "marvell,armada-370-spi", "marvell,orion-spi";
+	pinctrl-0 = <&spi0_pins1>;
+	pinctrl-names = "default";
+};
+
+&spi1 {
+	compatible = "marvell,armada-370-spi", "marvell,orion-spi";
+	pinctrl-0 = <&spi1_pins>;
+	pinctrl-names = "default";
 };

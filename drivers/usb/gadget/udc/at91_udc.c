@@ -1726,10 +1726,7 @@ static int at91sam9261_udc_init(struct at91_udc *udc)
 
 	udc->matrix = syscon_regmap_lookup_by_phandle(udc->pdev->dev.of_node,
 						      "atmel,matrix");
-	if (IS_ERR(udc->matrix))
-		return PTR_ERR(udc->matrix);
-
-	return 0;
+	return PTR_ERR_OR_ZERO(udc->matrix);
 }
 
 static void at91sam9261_udc_pullup(struct at91_udc *udc, int is_on)
@@ -1898,7 +1895,9 @@ static int at91udc_probe(struct platform_device *pdev)
 	clk_disable(udc->iclk);
 
 	/* request UDC and maybe VBUS irqs */
-	udc->udp_irq = platform_get_irq(pdev, 0);
+	udc->udp_irq = retval = platform_get_irq(pdev, 0);
+	if (retval < 0)
+		goto err_unprepare_iclk;
 	retval = devm_request_irq(dev, udc->udp_irq, at91_udc_irq, 0,
 				  driver_name, udc);
 	if (retval) {

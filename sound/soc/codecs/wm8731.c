@@ -358,6 +358,9 @@ static int wm8731_hw_params(struct snd_pcm_substream *substream,
 	case 24:
 		iface |= 0x0008;
 		break;
+	case 32:
+		iface |= 0x000c;
+		break;
 	}
 
 	wm8731_set_deemph(codec);
@@ -541,7 +544,7 @@ static int wm8731_startup(struct snd_pcm_substream *substream,
 #define WM8731_RATES SNDRV_PCM_RATE_8000_96000
 
 #define WM8731_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S20_3LE |\
-	SNDRV_PCM_FMTBIT_S24_LE)
+	SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE)
 
 static const struct snd_soc_dai_ops wm8731_dai_ops = {
 	.startup	= wm8731_startup,
@@ -601,7 +604,7 @@ static int wm8731_hw_init(struct device *dev, struct wm8731_priv *wm8731)
 	ret = wm8731_reset(wm8731->regmap);
 	if (ret < 0) {
 		dev_err(dev, "Failed to issue reset: %d\n", ret);
-		goto err_regulator_enable;
+		goto err;
 	}
 
 	/* Clear POWEROFF, keep everything else disabled */
@@ -618,23 +621,22 @@ static int wm8731_hw_init(struct device *dev, struct wm8731_priv *wm8731)
 
 	regcache_mark_dirty(wm8731->regmap);
 
-err_regulator_enable:
-	/* Regulators will be enabled by bias management */
-	regulator_bulk_disable(ARRAY_SIZE(wm8731->supplies), wm8731->supplies);
-
+err:
 	return ret;
 }
 
-static struct snd_soc_codec_driver soc_codec_dev_wm8731 = {
+static const struct snd_soc_codec_driver soc_codec_dev_wm8731 = {
 	.set_bias_level = wm8731_set_bias_level,
 	.suspend_bias_off = true,
 
-	.dapm_widgets = wm8731_dapm_widgets,
-	.num_dapm_widgets = ARRAY_SIZE(wm8731_dapm_widgets),
-	.dapm_routes = wm8731_intercon,
-	.num_dapm_routes = ARRAY_SIZE(wm8731_intercon),
-	.controls =	wm8731_snd_controls,
-	.num_controls = ARRAY_SIZE(wm8731_snd_controls),
+	.component_driver = {
+		.controls		= wm8731_snd_controls,
+		.num_controls		= ARRAY_SIZE(wm8731_snd_controls),
+		.dapm_widgets		= wm8731_dapm_widgets,
+		.num_dapm_widgets	= ARRAY_SIZE(wm8731_dapm_widgets),
+		.dapm_routes		= wm8731_intercon,
+		.num_dapm_routes	= ARRAY_SIZE(wm8731_intercon),
+	},
 };
 
 static const struct of_device_id wm8731_of_match[] = {
@@ -763,21 +765,27 @@ static int wm8731_i2c_probe(struct i2c_client *i2c,
 		ret = PTR_ERR(wm8731->regmap);
 		dev_err(&i2c->dev, "Failed to allocate register map: %d\n",
 			ret);
-		return ret;
+		goto err_regulator_enable;
 	}
 
 	ret = wm8731_hw_init(&i2c->dev, wm8731);
 	if (ret != 0)
-		return ret;
+		goto err_regulator_enable;
 
 	ret = snd_soc_register_codec(&i2c->dev,
 			&soc_codec_dev_wm8731, &wm8731_dai, 1);
 	if (ret != 0) {
 		dev_err(&i2c->dev, "Failed to register CODEC: %d\n", ret);
-		return ret;
+		goto err_regulator_enable;
 	}
 
 	return 0;
+
+err_regulator_enable:
+	/* Regulators will be enabled by bias management */
+	regulator_bulk_disable(ARRAY_SIZE(wm8731->supplies), wm8731->supplies);
+
+	return ret;
 }
 
 static int wm8731_i2c_remove(struct i2c_client *client)

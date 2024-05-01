@@ -202,12 +202,12 @@ int iwlagn_mac_setup_register(struct iwl_priv *priv,
 
 	hw->max_listen_interval = IWL_CONN_MAX_LISTEN_INTERVAL;
 
-	if (priv->nvm_data->bands[IEEE80211_BAND_2GHZ].n_channels)
-		priv->hw->wiphy->bands[IEEE80211_BAND_2GHZ] =
-			&priv->nvm_data->bands[IEEE80211_BAND_2GHZ];
-	if (priv->nvm_data->bands[IEEE80211_BAND_5GHZ].n_channels)
-		priv->hw->wiphy->bands[IEEE80211_BAND_5GHZ] =
-			&priv->nvm_data->bands[IEEE80211_BAND_5GHZ];
+	if (priv->nvm_data->bands[NL80211_BAND_2GHZ].n_channels)
+		priv->hw->wiphy->bands[NL80211_BAND_2GHZ] =
+			&priv->nvm_data->bands[NL80211_BAND_2GHZ];
+	if (priv->nvm_data->bands[NL80211_BAND_5GHZ].n_channels)
+		priv->hw->wiphy->bands[NL80211_BAND_5GHZ] =
+			&priv->nvm_data->bands[NL80211_BAND_5GHZ];
 
 	hw->wiphy->hw_version = priv->trans->hw_id;
 
@@ -315,7 +315,7 @@ static int iwlagn_mac_start(struct ieee80211_hw *hw)
 
 	priv->is_open = 1;
 	IWL_DEBUG_MAC80211(priv, "leave\n");
-	return 0;
+	return ret;
 }
 
 static void iwlagn_mac_stop(struct ieee80211_hw *hw)

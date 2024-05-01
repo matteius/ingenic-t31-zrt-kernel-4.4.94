@@ -51,8 +51,6 @@ static const struct vivid_format formats[] = {
 	},
 };
 
-static const unsigned int NUM_FORMATS = ARRAY_SIZE(formats);
-
 static const struct v4l2_frequency_band bands_adc[] = {
 	{
 		.tuner = 0,
@@ -151,7 +149,11 @@ static int vivid_thread_sdr_cap(void *data)
 		if (kthread_should_stop())
 			break;
 
-		mutex_lock(&dev->mutex);
+		if (!mutex_trylock(&dev->mutex)) {
+			schedule_timeout_uninterruptible(1);
+			continue;
+		}
+
 		cur_jiffies = jiffies;
 		if (dev->sdr_cap_seq_resync) {
 			dev->jiffies_sdr_cap = cur_jiffies;
@@ -215,7 +217,7 @@ static int vivid_thread_sdr_cap(void *data)
 
 static int sdr_cap_queue_setup(struct vb2_queue *vq,
 		       unsigned *nbuffers, unsigned *nplanes,
-		       unsigned sizes[], void *alloc_ctxs[])
+		       unsigned sizes[], struct device *alloc_devs[])
 {
 	/* 2 = max 16-bit sample returned */
 	sizes[0] = SDR_CAP_SAMPLES_PER_BUF * 2;
@@ -311,10 +313,8 @@ static void sdr_cap_stop_streaming(struct vb2_queue *vq)
 	}
 
 	/* shutdown control thread */
-	mutex_unlock(&dev->mutex);
 	kthread_stop(dev->kthread_sdr_cap);
 	dev->kthread_sdr_cap = NULL;
-	mutex_lock(&dev->mutex);
 }
 
 const struct vb2_ops vivid_sdr_cap_qops = {

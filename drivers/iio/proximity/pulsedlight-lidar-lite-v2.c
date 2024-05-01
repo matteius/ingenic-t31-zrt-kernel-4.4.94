@@ -51,7 +51,11 @@ struct lidar_data {
 	int (*xfer)(struct lidar_data *data, u8 reg, u8 *val, int len);
 	int i2c_enabled;
 
-	u16 buffer[8]; /* 2 byte distance + 8 byte timestamp */
+	/* Ensure timestamp is naturally aligned */
+	struct {
+		u16 chan;
+		s64 timestamp __aligned(8);
+	} scan;
 };
 
 static const struct iio_chan_spec lidar_channels[] = {
@@ -166,6 +170,7 @@ static int lidar_get_measurement(struct lidar_data *data, u16 *reg)
 	ret = lidar_write_control(data, LIDAR_REG_CONTROL_ACQUIRE);
 	if (ret < 0) {
 		dev_err(&client->dev, "cannot send start measurement command");
+		pm_runtime_put_noidle(&client->dev);
 		return ret;
 	}
 
@@ -203,22 +208,19 @@ static int lidar_read_raw(struct iio_dev *indio_dev,
 	struct lidar_data *data = iio_priv(indio_dev);
 	int ret = -EINVAL;
 
-	mutex_lock(&indio_dev->mlock);
-
-	if (iio_buffer_enabled(indio_dev) && mask == IIO_CHAN_INFO_RAW) {
-		ret = -EBUSY;
-		goto error_busy;
-	}
-
 	switch (mask) {
 	case IIO_CHAN_INFO_RAW: {
 		u16 reg;
+
+		if (iio_device_claim_direct_mode(indio_dev))
+			return -EBUSY;
 
 		ret = lidar_get_measurement(data, &reg);
 		if (!ret) {
 			*val = reg;
 			ret = IIO_VAL_INT;
 		}
+		iio_device_release_direct_mode(indio_dev);
 		break;
 	}
 	case IIO_CHAN_INFO_SCALE:
@@ -227,9 +229,6 @@ static int lidar_read_raw(struct iio_dev *indio_dev,
 		ret = IIO_VAL_INT_PLUS_MICRO;
 		break;
 	}
-
-error_busy:
-	mutex_unlock(&indio_dev->mlock);
 
 	return ret;
 }
@@ -241,10 +240,10 @@ static irqreturn_t lidar_trigger_handler(int irq, void *private)
 	struct lidar_data *data = iio_priv(indio_dev);
 	int ret;
 
-	ret = lidar_get_measurement(data, data->buffer);
+	ret = lidar_get_measurement(data, &data->scan.chan);
 	if (!ret) {
-		iio_push_to_buffers_with_timestamp(indio_dev, data->buffer,
-						   iio_get_time_ns());
+		iio_push_to_buffers_with_timestamp(indio_dev, &data->scan,
+						   iio_get_time_ns(indio_dev));
 	} else if (ret != -EINVAL) {
 		dev_err(&data->client->dev, "cannot read LIDAR measurement");
 	}

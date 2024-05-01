@@ -88,7 +88,8 @@ static int iser_create_device_ib_res(struct iser_device *device)
 		  device->comps_used, ib_dev->name,
 		  ib_dev->num_comp_vectors, max_cqe);
 
-	device->pd = ib_alloc_pd(ib_dev);
+	device->pd = ib_alloc_pd(ib_dev,
+		iser_always_reg ? 0 : IB_PD_UNSAFE_GLOBAL_RKEY);
 	if (IS_ERR(device->pd))
 		goto pd_err;
 
@@ -103,26 +104,13 @@ static int iser_create_device_ib_res(struct iser_device *device)
 		}
 	}
 
-	if (!iser_always_reg) {
-		int access = IB_ACCESS_LOCAL_WRITE |
-			     IB_ACCESS_REMOTE_WRITE |
-			     IB_ACCESS_REMOTE_READ;
-
-		device->mr = ib_get_dma_mr(device->pd, access);
-		if (IS_ERR(device->mr))
-			goto cq_err;
-	}
-
 	INIT_IB_EVENT_HANDLER(&device->event_handler, ib_dev,
 			      iser_event_handler);
 	if (ib_register_event_handler(&device->event_handler))
-		goto handler_err;
+		goto cq_err;
 
 	return 0;
 
-handler_err:
-	if (device->mr)
-		ib_dereg_mr(device->mr);
 cq_err:
 	for (i = 0; i < device->comps_used; i++) {
 		struct iser_comp *comp = &device->comps[i];
@@ -154,14 +142,10 @@ static void iser_free_device_ib_res(struct iser_device *device)
 	}
 
 	(void)ib_unregister_event_handler(&device->event_handler);
-	if (device->mr)
-		(void)ib_dereg_mr(device->mr);
 	ib_dealloc_pd(device->pd);
 
 	kfree(device->comps);
 	device->comps = NULL;
-
-	device->mr = NULL;
 	device->pd = NULL;
 }
 
@@ -378,6 +362,7 @@ int iser_alloc_fastreg_pool(struct ib_conn *ib_conn,
 	int i, ret;
 
 	INIT_LIST_HEAD(&fr_pool->list);
+	INIT_LIST_HEAD(&fr_pool->all_list);
 	spin_lock_init(&fr_pool->lock);
 	fr_pool->size = 0;
 	for (i = 0; i < cmds_max; i++) {
@@ -389,6 +374,7 @@ int iser_alloc_fastreg_pool(struct ib_conn *ib_conn,
 		}
 
 		list_add_tail(&desc->list, &fr_pool->list);
+		list_add_tail(&desc->all_list, &fr_pool->all_list);
 		fr_pool->size++;
 	}
 
@@ -408,13 +394,13 @@ void iser_free_fastreg_pool(struct ib_conn *ib_conn)
 	struct iser_fr_desc *desc, *tmp;
 	int i = 0;
 
-	if (list_empty(&fr_pool->list))
+	if (list_empty(&fr_pool->all_list))
 		return;
 
 	iser_info("freeing conn %p fr pool\n", ib_conn);
 
-	list_for_each_entry_safe(desc, tmp, &fr_pool->list, list) {
-		list_del(&desc->list);
+	list_for_each_entry_safe(desc, tmp, &fr_pool->all_list, all_list) {
+		list_del(&desc->all_list);
 		iser_free_reg_res(&desc->rsc);
 		if (desc->pi_ctx)
 			iser_free_pi_ctx(desc->pi_ctx);
@@ -1124,7 +1110,9 @@ u8 iser_check_task_pi_status(struct iscsi_iser_task *iser_task,
 					 IB_MR_CHECK_SIG_STATUS, &mr_status);
 		if (ret) {
 			pr_err("ib_check_mr_status failed, ret %d\n", ret);
-			goto err;
+			/* Not a lot we can do, return ambiguous guard error */
+			*sector = 0;
+			return 0x1;
 		}
 
 		if (mr_status.fail_status & IB_MR_CHECK_SIG_STATUS) {
@@ -1152,9 +1140,6 @@ u8 iser_check_task_pi_status(struct iscsi_iser_task *iser_task,
 	}
 
 	return 0;
-err:
-	/* Not alot we can do here, return ambiguous guard error */
-	return 0x1;
 }
 
 void iser_err_comp(struct ib_wc *wc, const char *type)

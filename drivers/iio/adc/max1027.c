@@ -426,6 +426,7 @@ static int max1027_probe(struct spi_device *spi)
 
 	indio_dev->name = spi_get_device_id(spi)->name;
 	indio_dev->dev.parent = &spi->dev;
+	indio_dev->dev.of_node = spi->dev.of_node;
 	indio_dev->info = &max1027_info;
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->channels = st->info->channels;
@@ -468,6 +469,14 @@ static int max1027_probe(struct spi_device *spi)
 	if (ret < 0) {
 		dev_err(&indio_dev->dev, "Failed to allocate IRQ.\n");
 		goto fail_dev_register;
+	}
+
+	/* Internal reset */
+	st->reg = MAX1027_RST_REG;
+	ret = spi_write(st->spi, &st->reg, 1);
+	if (ret < 0) {
+		dev_err(&indio_dev->dev, "Failed to reset the ADC\n");
+		return ret;
 	}
 
 	/* Disable averaging */

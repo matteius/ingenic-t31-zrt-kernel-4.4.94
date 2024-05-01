@@ -149,7 +149,7 @@ struct coresight_platform_data *of_get_coresight_platform_data(
 				continue;
 
 			/* The local out port number */
-			pdata->outports[i] = endpoint.id;
+			pdata->outports[i] = endpoint.port;
 
 			/*
 			 * Get a handle on the remote port and parent
@@ -166,7 +166,7 @@ struct coresight_platform_data *of_get_coresight_platform_data(
 
 			rdev = of_coresight_get_endpoint_device(rparent);
 			if (!rdev)
-				continue;
+				return ERR_PTR(-EPROBE_DEFER);
 
 			pdata->child_names[i] = dev_name(rdev);
 			pdata->child_ports[i] = rendpoint.id;
@@ -184,6 +184,7 @@ struct coresight_platform_data *of_get_coresight_platform_data(
 			break;
 		}
 	}
+	of_node_put(dn);
 
 	return pdata;
 }

@@ -18,6 +18,7 @@ static inline void pnv_pci_shutdown(void) { }
 #endif
 
 extern u32 pnv_get_supported_cpuidle_states(void);
+extern u64 pnv_deepest_stop_state;
 
 extern void pnv_lpc_init(void);
 
@@ -25,5 +26,7 @@ extern void opal_handle_events(uint64_t events);
 extern void opal_event_shutdown(void);
 
 bool cpu_core_split_required(void);
+
+void pnv_rng_init(void);
 
 #endif /* _POWERNV_H */

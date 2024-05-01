@@ -68,18 +68,23 @@ static struct dma_chan *of_dma_router_xlate(struct of_phandle_args *dma_spec,
 		return NULL;
 
 	ofdma_target = of_dma_find_controller(&dma_spec_target);
-	if (!ofdma_target)
-		return NULL;
-
-	chan = ofdma_target->of_dma_xlate(&dma_spec_target, ofdma_target);
-	if (chan) {
-		chan->router = ofdma->dma_router;
-		chan->route_data = route_data;
-	} else {
+	if (!ofdma_target) {
 		ofdma->dma_router->route_free(ofdma->dma_router->dev,
 					      route_data);
+		chan = ERR_PTR(-EPROBE_DEFER);
+		goto err;
 	}
 
+	chan = ofdma_target->of_dma_xlate(&dma_spec_target, ofdma_target);
+	if (IS_ERR_OR_NULL(chan)) {
+		ofdma->dma_router->route_free(ofdma->dma_router->dev,
+					      route_data);
+	} else {
+		chan->router = ofdma->dma_router;
+		chan->route_data = route_data;
+	}
+
+err:
 	/*
 	 * Need to put the node back since the ofdma->of_dma_route_allocate
 	 * has taken it for generating the new, translated dma_spec
@@ -240,8 +245,9 @@ struct dma_chan *of_dma_request_slave_channel(struct device_node *np,
 	struct of_phandle_args	dma_spec;
 	struct of_dma		*ofdma;
 	struct dma_chan		*chan;
-	int			count, i;
+	int			count, i, start;
 	int			ret_no_channel = -ENODEV;
+	static atomic_t		last_index;
 
 	if (!np || !name) {
 		pr_err("%s: not enough information provided\n", __func__);
@@ -259,8 +265,15 @@ struct dma_chan *of_dma_request_slave_channel(struct device_node *np,
 		return ERR_PTR(-ENODEV);
 	}
 
+	/*
+	 * approximate an average distribution across multiple
+	 * entries with the same name
+	 */
+	start = atomic_inc_return(&last_index);
 	for (i = 0; i < count; i++) {
-		if (of_dma_match_channel(np, name, i, &dma_spec))
+		if (of_dma_match_channel(np, name,
+					 (i + start) % count,
+					 &dma_spec))
 			continue;
 
 		mutex_lock(&of_dma_lock);

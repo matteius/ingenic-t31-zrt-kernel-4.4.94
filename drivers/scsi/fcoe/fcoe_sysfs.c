@@ -385,6 +385,44 @@ static FCOE_DEVICE_ATTR(ctlr, enabled, S_IRUGO | S_IWUSR,
 			show_ctlr_enabled_state,
 			store_ctlr_enabled);
 
+static ssize_t store_ctlr_fip_resp(struct device *dev,
+			      struct device_attribute *attr,
+			      const char *buf, size_t count)
+{
+	struct fcoe_ctlr_device *ctlr = dev_to_ctlr(dev);
+	struct fcoe_ctlr *fip = fcoe_ctlr_device_priv(ctlr);
+
+	mutex_lock(&fip->ctlr_mutex);
+	if ((buf[1] == '\0') || ((buf[1] == '\n') && (buf[2] == '\0'))) {
+		if (buf[0] == '1') {
+			fip->fip_resp = 1;
+			mutex_unlock(&fip->ctlr_mutex);
+			return count;
+		}
+		if (buf[0] == '0') {
+			fip->fip_resp = 0;
+			mutex_unlock(&fip->ctlr_mutex);
+			return count;
+		}
+	}
+	mutex_unlock(&fip->ctlr_mutex);
+	return -EINVAL;
+}
+
+static ssize_t show_ctlr_fip_resp(struct device *dev,
+				  struct device_attribute *attr,
+				  char *buf)
+{
+	struct fcoe_ctlr_device *ctlr = dev_to_ctlr(dev);
+	struct fcoe_ctlr *fip = fcoe_ctlr_device_priv(ctlr);
+
+	return sprintf(buf, "%d\n", fip->fip_resp ? 1 : 0);
+}
+
+static FCOE_DEVICE_ATTR(ctlr, fip_vlan_responder, S_IRUGO | S_IWUSR,
+			show_ctlr_fip_resp,
+			store_ctlr_fip_resp);
+
 static ssize_t
 store_private_fcoe_ctlr_fcf_dev_loss_tmo(struct device *dev,
 					 struct device_attribute *attr,
@@ -467,6 +505,7 @@ static struct attribute_group fcoe_ctlr_lesb_attr_group = {
 };
 
 static struct attribute *fcoe_ctlr_attrs[] = {
+	&device_attr_fcoe_ctlr_fip_vlan_responder.attr,
 	&device_attr_fcoe_ctlr_fcf_dev_loss_tmo.attr,
 	&device_attr_fcoe_ctlr_enabled.attr,
 	&device_attr_fcoe_ctlr_mode.attr,
@@ -713,14 +752,15 @@ struct fcoe_ctlr_device *fcoe_ctlr_device_add(struct device *parent,
 
 	dev_set_name(&ctlr->dev, "ctlr_%d", ctlr->id);
 	error = device_register(&ctlr->dev);
-	if (error)
-		goto out_del_q2;
+	if (error) {
+		destroy_workqueue(ctlr->devloss_work_q);
+		destroy_workqueue(ctlr->work_q);
+		put_device(&ctlr->dev);
+		return NULL;
+	}
 
 	return ctlr;
 
-out_del_q2:
-	destroy_workqueue(ctlr->devloss_work_q);
-	ctlr->devloss_work_q = NULL;
 out_del_q:
 	destroy_workqueue(ctlr->work_q);
 	ctlr->work_q = NULL;
@@ -919,16 +959,16 @@ struct fcoe_fcf_device *fcoe_fcf_device_add(struct fcoe_ctlr_device *ctlr,
 	fcf->selected = new_fcf->selected;
 
 	error = device_register(&fcf->dev);
-	if (error)
-		goto out_del;
+	if (error) {
+		put_device(&fcf->dev);
+		goto out;
+	}
 
 	fcf->state = FCOE_FCF_STATE_CONNECTED;
 	list_add_tail(&fcf->peers, &ctlr->fcfs);
 
 	return fcf;
 
-out_del:
-	kfree(fcf);
 out:
 	return NULL;
 }

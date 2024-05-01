@@ -330,7 +330,7 @@ static int mn88473_init(struct dvb_frontend *fe)
 	/* Request the firmware, this will block and timeout */
 	ret = request_firmware(&fw, name, &client->dev);
 	if (ret) {
-		dev_err(&client->dev, "firmare file '%s' not found\n", name);
+		dev_err(&client->dev, "firmware file '%s' not found\n", name);
 		goto err;
 	}
 
@@ -485,18 +485,6 @@ static int mn88473_probe(struct i2c_client *client,
 		goto err_kfree;
 	}
 
-	/* Check demod answers with correct chip id */
-	ret = regmap_read(dev->regmap[0], 0xff, &uitmp);
-	if (ret)
-		goto err_regmap_0_regmap_exit;
-
-	dev_dbg(&client->dev, "chip id=%02x\n", uitmp);
-
-	if (uitmp != 0x03) {
-		ret = -ENODEV;
-		goto err_regmap_0_regmap_exit;
-	}
-
 	/*
 	 * Chip has three I2C addresses for different register banks. Used
 	 * addresses are 0x18, 0x1a and 0x1c. We register two dummy clients,
@@ -533,10 +521,22 @@ static int mn88473_probe(struct i2c_client *client,
 	}
 	i2c_set_clientdata(dev->client[2], dev);
 
+	/* Check demod answers with correct chip id */
+	ret = regmap_read(dev->regmap[2], 0xff, &uitmp);
+	if (ret)
+		goto err_regmap_2_regmap_exit;
+
+	dev_dbg(&client->dev, "chip id=%02x\n", uitmp);
+
+	if (uitmp != 0x03) {
+		ret = -ENODEV;
+		goto err_regmap_2_regmap_exit;
+	}
+
 	/* Sleep because chip is active by default */
 	ret = regmap_write(dev->regmap[2], 0x05, 0x3e);
 	if (ret)
-		goto err_client_2_i2c_unregister_device;
+		goto err_regmap_2_regmap_exit;
 
 	/* Create dvb frontend */
 	memcpy(&dev->frontend.ops, &mn88473_ops, sizeof(dev->frontend.ops));
@@ -547,7 +547,8 @@ static int mn88473_probe(struct i2c_client *client,
 	dev_info(&client->dev, "Panasonic MN88473 successfully identified\n");
 
 	return 0;
-
+err_regmap_2_regmap_exit:
+	regmap_exit(dev->regmap[2]);
 err_client_2_i2c_unregister_device:
 	i2c_unregister_device(dev->client[2]);
 err_regmap_1_regmap_exit:

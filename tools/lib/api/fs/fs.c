@@ -34,6 +34,10 @@
 #define TRACEFS_MAGIC          0x74726163
 #endif
 
+#ifndef HUGETLBFS_MAGIC
+#define HUGETLBFS_MAGIC        0x958458f6
+#endif
+
 static const char * const sysfs__fs_known_mountpoints[] = {
 	"/sys",
 	0,
@@ -67,6 +71,10 @@ static const char * const tracefs__known_mountpoints[] = {
 	0,
 };
 
+static const char * const hugetlbfs__known_mountpoints[] = {
+	0,
+};
+
 struct fs {
 	const char		*name;
 	const char * const	*mounts;
@@ -80,6 +88,7 @@ enum {
 	FS__PROCFS  = 1,
 	FS__DEBUGFS = 2,
 	FS__TRACEFS = 3,
+	FS__HUGETLBFS = 4,
 };
 
 #ifndef TRACEFS_MAGIC
@@ -106,6 +115,11 @@ static struct fs fs__entries[] = {
 		.name	= "tracefs",
 		.mounts	= tracefs__known_mountpoints,
 		.magic	= TRACEFS_MAGIC,
+	},
+	[FS__HUGETLBFS] = {
+		.name	= "hugetlbfs",
+		.mounts = hugetlbfs__known_mountpoints,
+		.magic	= HUGETLBFS_MAGIC,
 	},
 };
 
@@ -180,6 +194,7 @@ static bool fs__env_override(struct fs *fs)
 	size_t name_len = strlen(fs->name);
 	/* name + "_PATH" + '\0' */
 	char upper_name[name_len + 5 + 1];
+
 	memcpy(upper_name, fs->name, name_len);
 	mem_toupper(upper_name, name_len);
 	strcpy(&upper_name[name_len], "_PATH");
@@ -189,7 +204,8 @@ static bool fs__env_override(struct fs *fs)
 		return false;
 
 	fs->found = true;
-	strncpy(fs->path, override_path, sizeof(fs->path));
+	strncpy(fs->path, override_path, sizeof(fs->path) - 1);
+	fs->path[sizeof(fs->path) - 1] = '\0';
 	return true;
 }
 
@@ -265,6 +281,7 @@ FS(sysfs,   FS__SYSFS);
 FS(procfs,  FS__PROCFS);
 FS(debugfs, FS__DEBUGFS);
 FS(tracefs, FS__TRACEFS);
+FS(hugetlbfs, FS__HUGETLBFS);
 
 int filename__read_int(const char *filename, int *value)
 {
@@ -283,6 +300,11 @@ int filename__read_int(const char *filename, int *value)
 	return err;
 }
 
+/*
+ * Parses @value out of @filename with strtoull.
+ * By using 0 for base, the strtoull detects the
+ * base automatically (see man strtoull).
+ */
 int filename__read_ull(const char *filename, unsigned long long *value)
 {
 	char line[64];
@@ -292,7 +314,7 @@ int filename__read_ull(const char *filename, unsigned long long *value)
 		return -1;
 
 	if (read(fd, line, sizeof(line)) > 0) {
-		*value = strtoull(line, NULL, 10);
+		*value = strtoull(line, NULL, 0);
 		if (*value != ULLONG_MAX)
 			err = 0;
 	}
@@ -349,6 +371,19 @@ int filename__read_str(const char *filename, char **buf, size_t *sizep)
 
 	close(fd);
 	return err;
+}
+
+int procfs__read_str(const char *entry, char **buf, size_t *sizep)
+{
+	char path[PATH_MAX];
+	const char *procfs = procfs__mountpoint();
+
+	if (!procfs)
+		return -1;
+
+	snprintf(path, sizeof(path), "%s/%s", procfs, entry);
+
+	return filename__read_str(path, buf, sizep);
 }
 
 int sysfs__read_ull(const char *entry, unsigned long long *value)

@@ -1348,12 +1348,14 @@ static struct snd_soc_codec_driver pcm512x_codec_driver = {
 	.set_bias_level = pcm512x_set_bias_level,
 	.idle_bias_off = true,
 
-	.controls = pcm512x_controls,
-	.num_controls = ARRAY_SIZE(pcm512x_controls),
-	.dapm_widgets = pcm512x_dapm_widgets,
-	.num_dapm_widgets = ARRAY_SIZE(pcm512x_dapm_widgets),
-	.dapm_routes = pcm512x_dapm_routes,
-	.num_dapm_routes = ARRAY_SIZE(pcm512x_dapm_routes),
+	.component_driver = {
+		.controls		= pcm512x_controls,
+		.num_controls		= ARRAY_SIZE(pcm512x_controls),
+		.dapm_widgets		= pcm512x_dapm_widgets,
+		.num_dapm_widgets	= ARRAY_SIZE(pcm512x_dapm_widgets),
+		.dapm_routes		= pcm512x_dapm_routes,
+		.num_dapm_routes	= ARRAY_SIZE(pcm512x_dapm_routes),
+	},
 };
 
 static const struct regmap_range_cfg pcm512x_range = {
@@ -1439,13 +1441,15 @@ int pcm512x_probe(struct device *dev, struct regmap *regmap)
 	}
 
 	pcm512x->sclk = devm_clk_get(dev, NULL);
-	if (PTR_ERR(pcm512x->sclk) == -EPROBE_DEFER)
-		return -EPROBE_DEFER;
+	if (PTR_ERR(pcm512x->sclk) == -EPROBE_DEFER) {
+		ret = -EPROBE_DEFER;
+		goto err;
+	}
 	if (!IS_ERR(pcm512x->sclk)) {
 		ret = clk_prepare_enable(pcm512x->sclk);
 		if (ret != 0) {
 			dev_err(dev, "Failed to enable SCLK: %d\n", ret);
-			return ret;
+			goto err;
 		}
 	}
 
@@ -1471,7 +1475,7 @@ int pcm512x_probe(struct device *dev, struct regmap *regmap)
 			if (val > 6) {
 				dev_err(dev, "Invalid pll-in\n");
 				ret = -EINVAL;
-				goto err_clk;
+				goto err_pm;
 			}
 			pcm512x->pll_in = val;
 		}
@@ -1480,7 +1484,7 @@ int pcm512x_probe(struct device *dev, struct regmap *regmap)
 			if (val > 6) {
 				dev_err(dev, "Invalid pll-out\n");
 				ret = -EINVAL;
-				goto err_clk;
+				goto err_pm;
 			}
 			pcm512x->pll_out = val;
 		}
@@ -1489,12 +1493,12 @@ int pcm512x_probe(struct device *dev, struct regmap *regmap)
 			dev_err(dev,
 				"Error: both pll-in and pll-out, or none\n");
 			ret = -EINVAL;
-			goto err_clk;
+			goto err_pm;
 		}
 		if (pcm512x->pll_in && pcm512x->pll_in == pcm512x->pll_out) {
 			dev_err(dev, "Error: pll-in == pll-out\n");
 			ret = -EINVAL;
-			goto err_clk;
+			goto err_pm;
 		}
 	}
 #endif

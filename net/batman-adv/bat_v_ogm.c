@@ -26,7 +26,10 @@
 #include <linux/if_ether.h>
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
+#include <linux/kref.h>
 #include <linux/list.h>
+#include <linux/lockdep.h>
+#include <linux/mutex.h>
 #include <linux/netdevice.h>
 #include <linux/random.h>
 #include <linux/rculist.h>
@@ -38,13 +41,16 @@
 #include <linux/types.h>
 #include <linux/workqueue.h>
 
+#include "bat_algo.h"
 #include "hard-interface.h"
 #include "hash.h"
+#include "log.h"
 #include "originator.h"
 #include "packet.h"
 #include "routing.h"
 #include "send.h"
 #include "translation-table.h"
+#include "tvlv.h"
 
 /**
  * batadv_v_ogm_orig_get - retrieve and possibly create an originator node
@@ -69,13 +75,12 @@ struct batadv_orig_node *batadv_v_ogm_orig_get(struct batadv_priv *bat_priv,
 	if (!orig_node)
 		return NULL;
 
+	kref_get(&orig_node->refcount);
 	hash_added = batadv_hash_add(bat_priv->orig_hash, batadv_compare_orig,
 				     batadv_choose_orig, orig_node,
 				     &orig_node->hash_entry);
 	if (hash_added != 0) {
-		/* orig_node->refcounter is initialised to 2 by
-		 * batadv_orig_node_new()
-		 */
+		/* remove refcnt for newly created orig_node and hash entry */
 		batadv_orig_node_put(orig_node);
 		batadv_orig_node_put(orig_node);
 		orig_node = NULL;
@@ -124,22 +129,19 @@ static void batadv_v_ogm_send_to_if(struct sk_buff *skb,
 }
 
 /**
- * batadv_v_ogm_send - periodic worker broadcasting the own OGM
- * @work: work queue item
+ * batadv_v_ogm_send_softif() - periodic worker broadcasting the own OGM
+ *  @bat_priv: the bat priv with all the soft interface information
  */
-static void batadv_v_ogm_send(struct work_struct *work)
+static void batadv_v_ogm_send_softif(struct batadv_priv *bat_priv)
 {
 	struct batadv_hard_iface *hard_iface;
-	struct batadv_priv_bat_v *bat_v;
-	struct batadv_priv *bat_priv;
 	struct batadv_ogm2_packet *ogm_packet;
 	struct sk_buff *skb, *skb_tmp;
 	unsigned char *ogm_buff, *pkt_buff;
 	int ogm_buff_len;
 	u16 tvlv_len = 0;
 
-	bat_v = container_of(work, struct batadv_priv_bat_v, ogm_wq.work);
-	bat_priv = container_of(bat_v, struct batadv_priv, bat_v);
+	lockdep_assert_held(&bat_priv->bat_v.ogm_buff_mutex);
 
 	if (atomic_read(&bat_priv->mesh_state) == BATADV_MESH_DEACTIVATING)
 		goto out;
@@ -176,6 +178,9 @@ static void batadv_v_ogm_send(struct work_struct *work)
 		if (hard_iface->soft_iface != bat_priv->soft_iface)
 			continue;
 
+		if (!kref_get_unless_zero(&hard_iface->refcount))
+			continue;
+
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 			   "Sending own OGM2 packet (originator %pM, seqno %u, throughput %u, TTL %d) on interface %s [%pM]\n",
 			   ogm_packet->orig, ntohl(ogm_packet->seqno),
@@ -185,10 +190,13 @@ static void batadv_v_ogm_send(struct work_struct *work)
 
 		/* this skb gets consumed by batadv_v_ogm_send_to_if() */
 		skb_tmp = skb_clone(skb, GFP_ATOMIC);
-		if (!skb_tmp)
+		if (!skb_tmp) {
+			batadv_hardif_put(hard_iface);
 			break;
+		}
 
 		batadv_v_ogm_send_to_if(skb_tmp, hard_iface);
+		batadv_hardif_put(hard_iface);
 	}
 	rcu_read_unlock();
 
@@ -198,6 +206,23 @@ reschedule:
 	batadv_v_ogm_start_timer(bat_priv);
 out:
 	return;
+}
+
+/**
+ * batadv_v_ogm_send() - periodic worker broadcasting the own OGM
+ * @work: work queue item
+ */
+static void batadv_v_ogm_send(struct work_struct *work)
+{
+	struct batadv_priv_bat_v *bat_v;
+	struct batadv_priv *bat_priv;
+
+	bat_v = container_of(work, struct batadv_priv_bat_v, ogm_wq.work);
+	bat_priv = container_of(bat_v, struct batadv_priv, bat_v);
+
+	mutex_lock(&bat_priv->bat_v.ogm_buff_mutex);
+	batadv_v_ogm_send_softif(bat_priv);
+	mutex_unlock(&bat_priv->bat_v.ogm_buff_mutex);
 }
 
 /**
@@ -226,78 +251,15 @@ void batadv_v_ogm_primary_iface_set(struct batadv_hard_iface *primary_iface)
 	struct batadv_priv *bat_priv = netdev_priv(primary_iface->soft_iface);
 	struct batadv_ogm2_packet *ogm_packet;
 
+	mutex_lock(&bat_priv->bat_v.ogm_buff_mutex);
 	if (!bat_priv->bat_v.ogm_buff)
-		return;
+		goto unlock;
 
 	ogm_packet = (struct batadv_ogm2_packet *)bat_priv->bat_v.ogm_buff;
 	ether_addr_copy(ogm_packet->orig, primary_iface->net_dev->dev_addr);
-}
 
-/**
- * batadv_v_ogm_orig_update - update the originator status based on the received
- *  OGM
- * @bat_priv: the bat priv with all the soft interface information
- * @orig_node: the originator to update
- * @neigh_node: the neighbour the OGM has been received from (to update)
- * @ogm2: the received OGM
- * @if_outgoing: the interface where this OGM is going to be forwarded through
- */
-static void
-batadv_v_ogm_orig_update(struct batadv_priv *bat_priv,
-			 struct batadv_orig_node *orig_node,
-			 struct batadv_neigh_node *neigh_node,
-			 const struct batadv_ogm2_packet *ogm2,
-			 struct batadv_hard_iface *if_outgoing)
-{
-	struct batadv_neigh_ifinfo *router_ifinfo = NULL, *neigh_ifinfo = NULL;
-	struct batadv_neigh_node *router = NULL;
-	s32 neigh_seq_diff;
-	u32 neigh_last_seqno;
-	u32 router_last_seqno;
-	u32 router_throughput, neigh_throughput;
-
-	batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
-		   "Searching and updating originator entry of received packet\n");
-
-	/* if this neighbor already is our next hop there is nothing
-	 * to change
-	 */
-	router = batadv_orig_router_get(orig_node, if_outgoing);
-	if (router == neigh_node)
-		goto out;
-
-	/* don't consider neighbours with worse throughput.
-	 * also switch route if this seqno is BATADV_V_MAX_ORIGDIFF newer than
-	 * the last received seqno from our best next hop.
-	 */
-	if (router) {
-		router_ifinfo = batadv_neigh_ifinfo_get(router, if_outgoing);
-		neigh_ifinfo = batadv_neigh_ifinfo_get(neigh_node, if_outgoing);
-
-		/* if these are not allocated, something is wrong. */
-		if (!router_ifinfo || !neigh_ifinfo)
-			goto out;
-
-		neigh_last_seqno = neigh_ifinfo->bat_v.last_seqno;
-		router_last_seqno = router_ifinfo->bat_v.last_seqno;
-		neigh_seq_diff = neigh_last_seqno - router_last_seqno;
-		router_throughput = router_ifinfo->bat_v.throughput;
-		neigh_throughput = neigh_ifinfo->bat_v.throughput;
-
-		if ((neigh_seq_diff < BATADV_OGM_MAX_ORIGDIFF) &&
-		    (router_throughput >= neigh_throughput))
-			goto out;
-	}
-
-	batadv_update_route(bat_priv, orig_node, if_outgoing, neigh_node);
-
-out:
-	if (router_ifinfo)
-		batadv_neigh_ifinfo_put(router_ifinfo);
-	if (neigh_ifinfo)
-		batadv_neigh_ifinfo_put(neigh_ifinfo);
-	if (router)
-		batadv_neigh_node_put(router);
+unlock:
+	mutex_unlock(&bat_priv->bat_v.ogm_buff_mutex);
 }
 
 /**
@@ -347,10 +309,12 @@ static u32 batadv_v_forward_penalty(struct batadv_priv *bat_priv,
 }
 
 /**
- * batadv_v_ogm_forward - forward an OGM to the given outgoing interface
+ * batadv_v_ogm_forward - check conditions and forward an OGM to the given
+ *  outgoing interface
  * @bat_priv: the bat priv with all the soft interface information
  * @ogm_received: previously received OGM to be forwarded
- * @throughput: throughput to announce, may vary per outgoing interface
+ * @orig_node: the originator which has been updated
+ * @neigh_node: the neigh_node through with the OGM has been received
  * @if_incoming: the interface on which this OGM was received on
  * @if_outgoing: the interface to which the OGM has to be forwarded to
  *
@@ -359,20 +323,49 @@ static u32 batadv_v_forward_penalty(struct batadv_priv *bat_priv,
  */
 static void batadv_v_ogm_forward(struct batadv_priv *bat_priv,
 				 const struct batadv_ogm2_packet *ogm_received,
-				 u32 throughput,
+				 struct batadv_orig_node *orig_node,
+				 struct batadv_neigh_node *neigh_node,
 				 struct batadv_hard_iface *if_incoming,
 				 struct batadv_hard_iface *if_outgoing)
 {
+	struct batadv_neigh_ifinfo *neigh_ifinfo = NULL;
+	struct batadv_orig_ifinfo *orig_ifinfo = NULL;
+	struct batadv_neigh_node *router = NULL;
 	struct batadv_ogm2_packet *ogm_forward;
 	unsigned char *skb_buff;
 	struct sk_buff *skb;
 	size_t packet_len;
 	u16 tvlv_len;
 
+	/* only forward for specific interfaces, not for the default one. */
+	if (if_outgoing == BATADV_IF_DEFAULT)
+		goto out;
+
+	orig_ifinfo = batadv_orig_ifinfo_new(orig_node, if_outgoing);
+	if (!orig_ifinfo)
+		goto out;
+
+	/* acquire possibly updated router */
+	router = batadv_orig_router_get(orig_node, if_outgoing);
+
+	/* strict rule: forward packets coming from the best next hop only */
+	if (neigh_node != router)
+		goto out;
+
+	/* don't forward the same seqno twice on one interface */
+	if (orig_ifinfo->last_seqno_forwarded == ntohl(ogm_received->seqno))
+		goto out;
+
+	orig_ifinfo->last_seqno_forwarded = ntohl(ogm_received->seqno);
+
 	if (ogm_received->ttl <= 1) {
 		batadv_dbg(BATADV_DBG_BATMAN, bat_priv, "ttl exceeded\n");
-		return;
+		goto out;
 	}
+
+	neigh_ifinfo = batadv_neigh_ifinfo_get(neigh_node, if_outgoing);
+	if (!neigh_ifinfo)
+		goto out;
 
 	tvlv_len = ntohs(ogm_received->tvlv_len);
 
@@ -380,7 +373,7 @@ static void batadv_v_ogm_forward(struct batadv_priv *bat_priv,
 	skb = netdev_alloc_skb_ip_align(if_outgoing->net_dev,
 					ETH_HLEN + packet_len);
 	if (!skb)
-		return;
+		goto out;
 
 	skb_reserve(skb, ETH_HLEN);
 	skb_buff = skb_put(skb, packet_len);
@@ -388,15 +381,23 @@ static void batadv_v_ogm_forward(struct batadv_priv *bat_priv,
 
 	/* apply forward penalty */
 	ogm_forward = (struct batadv_ogm2_packet *)skb_buff;
-	ogm_forward->throughput = htonl(throughput);
+	ogm_forward->throughput = htonl(neigh_ifinfo->bat_v.throughput);
 	ogm_forward->ttl--;
 
 	batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
 		   "Forwarding OGM2 packet on %s: throughput %u, ttl %u, received via %s\n",
-		   if_outgoing->net_dev->name, throughput, ogm_forward->ttl,
-		   if_incoming->net_dev->name);
+		   if_outgoing->net_dev->name, ntohl(ogm_forward->throughput),
+		   ogm_forward->ttl, if_incoming->net_dev->name);
 
 	batadv_v_ogm_send_to_if(skb, if_outgoing);
+
+out:
+	if (orig_ifinfo)
+		batadv_orig_ifinfo_put(orig_ifinfo);
+	if (router)
+		batadv_neigh_node_put(router);
+	if (neigh_ifinfo)
+		batadv_neigh_ifinfo_put(neigh_ifinfo);
 }
 
 /**
@@ -493,8 +494,10 @@ out:
  * @neigh_node: the neigh_node through with the OGM has been received
  * @if_incoming: the interface where this packet was received
  * @if_outgoing: the interface for which the packet should be considered
+ *
+ * Return: true if the packet should be forwarded, false otherwise
  */
-static void batadv_v_ogm_route_update(struct batadv_priv *bat_priv,
+static bool batadv_v_ogm_route_update(struct batadv_priv *bat_priv,
 				      const struct ethhdr *ethhdr,
 				      const struct batadv_ogm2_packet *ogm2,
 				      struct batadv_orig_node *orig_node,
@@ -503,14 +506,14 @@ static void batadv_v_ogm_route_update(struct batadv_priv *bat_priv,
 				      struct batadv_hard_iface *if_outgoing)
 {
 	struct batadv_neigh_node *router = NULL;
-	struct batadv_neigh_ifinfo *neigh_ifinfo = NULL;
 	struct batadv_orig_node *orig_neigh_node = NULL;
-	struct batadv_orig_ifinfo *orig_ifinfo = NULL;
 	struct batadv_neigh_node *orig_neigh_router = NULL;
-
-	neigh_ifinfo = batadv_neigh_ifinfo_get(neigh_node, if_outgoing);
-	if (!neigh_ifinfo)
-		goto out;
+	struct batadv_neigh_ifinfo *router_ifinfo = NULL, *neigh_ifinfo = NULL;
+	u32 router_throughput, neigh_throughput;
+	u32 router_last_seqno;
+	u32 neigh_last_seqno;
+	s32 neigh_seq_diff;
+	bool forward = false;
 
 	orig_neigh_node = batadv_v_ogm_orig_get(bat_priv, ethhdr->h_source);
 	if (!orig_neigh_node)
@@ -529,47 +532,57 @@ static void batadv_v_ogm_route_update(struct batadv_priv *bat_priv,
 		goto out;
 	}
 
-	if (router)
-		batadv_neigh_node_put(router);
+	/* Mark the OGM to be considered for forwarding, and update routes
+	 * if needed.
+	 */
+	forward = true;
 
-	/* Update routes, and check if the OGM is from the best next hop */
-	batadv_v_ogm_orig_update(bat_priv, orig_node, neigh_node, ogm2,
-				 if_outgoing);
+	batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
+		   "Searching and updating originator entry of received packet\n");
 
-	orig_ifinfo = batadv_orig_ifinfo_new(orig_node, if_outgoing);
-	if (!orig_ifinfo)
+	/* if this neighbor already is our next hop there is nothing
+	 * to change
+	 */
+	if (router == neigh_node)
 		goto out;
 
-	/* don't forward the same seqno twice on one interface */
-	if (orig_ifinfo->last_seqno_forwarded == ntohl(ogm2->seqno))
-		goto out;
+	/* don't consider neighbours with worse throughput.
+	 * also switch route if this seqno is BATADV_V_MAX_ORIGDIFF newer than
+	 * the last received seqno from our best next hop.
+	 */
+	if (router) {
+		router_ifinfo = batadv_neigh_ifinfo_get(router, if_outgoing);
+		neigh_ifinfo = batadv_neigh_ifinfo_get(neigh_node, if_outgoing);
 
-	/* acquire possibly updated router */
-	router = batadv_orig_router_get(orig_node, if_outgoing);
+		/* if these are not allocated, something is wrong. */
+		if (!router_ifinfo || !neigh_ifinfo)
+			goto out;
 
-	/* strict rule: forward packets coming from the best next hop only */
-	if (neigh_node != router)
-		goto out;
+		neigh_last_seqno = neigh_ifinfo->bat_v.last_seqno;
+		router_last_seqno = router_ifinfo->bat_v.last_seqno;
+		neigh_seq_diff = neigh_last_seqno - router_last_seqno;
+		router_throughput = router_ifinfo->bat_v.throughput;
+		neigh_throughput = neigh_ifinfo->bat_v.throughput;
 
-	/* only forward for specific interface, not for the default one. */
-	if (if_outgoing != BATADV_IF_DEFAULT) {
-		orig_ifinfo->last_seqno_forwarded = ntohl(ogm2->seqno);
-		batadv_v_ogm_forward(bat_priv, ogm2,
-				     neigh_ifinfo->bat_v.throughput,
-				     if_incoming, if_outgoing);
+		if ((neigh_seq_diff < BATADV_OGM_MAX_ORIGDIFF) &&
+		    (router_throughput >= neigh_throughput))
+			goto out;
 	}
 
+	batadv_update_route(bat_priv, orig_node, if_outgoing, neigh_node);
 out:
-	if (orig_ifinfo)
-		batadv_orig_ifinfo_put(orig_ifinfo);
 	if (router)
 		batadv_neigh_node_put(router);
 	if (orig_neigh_router)
 		batadv_neigh_node_put(orig_neigh_router);
 	if (orig_neigh_node)
 		batadv_orig_node_put(orig_neigh_node);
+	if (router_ifinfo)
+		batadv_neigh_ifinfo_put(router_ifinfo);
 	if (neigh_ifinfo)
 		batadv_neigh_ifinfo_put(neigh_ifinfo);
+
+	return forward;
 }
 
 /**
@@ -592,6 +605,7 @@ batadv_v_ogm_process_per_outif(struct batadv_priv *bat_priv,
 			       struct batadv_hard_iface *if_outgoing)
 {
 	int seqno_age;
+	bool forward;
 
 	/* first, update the metric with according sanity checks */
 	seqno_age = batadv_v_ogm_metric_update(bat_priv, ogm2, orig_node,
@@ -610,25 +624,37 @@ batadv_v_ogm_process_per_outif(struct batadv_priv *bat_priv,
 					       ntohs(ogm2->tvlv_len));
 
 	/* if the metric update went through, update routes if needed */
-	batadv_v_ogm_route_update(bat_priv, ethhdr, ogm2, orig_node,
-				  neigh_node, if_incoming, if_outgoing);
+	forward = batadv_v_ogm_route_update(bat_priv, ethhdr, ogm2, orig_node,
+					    neigh_node, if_incoming,
+					    if_outgoing);
+
+	/* if the routes have been processed correctly, check and forward */
+	if (forward)
+		batadv_v_ogm_forward(bat_priv, ogm2, orig_node, neigh_node,
+				     if_incoming, if_outgoing);
 }
 
 /**
  * batadv_v_ogm_aggr_packet - checks if there is another OGM aggregated
  * @buff_pos: current position in the skb
  * @packet_len: total length of the skb
- * @tvlv_len: tvlv length of the previously considered OGM
+ * @ogm2_packet: potential OGM2 in buffer
  *
  * Return: true if there is enough space for another OGM, false otherwise.
  */
-static bool batadv_v_ogm_aggr_packet(int buff_pos, int packet_len,
-				     __be16 tvlv_len)
+static bool
+batadv_v_ogm_aggr_packet(int buff_pos, int packet_len,
+			 const struct batadv_ogm2_packet *ogm2_packet)
 {
 	int next_buff_pos = 0;
 
-	next_buff_pos += buff_pos + BATADV_OGM2_HLEN;
-	next_buff_pos += ntohs(tvlv_len);
+	/* check if there is enough space for the header */
+	next_buff_pos += buff_pos + sizeof(*ogm2_packet);
+	if (next_buff_pos > packet_len)
+		return false;
+
+	/* check if there is enough space for the optional TVLV */
+	next_buff_pos += ntohs(ogm2_packet->tvlv_len);
 
 	return (next_buff_pos <= packet_len) &&
 	       (next_buff_pos <= BATADV_MAX_AGGREGATION_BYTES);
@@ -664,6 +690,12 @@ static void batadv_v_ogm_process(const struct sk_buff *skb, int ogm_offset,
 		   ntohl(ogm_packet->seqno), ogm_throughput, ogm_packet->ttl,
 		   ogm_packet->version, ntohs(ogm_packet->tvlv_len));
 
+	if (batadv_is_my_mac(bat_priv, ogm_packet->orig)) {
+		batadv_dbg(BATADV_DBG_BATMAN, bat_priv,
+			   "Drop packet: originator packet from ourself\n");
+		return;
+	}
+
 	/* If the troughput metric is 0, immediately drop the packet. No need to
 	 * create orig_node / neigh_node for an unusable route.
 	 */
@@ -683,10 +715,10 @@ static void batadv_v_ogm_process(const struct sk_buff *skb, int ogm_offset,
 
 	orig_node = batadv_v_ogm_orig_get(bat_priv, ogm_packet->orig);
 	if (!orig_node)
-		return;
+		goto out;
 
-	neigh_node = batadv_neigh_node_new(orig_node, if_incoming,
-					   ethhdr->h_source);
+	neigh_node = batadv_neigh_node_get_or_create(orig_node, if_incoming,
+						     ethhdr->h_source);
 	if (!neigh_node)
 		goto out;
 
@@ -713,9 +745,14 @@ static void batadv_v_ogm_process(const struct sk_buff *skb, int ogm_offset,
 		if (hard_iface->soft_iface != bat_priv->soft_iface)
 			continue;
 
+		if (!kref_get_unless_zero(&hard_iface->refcount))
+			continue;
+
 		batadv_v_ogm_process_per_outif(bat_priv, ethhdr, ogm_packet,
 					       orig_node, neigh_node,
 					       if_incoming, hard_iface);
+
+		batadv_hardif_put(hard_iface);
 	}
 	rcu_read_unlock();
 out:
@@ -748,18 +785,13 @@ int batadv_v_ogm_packet_recv(struct sk_buff *skb,
 	/* did we receive a OGM2 packet on an interface that does not have
 	 * B.A.T.M.A.N. V enabled ?
 	 */
-	if (strcmp(bat_priv->bat_algo_ops->name, "BATMAN_V") != 0)
+	if (strcmp(bat_priv->algo_ops->name, "BATMAN_V") != 0)
 		return NET_RX_DROP;
 
 	if (!batadv_check_management_packet(skb, if_incoming, BATADV_OGM2_HLEN))
 		return NET_RX_DROP;
 
 	if (batadv_is_my_mac(bat_priv, ethhdr->h_source))
-		return NET_RX_DROP;
-
-	ogm_packet = (struct batadv_ogm2_packet *)skb->data;
-
-	if (batadv_is_my_mac(bat_priv, ogm_packet->orig))
 		return NET_RX_DROP;
 
 	batadv_inc_counter(bat_priv, BATADV_CNT_MGMT_RX);
@@ -770,7 +802,7 @@ int batadv_v_ogm_packet_recv(struct sk_buff *skb,
 	ogm_packet = (struct batadv_ogm2_packet *)skb->data;
 
 	while (batadv_v_ogm_aggr_packet(ogm_offset, skb_headlen(skb),
-					ogm_packet->tvlv_len)) {
+					ogm_packet)) {
 		batadv_v_ogm_process(skb, ogm_offset, if_incoming);
 
 		ogm_offset += BATADV_OGM2_HLEN;
@@ -816,6 +848,8 @@ int batadv_v_ogm_init(struct batadv_priv *bat_priv)
 	atomic_set(&bat_priv->bat_v.ogm_seqno, random_seqno);
 	INIT_DELAYED_WORK(&bat_priv->bat_v.ogm_wq, batadv_v_ogm_send);
 
+	mutex_init(&bat_priv->bat_v.ogm_buff_mutex);
+
 	return 0;
 }
 
@@ -827,7 +861,11 @@ void batadv_v_ogm_free(struct batadv_priv *bat_priv)
 {
 	cancel_delayed_work_sync(&bat_priv->bat_v.ogm_wq);
 
+	mutex_lock(&bat_priv->bat_v.ogm_buff_mutex);
+
 	kfree(bat_priv->bat_v.ogm_buff);
 	bat_priv->bat_v.ogm_buff = NULL;
 	bat_priv->bat_v.ogm_buff_len = 0;
+
+	mutex_unlock(&bat_priv->bat_v.ogm_buff_mutex);
 }

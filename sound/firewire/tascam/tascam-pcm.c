@@ -81,6 +81,9 @@ static int pcm_open(struct snd_pcm_substream *substream)
 		goto err_locked;
 
 	err = snd_tscm_stream_get_clock(tscm, &clock);
+	if (err < 0)
+		goto err_locked;
+
 	if (clock != SND_TSCM_CLOCK_INTERNAL ||
 	    amdtp_stream_pcm_running(&tscm->rx_stream) ||
 	    amdtp_stream_pcm_running(&tscm->tx_stream)) {
@@ -268,7 +271,7 @@ static snd_pcm_uframes_t pcm_playback_pointer(struct snd_pcm_substream *sbstrm)
 	return amdtp_stream_pcm_pointer(&tscm->rx_stream);
 }
 
-static struct snd_pcm_ops pcm_capture_ops = {
+static const struct snd_pcm_ops pcm_capture_ops = {
 	.open		= pcm_open,
 	.close		= pcm_close,
 	.ioctl		= snd_pcm_lib_ioctl,
@@ -280,7 +283,7 @@ static struct snd_pcm_ops pcm_capture_ops = {
 	.page		= snd_pcm_lib_get_vmalloc_page,
 };
 
-static struct snd_pcm_ops pcm_playback_ops = {
+static const struct snd_pcm_ops pcm_playback_ops = {
 	.open		= pcm_open,
 	.close		= pcm_close,
 	.ioctl		= snd_pcm_lib_ioctl,

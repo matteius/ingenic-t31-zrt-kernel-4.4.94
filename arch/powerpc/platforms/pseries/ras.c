@@ -43,6 +43,7 @@ static int ras_check_exception_token;
 /* EPOW events counter variable */
 static int num_epow_events;
 
+static irqreturn_t ras_hotplug_interrupt(int irq, void *dev_id);
 static irqreturn_t ras_epow_interrupt(int irq, void *dev_id);
 static irqreturn_t ras_error_interrupt(int irq, void *dev_id);
 
@@ -62,6 +63,14 @@ static int __init init_ras_IRQ(void)
 	if (np != NULL) {
 		request_event_sources_irqs(np, ras_error_interrupt,
 					   "RAS_ERROR");
+		of_node_put(np);
+	}
+
+	/* Hotplug Events */
+	np = of_find_node_by_path("/event-sources/hot-plug-events");
+	if (np != NULL) {
+		request_event_sources_irqs(np, ras_hotplug_interrupt,
+					   "RAS_HOTPLUG");
 		of_node_put(np);
 	}
 
@@ -92,7 +101,6 @@ static void handle_system_shutdown(char event_modifier)
 	case EPOW_SHUTDOWN_ON_UPS:
 		pr_emerg("Loss of system power detected. System is running on"
 			 " UPS/battery. Check RTAS error log for details\n");
-		orderly_poweroff(true);
 		break;
 
 	case EPOW_SHUTDOWN_LOSS_OF_CRITICAL_FUNCTIONS:
@@ -190,6 +198,36 @@ static void rtas_parse_epow_errlog(struct rtas_error_log *log)
 		num_epow_events++;
 }
 
+static irqreturn_t ras_hotplug_interrupt(int irq, void *dev_id)
+{
+	struct pseries_errorlog *pseries_log;
+	struct pseries_hp_errorlog *hp_elog;
+
+	spin_lock(&ras_log_buf_lock);
+
+	rtas_call(ras_check_exception_token, 6, 1, NULL,
+		  RTAS_VECTOR_EXTERNAL_INTERRUPT, virq_to_hw(irq),
+		  RTAS_HOTPLUG_EVENTS, 0, __pa(&ras_log_buf),
+		  rtas_get_error_log_max());
+
+	pseries_log = get_pseries_errorlog((struct rtas_error_log *)ras_log_buf,
+					   PSERIES_ELOG_SECT_ID_HOTPLUG);
+	hp_elog = (struct pseries_hp_errorlog *)pseries_log->data;
+
+	/*
+	 * Since PCI hotplug is not currently supported on pseries, put PCI
+	 * hotplug events on the ras_log_buf to be handled by rtas_errd.
+	 */
+	if (hp_elog->resource == PSERIES_HP_ELOG_RESOURCE_MEM ||
+	    hp_elog->resource == PSERIES_HP_ELOG_RESOURCE_CPU)
+		queue_hotplug_event(hp_elog, NULL, NULL);
+	else
+		log_error(ras_log_buf, ERR_TYPE_RTAS_LOG, 0);
+
+	spin_unlock(&ras_log_buf_lock);
+	return IRQ_HANDLED;
+}
+
 /* Handle environmental and power warning (EPOW) interrupts. */
 static irqreturn_t ras_epow_interrupt(int irq, void *dev_id)
 {
@@ -272,10 +310,11 @@ static irqreturn_t ras_error_interrupt(int irq, void *dev_id)
 /*
  * Some versions of FWNMI place the buffer inside the 4kB page starting at
  * 0x7000. Other versions place it inside the rtas buffer. We check both.
+ * Minimum size of the buffer is 16 bytes.
  */
 #define VALID_FWNMI_BUFFER(A) \
-	((((A) >= 0x7000) && ((A) < 0x7ff0)) || \
-	(((A) >= rtas.base) && ((A) < (rtas.base + rtas.size - 16))))
+	((((A) >= 0x7000) && ((A) <= 0x8000 - 16)) || \
+	(((A) >= rtas.base) && ((A) <= (rtas.base + rtas.size - 16))))
 
 /*
  * Get the error information for errors coming through the
@@ -307,7 +346,7 @@ static struct rtas_error_log *fwnmi_get_errinfo(struct pt_regs *regs)
 	}
 
 	savep = __va(regs->gpr[3]);
-	regs->gpr[3] = savep[0];	/* restore original r3 */
+	regs->gpr[3] = be64_to_cpu(savep[0]);	/* restore original r3 */
 
 	/* If it isn't an extended log we can use the per cpu 64bit buffer */
 	h = (struct rtas_error_log *)&savep[1];
@@ -318,7 +357,7 @@ static struct rtas_error_log *fwnmi_get_errinfo(struct pt_regs *regs)
 		int len, error_log_length;
 
 		error_log_length = 8 + rtas_error_extended_log_length(h);
-		len = max_t(int, error_log_length, RTAS_ERROR_LOG_MAX);
+		len = min_t(int, error_log_length, RTAS_ERROR_LOG_MAX);
 		memset(global_mce_data_buf, 0, RTAS_ERROR_LOG_MAX);
 		memcpy(global_mce_data_buf, h, len);
 		errhdr = (struct rtas_error_log *)global_mce_data_buf;

@@ -24,9 +24,9 @@
 #include <linux/bpf.h>
 #include <asm/cacheflush.h>
 #include <asm/dis.h>
+#include <asm/facility.h>
+#include <asm/nospec-branch.h>
 #include "bpf_jit.h"
-
-int bpf_jit_enable __read_mostly;
 
 struct bpf_jit {
 	u32 seen;		/* Flags to remember seen eBPF instructions */
@@ -41,11 +41,13 @@ struct bpf_jit {
 	int base_ip;		/* Base address for literal pool */
 	int ret0_ip;		/* Address of return 0 */
 	int exit_ip;		/* Address of exit */
+	int r1_thunk_ip;	/* Address of expoline thunk for 'br %r1' */
+	int r14_thunk_ip;	/* Address of expoline thunk for 'br %r14' */
 	int tail_call_start;	/* Tail call start offset */
 	int labels[1];		/* Labels for local jumps */
 };
 
-#define BPF_SIZE_MAX	0x7ffff	/* Max size for program (20 bit signed displ) */
+#define BPF_SIZE_MAX	0xffff	/* Max size for program (16 bit branches) */
 
 #define SEEN_SKB	1	/* skb access */
 #define SEEN_MEM	2	/* use mem[] for temporary storage */
@@ -54,16 +56,17 @@ struct bpf_jit {
 #define SEEN_FUNC	16	/* calls C functions */
 #define SEEN_TAIL_CALL	32	/* code uses tail calls */
 #define SEEN_SKB_CHANGE	64	/* code changes skb data */
+#define SEEN_REG_AX	128	/* code uses constant blinding */
 #define SEEN_STACK	(SEEN_FUNC | SEEN_MEM | SEEN_SKB)
 
 /*
  * s390 registers
  */
-#define REG_W0		(__MAX_BPF_REG+0)	/* Work register 1 (even) */
-#define REG_W1		(__MAX_BPF_REG+1)	/* Work register 2 (odd) */
-#define REG_SKB_DATA	(__MAX_BPF_REG+2)	/* SKB data register */
-#define REG_L		(__MAX_BPF_REG+3)	/* Literal pool register */
-#define REG_15		(__MAX_BPF_REG+4)	/* Register 15 */
+#define REG_W0		(MAX_BPF_JIT_REG + 0)	/* Work register 1 (even) */
+#define REG_W1		(MAX_BPF_JIT_REG + 1)	/* Work register 2 (odd) */
+#define REG_SKB_DATA	(MAX_BPF_JIT_REG + 2)	/* SKB data register */
+#define REG_L		(MAX_BPF_JIT_REG + 3)	/* Literal pool register */
+#define REG_15		(MAX_BPF_JIT_REG + 4)	/* Register 15 */
 #define REG_0		REG_W0			/* Register 0 */
 #define REG_1		REG_W1			/* Register 1 */
 #define REG_2		BPF_REG_1		/* Register 2 */
@@ -88,6 +91,8 @@ static const int reg2hex[] = {
 	[BPF_REG_9]	= 10,
 	/* BPF stack pointer */
 	[BPF_REG_FP]	= 13,
+	/* Register for blinding (shared with REG_SKB_DATA) */
+	[BPF_REG_AX]	= 12,
 	/* SKB data pointer */
 	[REG_SKB_DATA]	= 12,
 	/* Work registers for s390x backend */
@@ -111,7 +116,7 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 {
 	u32 r1 = reg2hex[b1];
 
-	if (!jit->seen_reg[r1] && r1 >= 6 && r1 <= 15)
+	if (r1 >= 6 && r1 <= 15 && !jit->seen_reg[r1])
 		jit->seen_reg[r1] = 1;
 }
 
@@ -246,6 +251,19 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 	_EMIT6(op1 | reg(b1, b2) << 16 | (rel & 0xffff), op2 | mask);	\
 	REG_SET_SEEN(b1);					\
 	REG_SET_SEEN(b2);					\
+})
+
+#define EMIT6_PCREL_RILB(op, b, target)				\
+({								\
+	int rel = (target - jit->prg) / 2;			\
+	_EMIT6(op | reg_high(b) << 16 | rel >> 16, rel & 0xffff);	\
+	REG_SET_SEEN(b);					\
+})
+
+#define EMIT6_PCREL_RIL(op, target)				\
+({								\
+	int rel = (target - jit->prg) / 2;			\
+	_EMIT6(op | rel >> 16, rel & 0xffff);			\
 })
 
 #define _EMIT6_IMM(op, imm)					\
@@ -385,7 +403,7 @@ static void save_restore_regs(struct bpf_jit *jit, int op)
 /*
  * For SKB access %b1 contains the SKB pointer. For "bpf_jit.S"
  * we store the SKB header length on the stack and the SKB data
- * pointer in REG_SKB_DATA.
+ * pointer in REG_SKB_DATA if BPF_REG_AX is not used.
  */
 static void emit_load_skb_data_hlen(struct bpf_jit *jit)
 {
@@ -397,9 +415,10 @@ static void emit_load_skb_data_hlen(struct bpf_jit *jit)
 		   offsetof(struct sk_buff, data_len));
 	/* stg %w1,ST_OFF_HLEN(%r0,%r15) */
 	EMIT6_DISP_LH(0xe3000000, 0x0024, REG_W1, REG_0, REG_15, STK_OFF_HLEN);
-	/* lg %skb_data,data_off(%b1) */
-	EMIT6_DISP_LH(0xe3000000, 0x0004, REG_SKB_DATA, REG_0,
-		      BPF_REG_1, offsetof(struct sk_buff, data));
+	if (!(jit->seen & SEEN_REG_AX))
+		/* lg %skb_data,data_off(%b1) */
+		EMIT6_DISP_LH(0xe3000000, 0x0004, REG_SKB_DATA, REG_0,
+			      BPF_REG_1, offsetof(struct sk_buff, data));
 }
 
 /*
@@ -446,7 +465,7 @@ static void bpf_jit_prologue(struct bpf_jit *jit)
 		emit_load_skb_data_hlen(jit);
 	if (jit->seen & SEEN_SKB_CHANGE)
 		/* stg %b1,ST_OFF_SKBP(%r0,%r15) */
-		EMIT6_DISP_LH(0xe3000000, 0x0024, REG_W1, REG_0, REG_15,
+		EMIT6_DISP_LH(0xe3000000, 0x0024, BPF_REG_1, REG_0, REG_15,
 			      STK_OFF_SKBP);
 }
 
@@ -466,8 +485,43 @@ static void bpf_jit_epilogue(struct bpf_jit *jit)
 	EMIT4(0xb9040000, REG_2, BPF_REG_0);
 	/* Restore registers */
 	save_restore_regs(jit, REGS_RESTORE);
+	if (IS_ENABLED(CC_USING_EXPOLINE) && !nospec_disable) {
+		jit->r14_thunk_ip = jit->prg;
+		/* Generate __s390_indirect_jump_r14 thunk */
+		if (test_facility(35)) {
+			/* exrl %r0,.+10 */
+			EMIT6_PCREL_RIL(0xc6000000, jit->prg + 10);
+		} else {
+			/* larl %r1,.+14 */
+			EMIT6_PCREL_RILB(0xc0000000, REG_1, jit->prg + 14);
+			/* ex 0,0(%r1) */
+			EMIT4_DISP(0x44000000, REG_0, REG_1, 0);
+		}
+		/* j . */
+		EMIT4_PCREL(0xa7f40000, 0);
+	}
 	/* br %r14 */
 	_EMIT2(0x07fe);
+
+	if (IS_ENABLED(CC_USING_EXPOLINE) && !nospec_disable &&
+	    (jit->seen & SEEN_FUNC)) {
+		jit->r1_thunk_ip = jit->prg;
+		/* Generate __s390_indirect_jump_r1 thunk */
+		if (test_facility(35)) {
+			/* exrl %r0,.+10 */
+			EMIT6_PCREL_RIL(0xc6000000, jit->prg + 10);
+			/* j . */
+			EMIT4_PCREL(0xa7f40000, 0);
+			/* br %r1 */
+			_EMIT2(0x07f1);
+		} else {
+			/* ex 0,S390_lowcore.br_r1_tampoline */
+			EMIT4_DISP(0x44000000, REG_0, REG_0,
+				   offsetof(struct lowcore, br_r1_trampoline));
+			/* j . */
+			EMIT4_PCREL(0xa7f40000, 0);
+		}
+	}
 }
 
 /*
@@ -487,6 +541,8 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 	s32 imm = insn->imm;
 	s16 off = insn->off;
 
+	if (dst_reg == BPF_REG_AX || src_reg == BPF_REG_AX)
+		jit->seen |= SEEN_REG_AX;
 	switch (insn->code) {
 	/*
 	 * BPF_MOV
@@ -535,10 +591,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 		EMIT4(0xb9080000, dst_reg, src_reg);
 		break;
 	case BPF_ALU | BPF_ADD | BPF_K: /* dst = (u32) dst + (u32) imm */
-		if (!imm)
-			break;
-		/* alfi %dst,imm */
-		EMIT6_IMM(0xc20b0000, dst_reg, imm);
+		if (imm != 0) {
+			/* alfi %dst,imm */
+			EMIT6_IMM(0xc20b0000, dst_reg, imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_ADD | BPF_K: /* dst = dst + imm */
@@ -560,17 +616,22 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 		EMIT4(0xb9090000, dst_reg, src_reg);
 		break;
 	case BPF_ALU | BPF_SUB | BPF_K: /* dst = (u32) dst - (u32) imm */
-		if (!imm)
-			break;
-		/* alfi %dst,-imm */
-		EMIT6_IMM(0xc20b0000, dst_reg, -imm);
+		if (imm != 0) {
+			/* alfi %dst,-imm */
+			EMIT6_IMM(0xc20b0000, dst_reg, -imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_SUB | BPF_K: /* dst = dst - imm */
 		if (!imm)
 			break;
-		/* agfi %dst,-imm */
-		EMIT6_IMM(0xc2080000, dst_reg, -imm);
+		if (imm == -0x80000000) {
+			/* algfi %dst,0x80000000 */
+			EMIT6_IMM(0xc20a0000, dst_reg, 0x80000000);
+		} else {
+			/* agfi %dst,-imm */
+			EMIT6_IMM(0xc2080000, dst_reg, -imm);
+		}
 		break;
 	/*
 	 * BPF_MUL
@@ -585,10 +646,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 		EMIT4(0xb90c0000, dst_reg, src_reg);
 		break;
 	case BPF_ALU | BPF_MUL | BPF_K: /* dst = (u32) dst * (u32) imm */
-		if (imm == 1)
-			break;
-		/* msfi %r5,imm */
-		EMIT6_IMM(0xc2010000, dst_reg, imm);
+		if (imm != 1) {
+			/* msfi %r5,imm */
+			EMIT6_IMM(0xc2010000, dst_reg, imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_MUL | BPF_K: /* dst = dst * imm */
@@ -649,6 +710,8 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 			if (BPF_OP(insn->code) == BPF_MOD)
 				/* lhgi %dst,0 */
 				EMIT4_IMM(0xa7090000, dst_reg, 0);
+			else
+				EMIT_ZERO(dst_reg);
 			break;
 		}
 		/* lhi %w0,0 */
@@ -741,10 +804,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 		EMIT4(0xb9820000, dst_reg, src_reg);
 		break;
 	case BPF_ALU | BPF_XOR | BPF_K: /* dst = (u32) dst ^ (u32) imm */
-		if (!imm)
-			break;
-		/* xilf %dst,imm */
-		EMIT6_IMM(0xc0070000, dst_reg, imm);
+		if (imm != 0) {
+			/* xilf %dst,imm */
+			EMIT6_IMM(0xc0070000, dst_reg, imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_XOR | BPF_K: /* dst = dst ^ imm */
@@ -765,10 +828,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 		EMIT6_DISP_LH(0xeb000000, 0x000d, dst_reg, dst_reg, src_reg, 0);
 		break;
 	case BPF_ALU | BPF_LSH | BPF_K: /* dst = (u32) dst << (u32) imm */
-		if (imm == 0)
-			break;
-		/* sll %dst,imm(%r0) */
-		EMIT4_DISP(0x89000000, dst_reg, REG_0, imm);
+		if (imm != 0) {
+			/* sll %dst,imm(%r0) */
+			EMIT4_DISP(0x89000000, dst_reg, REG_0, imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_LSH | BPF_K: /* dst = dst << imm */
@@ -790,10 +853,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 		EMIT6_DISP_LH(0xeb000000, 0x000c, dst_reg, dst_reg, src_reg, 0);
 		break;
 	case BPF_ALU | BPF_RSH | BPF_K: /* dst = (u32) dst >> (u32) imm */
-		if (imm == 0)
-			break;
-		/* srl %dst,imm(%r0) */
-		EMIT4_DISP(0x88000000, dst_reg, REG_0, imm);
+		if (imm != 0) {
+			/* srl %dst,imm(%r0) */
+			EMIT4_DISP(0x88000000, dst_reg, REG_0, imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_RSH | BPF_K: /* dst = dst >> imm */
@@ -825,7 +888,7 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 		break;
 	case BPF_ALU64 | BPF_NEG: /* dst = -dst */
 		/* lcgr %dst,%dst */
-		EMIT4(0xb9130000, dst_reg, dst_reg);
+		EMIT4(0xb9030000, dst_reg, dst_reg);
 		break;
 	/*
 	 * BPF_FROM_BE/LE
@@ -971,8 +1034,13 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 		/* lg %w1,<d(imm)>(%l) */
 		EMIT6_DISP_LH(0xe3000000, 0x0004, REG_W1, REG_0, REG_L,
 			      EMIT_CONST_U64(func));
-		/* basr %r14,%w1 */
-		EMIT2(0x0d00, REG_14, REG_W1);
+		if (IS_ENABLED(CC_USING_EXPOLINE) && !nospec_disable) {
+			/* brasl %r14,__s390_indirect_jump_r1 */
+			EMIT6_PCREL_RILB(0xc0050000, REG_14, jit->r1_thunk_ip);
+		} else {
+			/* basr %r14,%w1 */
+			EMIT2(0x0d00, REG_14, REG_W1);
+		}
 		/* lgr %b0,%r2: load return value into %b0 */
 		EMIT4(0xb9040000, BPF_REG_0, REG_2);
 		if (bpf_helper_changes_skb_data((void *)func)) {
@@ -1001,8 +1069,8 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 		/* llgf %w1,map.max_entries(%b2) */
 		EMIT6_DISP_LH(0xe3000000, 0x0016, REG_W1, REG_0, BPF_REG_2,
 			      offsetof(struct bpf_array, map.max_entries));
-		/* clgrj %b3,%w1,0xa,label0: if %b3 >= %w1 goto out */
-		EMIT6_PCREL_LABEL(0xec000000, 0x0065, BPF_REG_3,
+		/* clrj %b3,%w1,0xa,label0: if (u32)%b3 >= (u32)%w1 goto out */
+		EMIT6_PCREL_LABEL(0xec000000, 0x0077, BPF_REG_3,
 				  REG_W1, 0, 0xa);
 
 		/*
@@ -1028,8 +1096,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp, int i
 		 *         goto out;
 		 */
 
-		/* sllg %r1,%b3,3: %r1 = index * 8 */
-		EMIT6_DISP_LH(0xeb000000, 0x000d, REG_1, BPF_REG_3, REG_0, 3);
+		/* llgfr %r1,%b3: %r1 = (u32) index */
+		EMIT4(0xb9160000, REG_1, BPF_REG_3);
+		/* sllg %r1,%r1,3: %r1 *= 8 */
+		EMIT6_DISP_LH(0xeb000000, 0x000d, REG_1, REG_1, REG_0, 3);
 		/* lg %r1,prog(%b2,%r1) */
 		EMIT6_DISP_LH(0xe3000000, 0x0004, REG_1, BPF_REG_2,
 			      REG_1, offsetof(struct bpf_array, ptrs));
@@ -1188,7 +1258,7 @@ call_fn:
 		/*
 		 * Implicit input:
 		 *  BPF_REG_6	 (R7) : skb pointer
-		 *  REG_SKB_DATA (R12): skb data pointer
+		 *  REG_SKB_DATA (R12): skb data pointer (if no BPF_REG_AX)
 		 *
 		 * Calculated input:
 		 *  BPF_REG_2	 (R3) : offset of byte(s) to fetch in skb
@@ -1209,6 +1279,11 @@ call_fn:
 			/* agfr %b2,%src (%src is s32 here) */
 			EMIT4(0xb9180000, BPF_REG_2, src_reg);
 
+		/* Reload REG_SKB_DATA if BPF_REG_AX is used */
+		if (jit->seen & SEEN_REG_AX)
+			/* lg %skb_data,data_off(%b6) */
+			EMIT6_DISP_LH(0xe3000000, 0x0004, REG_SKB_DATA, REG_0,
+				      BPF_REG_6, offsetof(struct sk_buff, data));
 		/* basr %b5,%w1 (%b5 is call saved) */
 		EMIT2(0x0d00, BPF_REG_5, REG_W1);
 
@@ -1241,7 +1316,8 @@ static int bpf_jit_prog(struct bpf_jit *jit, struct bpf_prog *fp)
 		insn_count = bpf_jit_insn(jit, fp, i);
 		if (insn_count < 0)
 			return -1;
-		jit->addrs[i + 1] = jit->prg; /* Next instruction address */
+		/* Next instruction address */
+		jit->addrs[i + insn_count] = jit->prg;
 	}
 	bpf_jit_epilogue(jit);
 
@@ -1262,37 +1338,63 @@ void bpf_jit_compile(struct bpf_prog *fp)
 /*
  * Compile eBPF program "fp"
  */
-void bpf_int_jit_compile(struct bpf_prog *fp)
+struct bpf_prog *bpf_int_jit_compile(struct bpf_prog *fp)
 {
+	struct bpf_prog *tmp, *orig_fp = fp;
 	struct bpf_binary_header *header;
+	bool tmp_blinded = false;
 	struct bpf_jit jit;
 	int pass;
 
 	if (!bpf_jit_enable)
-		return;
+		return orig_fp;
+
+	tmp = bpf_jit_blind_constants(fp);
+	/*
+	 * If blinding was requested and we failed during blinding,
+	 * we must fall back to the interpreter.
+	 */
+	if (IS_ERR(tmp))
+		return orig_fp;
+	if (tmp != fp) {
+		tmp_blinded = true;
+		fp = tmp;
+	}
+
 	memset(&jit, 0, sizeof(jit));
 	jit.addrs = kcalloc(fp->len + 1, sizeof(*jit.addrs), GFP_KERNEL);
-	if (jit.addrs == NULL)
-		return;
+	if (jit.addrs == NULL) {
+		fp = orig_fp;
+		goto out;
+	}
 	/*
 	 * Three initial passes:
 	 *   - 1/2: Determine clobbered registers
 	 *   - 3:   Calculate program size and addrs arrray
 	 */
 	for (pass = 1; pass <= 3; pass++) {
-		if (bpf_jit_prog(&jit, fp))
+		if (bpf_jit_prog(&jit, fp)) {
+			fp = orig_fp;
 			goto free_addrs;
+		}
 	}
 	/*
 	 * Final pass: Allocate and generate program
 	 */
-	if (jit.size >= BPF_SIZE_MAX)
+	if (jit.size >= BPF_SIZE_MAX) {
+		fp = orig_fp;
 		goto free_addrs;
+	}
 	header = bpf_jit_binary_alloc(jit.size, &jit.prg_buf, 2, jit_fill_hole);
-	if (!header)
+	if (!header) {
+		fp = orig_fp;
 		goto free_addrs;
-	if (bpf_jit_prog(&jit, fp))
+	}
+	if (bpf_jit_prog(&jit, fp)) {
+		bpf_jit_binary_free(header);
+		fp = orig_fp;
 		goto free_addrs;
+	}
 	if (bpf_jit_enable > 1) {
 		bpf_jit_dump(fp->len, jit.size, pass, jit.prg_buf);
 		if (jit.prg_buf)
@@ -1305,6 +1407,11 @@ void bpf_int_jit_compile(struct bpf_prog *fp)
 	}
 free_addrs:
 	kfree(jit.addrs);
+out:
+	if (tmp_blinded)
+		bpf_jit_prog_release_other(fp, fp == orig_fp ?
+					   tmp : orig_fp);
+	return fp;
 }
 
 /*

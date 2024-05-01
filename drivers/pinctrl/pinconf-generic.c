@@ -31,10 +31,10 @@ static const struct pin_config_item conf_items[] = {
 	PCONFDUMP(PIN_CONFIG_BIAS_BUS_HOLD, "input bias bus hold", NULL, false),
 	PCONFDUMP(PIN_CONFIG_BIAS_DISABLE, "input bias disabled", NULL, false),
 	PCONFDUMP(PIN_CONFIG_BIAS_HIGH_IMPEDANCE, "input bias high impedance", NULL, false),
-	PCONFDUMP(PIN_CONFIG_BIAS_PULL_DOWN, "input bias pull down", NULL, false),
+	PCONFDUMP(PIN_CONFIG_BIAS_PULL_DOWN, "input bias pull down", "ohms", true),
 	PCONFDUMP(PIN_CONFIG_BIAS_PULL_PIN_DEFAULT,
-				"input bias pull to pin specific state", NULL, false),
-	PCONFDUMP(PIN_CONFIG_BIAS_PULL_UP, "input bias pull up", NULL, false),
+				"input bias pull to pin specific state", "ohms", true),
+	PCONFDUMP(PIN_CONFIG_BIAS_PULL_UP, "input bias pull up", "ohms", true),
 	PCONFDUMP(PIN_CONFIG_DRIVE_OPEN_DRAIN, "output drive open drain", NULL, false),
 	PCONFDUMP(PIN_CONFIG_DRIVE_OPEN_SOURCE, "output drive open source", NULL, false),
 	PCONFDUMP(PIN_CONFIG_DRIVE_PUSH_PULL, "output drive push pull", NULL, false),
@@ -53,7 +53,7 @@ static void pinconf_generic_dump_one(struct pinctrl_dev *pctldev,
 				     struct seq_file *s, const char *gname,
 				     unsigned pin,
 				     const struct pin_config_item *items,
-				     int nitems)
+				     int nitems, int *print_sep)
 {
 	int i;
 
@@ -75,8 +75,10 @@ static void pinconf_generic_dump_one(struct pinctrl_dev *pctldev,
 			seq_printf(s, "ERROR READING CONFIG SETTING %d ", i);
 			continue;
 		}
-		/* Space between multiple configs */
-		seq_puts(s, " ");
+		/* comma between multiple configs */
+		if (*print_sep)
+			seq_puts(s, ", ");
+		*print_sep = 1;
 		seq_puts(s, items[i].display);
 		/* Print unit if available */
 		if (items[i].has_arg) {
@@ -105,19 +107,21 @@ void pinconf_generic_dump_pins(struct pinctrl_dev *pctldev, struct seq_file *s,
 			       const char *gname, unsigned pin)
 {
 	const struct pinconf_ops *ops = pctldev->desc->confops;
+	int print_sep = 0;
 
 	if (!ops->is_generic)
 		return;
 
 	/* generic parameters */
 	pinconf_generic_dump_one(pctldev, s, gname, pin, conf_items,
-				 ARRAY_SIZE(conf_items));
+				 ARRAY_SIZE(conf_items), &print_sep);
 	/* driver-specific parameters */
 	if (pctldev->desc->num_custom_params &&
 	    pctldev->desc->custom_conf_items)
 		pinconf_generic_dump_one(pctldev, s, gname, pin,
 					 pctldev->desc->custom_conf_items,
-					 pctldev->desc->num_custom_params);
+					 pctldev->desc->num_custom_params,
+					 &print_sep);
 }
 
 void pinconf_generic_dump_config(struct pinctrl_dev *pctldev,
@@ -380,15 +384,25 @@ int pinconf_generic_dt_node_to_map(struct pinctrl_dev *pctldev,
 	for_each_child_of_node(np_config, np) {
 		ret = pinconf_generic_dt_subnode_to_map(pctldev, np, map,
 					&reserved_maps, num_maps, type);
-		if (ret < 0)
+		if (ret < 0) {
+			of_node_put(np);
 			goto exit;
+		}
 	}
 	return 0;
 
 exit:
-	pinctrl_utils_dt_free_map(pctldev, *map, *num_maps);
+	pinctrl_utils_free_map(pctldev, *map, *num_maps);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(pinconf_generic_dt_node_to_map);
+
+void pinconf_generic_dt_free_map(struct pinctrl_dev *pctldev,
+				 struct pinctrl_map *map,
+				 unsigned num_maps)
+{
+	pinctrl_utils_free_map(pctldev, map, num_maps);
+}
+EXPORT_SYMBOL_GPL(pinconf_generic_dt_free_map);
 
 #endif

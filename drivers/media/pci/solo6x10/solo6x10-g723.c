@@ -252,7 +252,7 @@ static int snd_solo_pcm_copy(struct snd_pcm_substream *ss, int channel,
 	return 0;
 }
 
-static struct snd_pcm_ops snd_solo_pcm_ops = {
+static const struct snd_pcm_ops snd_solo_pcm_ops = {
 	.open = snd_solo_pcm_open,
 	.close = snd_solo_pcm_close,
 	.ioctl = snd_pcm_lib_ioctl,
@@ -385,7 +385,7 @@ int solo_g723_init(struct solo_dev *solo_dev)
 
 	ret = snd_ctl_add(card, snd_ctl_new1(&kctl, solo_dev));
 	if (ret < 0)
-		return ret;
+		goto snd_error;
 
 	ret = solo_snd_pcm_init(solo_dev);
 	if (ret < 0)

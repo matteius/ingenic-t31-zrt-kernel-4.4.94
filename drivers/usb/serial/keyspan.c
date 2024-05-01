@@ -255,7 +255,7 @@ static int keyspan_write(struct tty_struct *tty,
 			return count;
 		}
 
-		dev_dbg(&port->dev, "%s - endpoint %d flip %d\n",
+		dev_dbg(&port->dev, "%s - endpoint %x flip %d\n",
 			__func__, usb_pipeendpoint(this_urb->pipe), flip);
 
 		if (this_urb->status == -EINPROGRESS) {
@@ -300,7 +300,7 @@ static void	usa26_indat_callback(struct urb *urb)
 	endpoint = usb_pipeendpoint(urb->pipe);
 
 	if (status) {
-		dev_dbg(&urb->dev->dev, "%s - nonzero status: %x on endpoint %d.\n",
+		dev_dbg(&urb->dev->dev, "%s - nonzero status %d on endpoint %x\n",
 			__func__, status, endpoint);
 		return;
 	}
@@ -393,7 +393,8 @@ static void	usa26_instat_callback(struct urb *urb)
 	serial =  urb->context;
 
 	if (status) {
-		dev_dbg(&urb->dev->dev, "%s - nonzero status: %x\n", __func__, status);
+		dev_dbg(&urb->dev->dev, "%s - nonzero status: %d\n",
+				__func__, status);
 		return;
 	}
 	if (urb->actual_length != 9) {
@@ -452,7 +453,7 @@ static void usa28_indat_callback(struct urb *urb)
 
 	do {
 		if (status) {
-			dev_dbg(&urb->dev->dev, "%s - nonzero status: %x on endpoint %d.\n",
+			dev_dbg(&urb->dev->dev, "%s - nonzero status %d on endpoint %x\n",
 				__func__, status, usb_pipeendpoint(urb->pipe));
 			return;
 		}
@@ -511,7 +512,8 @@ static void	usa28_instat_callback(struct urb *urb)
 	serial =  urb->context;
 
 	if (status) {
-		dev_dbg(&urb->dev->dev, "%s - nonzero status: %x\n", __func__, status);
+		dev_dbg(&urb->dev->dev, "%s - nonzero status: %d\n",
+				__func__, status);
 		return;
 	}
 
@@ -565,6 +567,8 @@ static void	usa49_glocont_callback(struct urb *urb)
 	for (i = 0; i < serial->num_ports; ++i) {
 		port = serial->port[i];
 		p_priv = usb_get_serial_port_data(port);
+		if (!p_priv)
+			continue;
 
 		if (p_priv->resend_cont) {
 			dev_dbg(&port->dev, "%s - sending setup\n", __func__);
@@ -591,7 +595,8 @@ static void	usa49_instat_callback(struct urb *urb)
 	serial =  urb->context;
 
 	if (status) {
-		dev_dbg(&urb->dev->dev, "%s - nonzero status: %x\n", __func__, status);
+		dev_dbg(&urb->dev->dev, "%s - nonzero status: %d\n",
+				__func__, status);
 		return;
 	}
 
@@ -646,7 +651,7 @@ static void	usa49_indat_callback(struct urb *urb)
 	endpoint = usb_pipeendpoint(urb->pipe);
 
 	if (status) {
-		dev_dbg(&urb->dev->dev, "%s - nonzero status: %x on endpoint %d.\n",
+		dev_dbg(&urb->dev->dev, "%s - nonzero status %d on endpoint %x\n",
 			__func__, status, endpoint);
 		return;
 	}
@@ -698,7 +703,8 @@ static void usa49wg_indat_callback(struct urb *urb)
 	serial = urb->context;
 
 	if (status) {
-		dev_dbg(&urb->dev->dev, "%s - nonzero status: %x\n", __func__, status);
+		dev_dbg(&urb->dev->dev, "%s - nonzero status: %d\n",
+				__func__, status);
 		return;
 	}
 
@@ -774,8 +780,8 @@ static void usa90_indat_callback(struct urb *urb)
 	endpoint = usb_pipeendpoint(urb->pipe);
 
 	if (status) {
-		dev_dbg(&urb->dev->dev, "%s - nonzero status: %x on endpoint %d.\n",
-		    __func__, status, endpoint);
+		dev_dbg(&urb->dev->dev, "%s - nonzero status %d on endpoint %x\n",
+			__func__, status, endpoint);
 		return;
 	}
 
@@ -847,7 +853,8 @@ static void	usa90_instat_callback(struct urb *urb)
 	serial =  urb->context;
 
 	if (status) {
-		dev_dbg(&urb->dev->dev, "%s - nonzero status: %x\n", __func__, status);
+		dev_dbg(&urb->dev->dev, "%s - nonzero status: %d\n",
+				__func__, status);
 		return;
 	}
 	if (urb->actual_length < 14) {
@@ -912,7 +919,8 @@ static void	usa67_instat_callback(struct urb *urb)
 	serial = urb->context;
 
 	if (status) {
-		dev_dbg(&urb->dev->dev, "%s - nonzero status: %x\n", __func__, status);
+		dev_dbg(&urb->dev->dev, "%s - nonzero status: %d\n",
+				__func__, status);
 		return;
 	}
 
@@ -962,6 +970,8 @@ static void usa67_glocont_callback(struct urb *urb)
 	for (i = 0; i < serial->num_ports; ++i) {
 		port = serial->port[i];
 		p_priv = usb_get_serial_port_data(port);
+		if (!p_priv)
+			continue;
 
 		if (p_priv->resend_cont) {
 			dev_dbg(&port->dev, "%s - sending setup\n", __func__);
@@ -1082,12 +1092,6 @@ static int keyspan_open(struct tty_struct *tty, struct usb_serial_port *port)
 	return 0;
 }
 
-static inline void stop_urb(struct urb *urb)
-{
-	if (urb && urb->status == -EINPROGRESS)
-		usb_kill_urb(urb);
-}
-
 static void keyspan_dtr_rts(struct usb_serial_port *port, int on)
 {
 	struct keyspan_port_private *p_priv = usb_get_serial_port_data(port);
@@ -1114,10 +1118,10 @@ static void keyspan_close(struct usb_serial_port *port)
 	p_priv->out_flip = 0;
 	p_priv->in_flip = 0;
 
-	stop_urb(p_priv->inack_urb);
+	usb_kill_urb(p_priv->inack_urb);
 	for (i = 0; i < 2; i++) {
-		stop_urb(p_priv->in_urbs[i]);
-		stop_urb(p_priv->out_urbs[i]);
+		usb_kill_urb(p_priv->in_urbs[i]);
+		usb_kill_urb(p_priv->out_urbs[i]);
 	}
 }
 
@@ -1221,8 +1225,8 @@ static struct usb_endpoint_descriptor const *find_ep(struct usb_serial const *se
 		if (ep->bEndpointAddress == endpoint)
 			return ep;
 	}
-	dev_warn(&serial->interface->dev, "found no endpoint descriptor for "
-		 "endpoint %x\n", endpoint);
+	dev_warn(&serial->interface->dev, "found no endpoint descriptor for endpoint %x\n",
+			endpoint);
 	return NULL;
 }
 
@@ -1237,7 +1241,8 @@ static struct urb *keyspan_setup_urb(struct usb_serial *serial, int endpoint,
 	if (endpoint == -1)
 		return NULL;		/* endpoint not needed */
 
-	dev_dbg(&serial->interface->dev, "%s - alloc for endpoint %d.\n", __func__, endpoint);
+	dev_dbg(&serial->interface->dev, "%s - alloc for endpoint %x\n",
+			__func__, endpoint);
 	urb = usb_alloc_urb(0, GFP_KERNEL);		/* No ISO */
 	if (!urb)
 		return NULL;
@@ -1249,8 +1254,8 @@ static struct urb *keyspan_setup_urb(struct usb_serial *serial, int endpoint,
 
 	ep_desc = find_ep(serial, endpoint);
 	if (!ep_desc) {
-		/* leak the urb, something's wrong and the callers don't care */
-		return urb;
+		usb_free_urb(urb);
+		return NULL;
 	}
 	if (usb_endpoint_xfer_int(ep_desc)) {
 		ep_type_name = "INT";
@@ -1572,7 +1577,8 @@ static int keyspan_usa26_send_setup(struct usb_serial *serial,
 		return -1;
 	}
 
-	dev_dbg(&port->dev, "%s - endpoint %d\n", __func__, usb_pipeendpoint(this_urb->pipe));
+	dev_dbg(&port->dev, "%s - endpoint %x\n",
+			__func__, usb_pipeendpoint(this_urb->pipe));
 
 	/* Save reset port val for resend.
 	   Don't overwrite resend for open/close condition. */
@@ -1838,7 +1844,7 @@ static int keyspan_usa49_send_setup(struct usb_serial *serial,
 		return -1;
 	}
 
-	dev_dbg(&port->dev, "%s - endpoint %d (%d)\n",
+	dev_dbg(&port->dev, "%s - endpoint %x (%d)\n",
 		__func__, usb_pipeendpoint(this_urb->pipe), device_port);
 
 	/* Save reset port val for resend.
@@ -2365,9 +2371,9 @@ static void keyspan_disconnect(struct usb_serial *serial)
 
 	s_priv = usb_get_serial_data(serial);
 
-	stop_urb(s_priv->instat_urb);
-	stop_urb(s_priv->glocont_urb);
-	stop_urb(s_priv->indat_urb);
+	usb_kill_urb(s_priv->instat_urb);
+	usb_kill_urb(s_priv->glocont_urb);
+	usb_kill_urb(s_priv->indat_urb);
 }
 
 static void keyspan_release(struct usb_serial *serial)
@@ -2375,6 +2381,10 @@ static void keyspan_release(struct usb_serial *serial)
 	struct keyspan_serial_private *s_priv;
 
 	s_priv = usb_get_serial_data(serial);
+
+	/* Make sure to unlink the URBs submitted in attach. */
+	usb_kill_urb(s_priv->instat_urb);
+	usb_kill_urb(s_priv->indat_urb);
 
 	usb_free_urb(s_priv->instat_urb);
 	usb_free_urb(s_priv->indat_urb);
@@ -2409,22 +2419,22 @@ static int keyspan_port_probe(struct usb_serial_port *port)
 	for (i = 0; i < ARRAY_SIZE(p_priv->in_buffer); ++i) {
 		p_priv->in_buffer[i] = kzalloc(IN_BUFLEN, GFP_KERNEL);
 		if (!p_priv->in_buffer[i])
-			goto err_in_buffer;
+			goto err_free_in_buffer;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(p_priv->out_buffer); ++i) {
 		p_priv->out_buffer[i] = kzalloc(OUT_BUFLEN, GFP_KERNEL);
 		if (!p_priv->out_buffer[i])
-			goto err_out_buffer;
+			goto err_free_out_buffer;
 	}
 
 	p_priv->inack_buffer = kzalloc(INACK_BUFLEN, GFP_KERNEL);
 	if (!p_priv->inack_buffer)
-		goto err_inack_buffer;
+		goto err_free_out_buffer;
 
 	p_priv->outcont_buffer = kzalloc(OUTCONT_BUFLEN, GFP_KERNEL);
 	if (!p_priv->outcont_buffer)
-		goto err_outcont_buffer;
+		goto err_free_inack_buffer;
 
 	p_priv->device_details = d_details;
 
@@ -2470,15 +2480,14 @@ static int keyspan_port_probe(struct usb_serial_port *port)
 
 	return 0;
 
-err_outcont_buffer:
+err_free_inack_buffer:
 	kfree(p_priv->inack_buffer);
-err_inack_buffer:
+err_free_out_buffer:
 	for (i = 0; i < ARRAY_SIZE(p_priv->out_buffer); ++i)
 		kfree(p_priv->out_buffer[i]);
-err_out_buffer:
+err_free_in_buffer:
 	for (i = 0; i < ARRAY_SIZE(p_priv->in_buffer); ++i)
 		kfree(p_priv->in_buffer[i]);
-err_in_buffer:
 	kfree(p_priv);
 
 	return -ENOMEM;
@@ -2491,11 +2500,11 @@ static int keyspan_port_remove(struct usb_serial_port *port)
 
 	p_priv = usb_get_serial_port_data(port);
 
-	stop_urb(p_priv->inack_urb);
-	stop_urb(p_priv->outcont_urb);
+	usb_kill_urb(p_priv->inack_urb);
+	usb_kill_urb(p_priv->outcont_urb);
 	for (i = 0; i < 2; i++) {
-		stop_urb(p_priv->in_urbs[i]);
-		stop_urb(p_priv->out_urbs[i]);
+		usb_kill_urb(p_priv->in_urbs[i]);
+		usb_kill_urb(p_priv->out_urbs[i]);
 	}
 
 	usb_free_urb(p_priv->inack_urb);

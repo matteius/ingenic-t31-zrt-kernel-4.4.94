@@ -35,7 +35,7 @@ PROPERTIES
 		Definition: Specifies the index of the FMan unit.
 
 		The cell-index value may be used by the SoC, to identify the
-		FMan unit in the SoC memory map. In the table bellow,
+		FMan unit in the SoC memory map. In the table below,
 		there's a description of the cell-index use in each SoC:
 
 		- P1023:
@@ -109,6 +109,13 @@ PROPERTIES
 - fsl,bman
 		Usage: required
 		Definition: See soc/fsl/qman.txt and soc/fsl/bman.txt
+
+- fsl,erratum-a050385
+		Usage: optional
+		Value type: boolean
+		Definition: A boolean property. Indicates the presence of the
+		erratum A050385 which indicates that DMA transactions that are
+		split can result in a FMan lock.
 
 =============================================================================
 FMan MURAM Node
@@ -247,7 +254,7 @@ PROPERTIES
 
 		The cell-index value may be used by the FMan or the SoC, to
 		identify the MAC unit in the FMan (or SoC) memory map.
-		In the tables bellow there's a description of the cell-index
+		In the tables below there's a description of the cell-index
 		use, there are two tables, one describes the use of cell-index
 		by the FMan, the second describes the use by the SoC:
 

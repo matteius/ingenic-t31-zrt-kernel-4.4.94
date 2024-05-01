@@ -11,7 +11,7 @@
 #include <linux/bitops.h>
 #include <linux/clk.h>
 #include <linux/io.h>
-#include <linux/module.h>
+#include <linux/init.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/pinctrl/pinctrl.h>
@@ -630,14 +630,8 @@ static const struct pinctrl_pin_desc lpc18xx_pins[] = {
 	LPC18XX_PIN(i2c0_sda, PIN_I2C0_SDA),
 };
 
-/**
- * enum lpc18xx_pin_config_param - possible pin configuration parameters
- * @PIN_CONFIG_GPIO_PIN_INT: route gpio to the gpio pin interrupt
- * 	controller.
- */
-enum lpc18xx_pin_config_param {
-	PIN_CONFIG_GPIO_PIN_INT = PIN_CONFIG_END + 1,
-};
+/* PIN_CONFIG_GPIO_PIN_INT: route gpio to the gpio pin interrupt controller */
+#define PIN_CONFIG_GPIO_PIN_INT		(PIN_CONFIG_END + 1)
 
 static const struct pinconf_generic_params lpc18xx_params[] = {
 	{"nxp,gpio-pin-interrupt", PIN_CONFIG_GPIO_PIN_INT, 0},
@@ -1252,7 +1246,7 @@ static const struct pinctrl_ops lpc18xx_pctl_ops = {
 	.get_group_name		= lpc18xx_pctl_get_group_name,
 	.get_group_pins		= lpc18xx_pctl_get_group_pins,
 	.dt_node_to_map		= pinconf_generic_dt_node_to_map_pin,
-	.dt_free_map		= pinctrl_utils_dt_free_map,
+	.dt_free_map		= pinctrl_utils_free_map,
 };
 
 static struct pinctrl_desc lpc18xx_scu_desc = {
@@ -1355,7 +1349,7 @@ static int lpc18xx_scu_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, scu);
 
-	scu->pctl = pinctrl_register(&lpc18xx_scu_desc, &pdev->dev, scu);
+	scu->pctl = devm_pinctrl_register(&pdev->dev, &lpc18xx_scu_desc, scu);
 	if (IS_ERR(scu->pctl)) {
 		dev_err(&pdev->dev, "Could not register pinctrl driver\n");
 		clk_disable_unprepare(scu->clk);
@@ -1365,32 +1359,17 @@ static int lpc18xx_scu_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int lpc18xx_scu_remove(struct platform_device *pdev)
-{
-	struct lpc18xx_scu_data *scu = platform_get_drvdata(pdev);
-
-	pinctrl_unregister(scu->pctl);
-	clk_disable_unprepare(scu->clk);
-
-	return 0;
-}
-
 static const struct of_device_id lpc18xx_scu_match[] = {
 	{ .compatible = "nxp,lpc1850-scu" },
 	{},
 };
-MODULE_DEVICE_TABLE(of, lpc18xx_scu_match);
 
 static struct platform_driver lpc18xx_scu_driver = {
 	.probe		= lpc18xx_scu_probe,
-	.remove		= lpc18xx_scu_remove,
 	.driver = {
 		.name		= "lpc18xx-scu",
 		.of_match_table	= lpc18xx_scu_match,
+		.suppress_bind_attrs = true,
 	},
 };
-module_platform_driver(lpc18xx_scu_driver);
-
-MODULE_AUTHOR("Joachim Eastwood <manabian@gmail.com>");
-MODULE_DESCRIPTION("Pinctrl driver for NXP LPC18xx/43xx SCU");
-MODULE_LICENSE("GPL v2");
+builtin_platform_driver(lpc18xx_scu_driver);

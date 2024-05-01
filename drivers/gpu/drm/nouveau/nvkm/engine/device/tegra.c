@@ -23,6 +23,10 @@
 #ifdef CONFIG_NOUVEAU_PLATFORM_DRIVER
 #include "priv.h"
 
+#if IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU)
+#include <asm/dma-iommu.h>
+#endif
+
 static int
 nvkm_device_tegra_power_up(struct nvkm_device_tegra *tdev)
 {
@@ -94,6 +98,15 @@ nvkm_device_tegra_probe_iommu(struct nvkm_device_tegra *tdev)
 	struct device *dev = &tdev->pdev->dev;
 	unsigned long pgsize_bitmap;
 	int ret;
+
+#if IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU)
+	if (dev->archdata.mapping) {
+		struct dma_iommu_mapping *mapping = to_dma_iommu_mapping(dev);
+
+		arm_iommu_detach_device(dev);
+		arm_iommu_release_mapping(mapping);
+	}
+#endif
 
 	if (!tdev->func->iommu_bit)
 		return;
@@ -191,13 +204,11 @@ static irqreturn_t
 nvkm_device_tegra_intr(int irq, void *arg)
 {
 	struct nvkm_device_tegra *tdev = arg;
-	struct nvkm_mc *mc = tdev->device.mc;
+	struct nvkm_device *device = &tdev->device;
 	bool handled = false;
-	if (likely(mc)) {
-		nvkm_mc_intr_unarm(mc);
-		nvkm_mc_intr(mc, &handled);
-		nvkm_mc_intr_rearm(mc);
-	}
+	nvkm_mc_intr_unarm(device);
+	nvkm_mc_intr(device, &handled);
+	nvkm_mc_intr_rearm(device);
 	return handled ? IRQ_HANDLED : IRQ_NONE;
 }
 
@@ -313,6 +324,7 @@ nvkm_device_tegra_new(const struct nvkm_device_tegra_func *func,
 		goto remove;
 
 	tdev->gpu_speedo = tegra_sku_info.gpu_speedo_value;
+	tdev->gpu_speedo_id = tegra_sku_info.gpu_speedo_id;
 	ret = nvkm_device_ctor(&nvkm_device_tegra_func, NULL, &pdev->dev,
 			       NVKM_DEVICE_TEGRA, pdev->id, NULL,
 			       cfg, dbg, detect, mmio, subdev_mask,

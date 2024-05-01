@@ -30,6 +30,7 @@
 #include "radeon_audio.h"
 #include "atom.h"
 #include <linux/backlight.h>
+#include <linux/dmi.h>
 
 extern int atom_debug;
 
@@ -120,6 +121,7 @@ atombios_set_backlight_level(struct radeon_encoder *radeon_encoder, u8 level)
 		case ENCODER_OBJECT_ID_INTERNAL_KLDSCP_LVTMA:
 		case ENCODER_OBJECT_ID_INTERNAL_UNIPHY1:
 		case ENCODER_OBJECT_ID_INTERNAL_UNIPHY2:
+		case ENCODER_OBJECT_ID_INTERNAL_UNIPHY3:
 			if (dig->backlight_level == 0)
 				atombios_dig_transmitter_setup(encoder, ATOM_TRANSMITTER_ACTION_LCD_BLOFF, 0, 0);
 			else {
@@ -190,7 +192,8 @@ void radeon_atom_backlight_init(struct radeon_encoder *radeon_encoder,
 	 * so don't register a backlight device
 	 */
 	if ((rdev->pdev->subsystem_vendor == PCI_VENDOR_ID_APPLE) &&
-	    (rdev->pdev->device == 0x6741))
+	    (rdev->pdev->device == 0x6741) &&
+	    !dmi_match(DMI_PRODUCT_NAME, "iMac12,1"))
 		return;
 
 	if (!radeon_encoder->enc_priv)
@@ -2182,9 +2185,17 @@ int radeon_atom_pick_dig_encoder(struct drm_encoder *encoder, int fe_idx)
 		goto assigned;
 	}
 
-	/* on DCE32 and encoder can driver any block so just crtc id */
+	/*
+	 * On DCE32 any encoder can drive any block so usually just use crtc id,
+	 * but Apple thinks different at least on iMac10,1, so there use linkb,
+	 * otherwise the internal eDP panel will stay dark.
+	 */
 	if (ASIC_IS_DCE32(rdev)) {
-		enc_idx = radeon_crtc->crtc_id;
+		if (dmi_match(DMI_PRODUCT_NAME, "iMac10,1"))
+			enc_idx = (dig->linkb) ? 1 : 0;
+		else
+			enc_idx = radeon_crtc->crtc_id;
+
 		goto assigned;
 	}
 

@@ -292,7 +292,7 @@ static int stk7700P2_frontend_attach(struct dvb_usb_adapter *adap)
 					     stk7700d_dib7000p_mt2266_config)
 		    != 0) {
 			err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n", __func__);
-			dvb_detach(&state->dib7000p_ops);
+			dvb_detach(state->dib7000p_ops.set_wbd_ref);
 			return -ENODEV;
 		}
 	}
@@ -326,7 +326,7 @@ static int stk7700d_frontend_attach(struct dvb_usb_adapter *adap)
 					     stk7700d_dib7000p_mt2266_config)
 		    != 0) {
 			err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n", __func__);
-			dvb_detach(&state->dib7000p_ops);
+			dvb_detach(state->dib7000p_ops.set_wbd_ref);
 			return -ENODEV;
 		}
 	}
@@ -431,6 +431,7 @@ static int stk7700ph_xc3028_callback(void *ptr, int component,
 		state->dib7000p_ops.set_gpio(adap->fe_adap[0].fe, 8, 0, 1);
 		break;
 	case XC2028_RESET_CLK:
+	case XC2028_I2C_FLUSH:
 		break;
 	default:
 		err("%s: unknown command %d, arg %d\n", __func__,
@@ -479,7 +480,7 @@ static int stk7700ph_frontend_attach(struct dvb_usb_adapter *adap)
 				     &stk7700ph_dib7700_xc3028_config) != 0) {
 		err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n",
 		    __func__);
-		dvb_detach(&state->dib7000p_ops);
+		dvb_detach(state->dib7000p_ops.set_wbd_ref);
 		return -ENODEV;
 	}
 
@@ -508,8 +509,6 @@ static int stk7700ph_tuner_attach(struct dvb_usb_adapter *adap)
 
 #define DEFAULT_RC_INTERVAL 50
 
-static u8 rc_request[] = { REQUEST_POLL_RC, 0 };
-
 /*
  * This function is used only when firmware is < 1.20 version. Newer
  * firmwares use bulk mode, with functions implemented at dib0700_core,
@@ -517,7 +516,6 @@ static u8 rc_request[] = { REQUEST_POLL_RC, 0 };
  */
 static int dib0700_rc_query_old_firmware(struct dvb_usb_device *d)
 {
-	u8 key[4];
 	enum rc_type protocol;
 	u32 scancode;
 	u8 toggle;
@@ -532,39 +530,43 @@ static int dib0700_rc_query_old_firmware(struct dvb_usb_device *d)
 		return 0;
 	}
 
-	i = dib0700_ctrl_rd(d, rc_request, 2, key, 4);
+	st->buf[0] = REQUEST_POLL_RC;
+	st->buf[1] = 0;
+
+	i = dib0700_ctrl_rd(d, st->buf, 2, st->buf, 4);
 	if (i <= 0) {
 		err("RC Query Failed");
-		return -1;
+		return -EIO;
 	}
 
 	/* losing half of KEY_0 events from Philipps rc5 remotes.. */
-	if (key[0] == 0 && key[1] == 0 && key[2] == 0 && key[3] == 0)
+	if (st->buf[0] == 0 && st->buf[1] == 0
+	    && st->buf[2] == 0 && st->buf[3] == 0)
 		return 0;
 
-	/* info("%d: %2X %2X %2X %2X",dvb_usb_dib0700_ir_proto,(int)key[3-2],(int)key[3-3],(int)key[3-1],(int)key[3]);  */
+	/* info("%d: %2X %2X %2X %2X",dvb_usb_dib0700_ir_proto,(int)st->buf[3 - 2],(int)st->buf[3 - 3],(int)st->buf[3 - 1],(int)st->buf[3]);  */
 
 	dib0700_rc_setup(d, NULL); /* reset ir sensor data to prevent false events */
 
 	switch (d->props.rc.core.protocol) {
 	case RC_BIT_NEC:
 		/* NEC protocol sends repeat code as 0 0 0 FF */
-		if ((key[3-2] == 0x00) && (key[3-3] == 0x00) &&
-		    (key[3] == 0xff)) {
+		if ((st->buf[3 - 2] == 0x00) && (st->buf[3 - 3] == 0x00) &&
+		    (st->buf[3] == 0xff)) {
 			rc_repeat(d->rc_dev);
 			return 0;
 		}
 
 		protocol = RC_TYPE_NEC;
-		scancode = RC_SCANCODE_NEC(key[3-2], key[3-3]);
+		scancode = RC_SCANCODE_NEC(st->buf[3 - 2], st->buf[3 - 3]);
 		toggle = 0;
 		break;
 
 	default:
 		/* RC-5 protocol changes toggle bit on new keypress */
 		protocol = RC_TYPE_RC5;
-		scancode = RC_SCANCODE_RC5(key[3-2], key[3-3]);
-		toggle = key[3-1];
+		scancode = RC_SCANCODE_RC5(st->buf[3 - 2], st->buf[3 - 3]);
+		toggle = st->buf[3 - 1];
 		break;
 	}
 
@@ -1010,7 +1012,7 @@ static int stk7070p_frontend_attach(struct dvb_usb_adapter *adap)
 				     &dib7070p_dib7000p_config) != 0) {
 		err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n",
 		    __func__);
-		dvb_detach(&state->dib7000p_ops);
+		dvb_detach(state->dib7000p_ops.set_wbd_ref);
 		return -ENODEV;
 	}
 
@@ -1068,7 +1070,7 @@ static int stk7770p_frontend_attach(struct dvb_usb_adapter *adap)
 				     &dib7770p_dib7000p_config) != 0) {
 		err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n",
 		    __func__);
-		dvb_detach(&state->dib7000p_ops);
+		dvb_detach(state->dib7000p_ops.set_wbd_ref);
 		return -ENODEV;
 	}
 
@@ -2436,9 +2438,13 @@ static int dib9090_tuner_attach(struct dvb_usb_adapter *adap)
 		8, 0x0486,
 	};
 
+	if (!IS_ENABLED(CONFIG_DVB_DIB9000))
+		return -ENODEV;
 	if (dvb_attach(dib0090_fw_register, adap->fe_adap[0].fe, i2c, &dib9090_dib0090_config) == NULL)
 		return -ENODEV;
 	i2c = dib9000_get_i2c_master(adap->fe_adap[0].fe, DIBX000_I2C_INTERFACE_GPIO_1_2, 0);
+	if (!i2c)
+		return -ENODEV;
 	if (dib01x0_pmu_update(i2c, data_dib190, 10) != 0)
 		return -ENODEV;
 	dib0700_set_i2c_speed(adap->dev, 1500);
@@ -2514,10 +2520,14 @@ static int nim9090md_tuner_attach(struct dvb_usb_adapter *adap)
 		0, 0x00ef,
 		8, 0x0406,
 	};
+	if (!IS_ENABLED(CONFIG_DVB_DIB9000))
+		return -ENODEV;
 	i2c = dib9000_get_tuner_interface(adap->fe_adap[0].fe);
 	if (dvb_attach(dib0090_fw_register, adap->fe_adap[0].fe, i2c, &nim9090md_dib0090_config[0]) == NULL)
 		return -ENODEV;
 	i2c = dib9000_get_i2c_master(adap->fe_adap[0].fe, DIBX000_I2C_INTERFACE_GPIO_1_2, 0);
+	if (!i2c)
+		return -ENODEV;
 	if (dib01x0_pmu_update(i2c, data_dib190, 10) < 0)
 		return -ENODEV;
 
@@ -3055,7 +3065,7 @@ static int nim7090_frontend_attach(struct dvb_usb_adapter *adap)
 
 	if (state->dib7000p_ops.i2c_enumeration(&adap->dev->i2c_adap, 1, 0x10, &nim7090_dib7000p_config) != 0) {
 		err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n", __func__);
-		dvb_detach(&state->dib7000p_ops);
+		dvb_detach(state->dib7000p_ops.set_wbd_ref);
 		return -ENODEV;
 	}
 	adap->fe_adap[0].fe = state->dib7000p_ops.init(&adap->dev->i2c_adap, 0x80, &nim7090_dib7000p_config);
@@ -3108,7 +3118,7 @@ static int tfe7090pvr_frontend0_attach(struct dvb_usb_adapter *adap)
 	/* initialize IC 0 */
 	if (state->dib7000p_ops.i2c_enumeration(&adap->dev->i2c_adap, 1, 0x20, &tfe7090pvr_dib7000p_config[0]) != 0) {
 		err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n", __func__);
-		dvb_detach(&state->dib7000p_ops);
+		dvb_detach(state->dib7000p_ops.set_wbd_ref);
 		return -ENODEV;
 	}
 
@@ -3138,7 +3148,7 @@ static int tfe7090pvr_frontend1_attach(struct dvb_usb_adapter *adap)
 	i2c = state->dib7000p_ops.get_i2c_master(adap->dev->adapter[0].fe_adap[0].fe, DIBX000_I2C_INTERFACE_GPIO_6_7, 1);
 	if (state->dib7000p_ops.i2c_enumeration(i2c, 1, 0x10, &tfe7090pvr_dib7000p_config[1]) != 0) {
 		err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n", __func__);
-		dvb_detach(&state->dib7000p_ops);
+		dvb_detach(state->dib7000p_ops.set_wbd_ref);
 		return -ENODEV;
 	}
 
@@ -3213,7 +3223,7 @@ static int tfe7790p_frontend_attach(struct dvb_usb_adapter *adap)
 				1, 0x10, &tfe7790p_dib7000p_config) != 0) {
 		err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n",
 				__func__);
-		dvb_detach(&state->dib7000p_ops);
+		dvb_detach(state->dib7000p_ops.set_wbd_ref);
 		return -ENODEV;
 	}
 	adap->fe_adap[0].fe = state->dib7000p_ops.init(&adap->dev->i2c_adap,
@@ -3308,7 +3318,7 @@ static int stk7070pd_frontend_attach0(struct dvb_usb_adapter *adap)
 				     stk7070pd_dib7000p_config) != 0) {
 		err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n",
 		    __func__);
-		dvb_detach(&state->dib7000p_ops);
+		dvb_detach(state->dib7000p_ops.set_wbd_ref);
 		return -ENODEV;
 	}
 
@@ -3383,7 +3393,7 @@ static int novatd_frontend_attach(struct dvb_usb_adapter *adap)
 					     stk7070pd_dib7000p_config) != 0) {
 			err("%s: state->dib7000p_ops.i2c_enumeration failed.  Cannot continue\n",
 			    __func__);
-			dvb_detach(&state->dib7000p_ops);
+			dvb_detach(state->dib7000p_ops.set_wbd_ref);
 			return -ENODEV;
 		}
 	}
@@ -3619,7 +3629,7 @@ static int pctv340e_frontend_attach(struct dvb_usb_adapter *adap)
 
 	if (state->dib7000p_ops.dib7000pc_detection(&adap->dev->i2c_adap) == 0) {
 		/* Demodulator not found for some reason? */
-		dvb_detach(&state->dib7000p_ops);
+		dvb_detach(state->dib7000p_ops.set_wbd_ref);
 		return -ENODEV;
 	}
 
@@ -3814,6 +3824,7 @@ struct usb_device_id dib0700_usb_id_table[] = {
 	{ USB_DEVICE(USB_VID_PCTV,      USB_PID_PCTV_2002E) },
 	{ USB_DEVICE(USB_VID_PCTV,      USB_PID_PCTV_2002E_SE) },
 	{ USB_DEVICE(USB_VID_PCTV,      USB_PID_DIBCOM_STK8096PVR) },
+	{ USB_DEVICE(USB_VID_DIBCOM,    USB_PID_DIBCOM_STK8096PVR) },
 	{ 0 }		/* Terminating entry */
 };
 MODULE_DEVICE_TABLE(usb, dib0700_usb_id_table);
@@ -5017,7 +5028,8 @@ struct dvb_usb_device_properties dib0700_devices[] = {
 		.num_device_descs = 1,
 		.devices = {
 			{   "DiBcom STK8096-PVR reference design",
-				{ &dib0700_usb_id_table[83], NULL },
+				{ &dib0700_usb_id_table[83],
+					&dib0700_usb_id_table[84], NULL},
 				{ NULL },
 			},
 		},

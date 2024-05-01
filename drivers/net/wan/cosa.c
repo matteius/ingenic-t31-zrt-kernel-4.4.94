@@ -739,7 +739,7 @@ static char *cosa_net_setup_rx(struct channel_data *chan, int size)
 		chan->netdev->stats.rx_dropped++;
 		return NULL;
 	}
-	chan->netdev->trans_start = jiffies;
+	netif_trans_update(chan->netdev);
 	return skb_put(chan->rx_skb, size);
 }
 
@@ -903,6 +903,7 @@ static ssize_t cosa_write(struct file *file,
 			chan->tx_status = 1;
 			spin_unlock_irqrestore(&cosa->lock, flags);
 			up(&chan->wsem);
+			kfree(kbuf);
 			return -ERESTARTSYS;
 		}
 	}

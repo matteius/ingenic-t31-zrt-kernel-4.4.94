@@ -275,7 +275,7 @@ static uint r8712_usb_dvobj_init(struct _adapter *padapter)
 
 	pdvobjpriv->padapter = padapter;
 	padapter->EepromAddressSize = 6;
-	phost_iface = &pintf->altsetting[0];
+	phost_iface = pintf->cur_altsetting;
 	piface_desc = &phost_iface->desc;
 	pdvobjpriv->nr_endpoint = piface_desc->bNumEndpoints;
 	if (pusbd->speed == USB_SPEED_HIGH) {
@@ -301,7 +301,8 @@ void rtl871x_intf_stop(struct _adapter *padapter)
 	/*disable_hw_interrupt*/
 	if (!padapter->bSurpriseRemoved) {
 		/*device still exists, so driver can do i/o operation
-		 * TODO: */
+		 * TODO:
+		 */
 	}
 
 	/* cancel in irp */
@@ -368,7 +369,7 @@ static const struct device_type wlan_type = {
  *
  * notes: drv_init() is called when the bus driver has located a card for us
  * to support. We accept the new device by returning 0.
-*/
+ */
 static int r871xu_drv_init(struct usb_interface *pusb_intf,
 			   const struct usb_device_id *pdid)
 {
@@ -568,13 +569,13 @@ static int r871xu_drv_init(struct usb_interface *pusb_intf,
 		} else {
 			AutoloadFail = false;
 		}
-		if (((mac[0] == 0xff) && (mac[1] == 0xff) &&
+		if ((!AutoloadFail) ||
+		    ((mac[0] == 0xff) && (mac[1] == 0xff) &&
 		     (mac[2] == 0xff) && (mac[3] == 0xff) &&
 		     (mac[4] == 0xff) && (mac[5] == 0xff)) ||
 		    ((mac[0] == 0x00) && (mac[1] == 0x00) &&
 		     (mac[2] == 0x00) && (mac[3] == 0x00) &&
-		     (mac[4] == 0x00) && (mac[5] == 0x00)) ||
-		     (!AutoloadFail)) {
+		     (mac[4] == 0x00) && (mac[5] == 0x00))) {
 			mac[0] = 0x00;
 			mac[1] = 0xe0;
 			mac[2] = 0x4c;
@@ -611,7 +612,8 @@ error:
 }
 
 /* rmmod module & unplug(SurpriseRemoved) will call r871xu_dev_remove()
- * => how to recognize both */
+ * => how to recognize both
+ */
 static void r871xu_dev_remove(struct usb_interface *pusb_intf)
 {
 	struct net_device *pnetdev = usb_get_intfdata(pusb_intf);
@@ -635,12 +637,14 @@ static void r871xu_dev_remove(struct usb_interface *pusb_intf)
 		r8712_free_drv_sw(padapter);
 
 		/* decrease the reference count of the usb device structure
-		 * when disconnect */
+		 * when disconnect
+		 */
 		usb_put_dev(udev);
 	}
 	/* If we didn't unplug usb dongle and remove/insert module, driver
 	 * fails on sitesurvey for the first time when device is up.
-	 * Reset usb port for sitesurvey fail issue. */
+	 * Reset usb port for sitesurvey fail issue.
+	 */
 	if (udev->state != USB_STATE_NOTATTACHED)
 		usb_reset_device(udev);
 }

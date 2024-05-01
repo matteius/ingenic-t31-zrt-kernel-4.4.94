@@ -176,7 +176,17 @@ static ssize_t blk_mq_sysfs_rq_list_show(struct blk_mq_ctx *ctx, char *page)
 
 static ssize_t blk_mq_hw_sysfs_poll_show(struct blk_mq_hw_ctx *hctx, char *page)
 {
-	return sprintf(page, "invoked=%lu, success=%lu\n", hctx->poll_invoked, hctx->poll_success);
+	return sprintf(page, "considered=%lu, invoked=%lu, success=%lu\n",
+		       hctx->poll_considered, hctx->poll_invoked,
+		       hctx->poll_success);
+}
+
+static ssize_t blk_mq_hw_sysfs_poll_store(struct blk_mq_hw_ctx *hctx,
+					  const char *page, size_t size)
+{
+	hctx->poll_considered = hctx->poll_invoked = hctx->poll_success = 0;
+
+	return size;
 }
 
 static ssize_t blk_mq_hw_sysfs_queued_show(struct blk_mq_hw_ctx *hctx,
@@ -198,12 +208,14 @@ static ssize_t blk_mq_hw_sysfs_dispatched_show(struct blk_mq_hw_ctx *hctx,
 
 	page += sprintf(page, "%8u\t%lu\n", 0U, hctx->dispatched[0]);
 
-	for (i = 1; i < BLK_MQ_MAX_DISPATCH_ORDER; i++) {
-		unsigned long d = 1U << (i - 1);
+	for (i = 1; i < BLK_MQ_MAX_DISPATCH_ORDER - 1; i++) {
+		unsigned int d = 1U << (i - 1);
 
-		page += sprintf(page, "%8lu\t%lu\n", d, hctx->dispatched[i]);
+		page += sprintf(page, "%8u\t%lu\n", d, hctx->dispatched[i]);
 	}
 
+	page += sprintf(page, "%8u+\t%lu\n", 1U << (i - 1),
+						hctx->dispatched[i]);
 	return page - start_page;
 }
 
@@ -231,20 +243,25 @@ static ssize_t blk_mq_hw_sysfs_active_show(struct blk_mq_hw_ctx *hctx, char *pag
 
 static ssize_t blk_mq_hw_sysfs_cpus_show(struct blk_mq_hw_ctx *hctx, char *page)
 {
+	const size_t size = PAGE_SIZE - 1;
 	unsigned int i, first = 1;
-	ssize_t ret = 0;
+	int ret = 0, pos = 0;
 
 	for_each_cpu(i, hctx->cpumask) {
 		if (first)
-			ret += sprintf(ret + page, "%u", i);
+			ret = snprintf(pos + page, size - pos, "%u", i);
 		else
-			ret += sprintf(ret + page, ", %u", i);
+			ret = snprintf(pos + page, size - pos, ", %u", i);
+
+		if (ret >= size - pos)
+			break;
 
 		first = 0;
+		pos += ret;
 	}
 
-	ret += sprintf(ret + page, "\n");
-	return ret;
+	ret = snprintf(pos + page, size + 1 - pos, "\n");
+	return pos + ret;
 }
 
 static struct blk_mq_ctx_sysfs_entry blk_mq_sysfs_dispatched = {
@@ -301,8 +318,9 @@ static struct blk_mq_hw_ctx_sysfs_entry blk_mq_hw_sysfs_cpus = {
 	.show = blk_mq_hw_sysfs_cpus_show,
 };
 static struct blk_mq_hw_ctx_sysfs_entry blk_mq_hw_sysfs_poll = {
-	.attr = {.name = "io_poll", .mode = S_IRUGO },
+	.attr = {.name = "io_poll", .mode = S_IWUSR | S_IRUGO },
 	.show = blk_mq_hw_sysfs_poll_show,
+	.store = blk_mq_hw_sysfs_poll_store,
 };
 
 static struct attribute *default_hw_ctx_attrs[] = {
@@ -362,7 +380,7 @@ static int blk_mq_register_hctx(struct blk_mq_hw_ctx *hctx)
 {
 	struct request_queue *q = hctx->queue;
 	struct blk_mq_ctx *ctx;
-	int i, ret;
+	int i, j, ret;
 
 	if (!hctx->nr_ctx)
 		return 0;
@@ -374,20 +392,24 @@ static int blk_mq_register_hctx(struct blk_mq_hw_ctx *hctx)
 	hctx_for_each_ctx(hctx, ctx, i) {
 		ret = kobject_add(&ctx->kobj, &hctx->kobj, "cpu%u", ctx->cpu);
 		if (ret)
-			break;
+			goto out;
 	}
 
+	return 0;
+out:
+	hctx_for_each_ctx(hctx, ctx, j) {
+		if (j < i)
+			kobject_del(&ctx->kobj);
+	}
+	kobject_del(&hctx->kobj);
 	return ret;
 }
 
-void blk_mq_unregister_disk(struct gendisk *disk)
+static void __blk_mq_unregister_dev(struct device *dev, struct request_queue *q)
 {
-	struct request_queue *q = disk->queue;
 	struct blk_mq_hw_ctx *hctx;
 	struct blk_mq_ctx *ctx;
 	int i, j;
-
-	blk_mq_disable_hotplug();
 
 	queue_for_each_hw_ctx(q, hctx, i) {
 		blk_mq_unregister_hctx(hctx);
@@ -402,9 +424,15 @@ void blk_mq_unregister_disk(struct gendisk *disk)
 	kobject_del(&q->mq_kobj);
 	kobject_put(&q->mq_kobj);
 
-	kobject_put(&disk_to_dev(disk)->kobj);
+	kobject_put(&dev->kobj);
 
 	q->mq_sysfs_init_done = false;
+}
+
+void blk_mq_unregister_dev(struct device *dev, struct request_queue *q)
+{
+	blk_mq_disable_hotplug();
+	__blk_mq_unregister_dev(dev, q);
 	blk_mq_enable_hotplug();
 }
 
@@ -413,7 +441,7 @@ void blk_mq_hctx_kobj_init(struct blk_mq_hw_ctx *hctx)
 	kobject_init(&hctx->kobj, &blk_mq_hw_ktype);
 }
 
-static void blk_mq_sysfs_init(struct request_queue *q)
+void blk_mq_sysfs_init(struct request_queue *q)
 {
 	struct blk_mq_ctx *ctx;
 	int cpu;
@@ -426,16 +454,12 @@ static void blk_mq_sysfs_init(struct request_queue *q)
 	}
 }
 
-int blk_mq_register_disk(struct gendisk *disk)
+int blk_mq_register_dev(struct device *dev, struct request_queue *q)
 {
-	struct device *dev = disk_to_dev(disk);
-	struct request_queue *q = disk->queue;
 	struct blk_mq_hw_ctx *hctx;
 	int ret, i;
 
 	blk_mq_disable_hotplug();
-
-	blk_mq_sysfs_init(q);
 
 	ret = kobject_add(&q->mq_kobj, kobject_get(&dev->kobj), "%s", "mq");
 	if (ret < 0)
@@ -450,7 +474,7 @@ int blk_mq_register_disk(struct gendisk *disk)
 	}
 
 	if (ret)
-		blk_mq_unregister_disk(disk);
+		__blk_mq_unregister_dev(dev, q);
 	else
 		q->mq_sysfs_init_done = true;
 out:
@@ -458,7 +482,7 @@ out:
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(blk_mq_register_disk);
+EXPORT_SYMBOL_GPL(blk_mq_register_dev);
 
 void blk_mq_sysfs_unregister(struct request_queue *q)
 {

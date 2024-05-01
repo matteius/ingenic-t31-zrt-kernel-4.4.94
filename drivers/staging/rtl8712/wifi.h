@@ -376,7 +376,8 @@ static inline unsigned char *get_hdr_bssid(unsigned char *pframe)
 
 /*-----------------------------------------------------------------------------
 			Below is for the security related definition
-------------------------------------------------------------------------------*/
+ *-----------------------------------------------------------------------------
+ */
 #define _RESERVED_FRAME_TYPE_	0
 #define _SKB_FRAME_TYPE_	2
 #define _PRE_ALLOCMEM_		1
@@ -420,7 +421,8 @@ static inline unsigned char *get_hdr_bssid(unsigned char *pframe)
 
 /* ---------------------------------------------------------------------------
 					Below is the fixed elements...
------------------------------------------------------------------------------*/
+ * ---------------------------------------------------------------------------
+ */
 #define _AUTH_ALGM_NUM_			2
 #define _AUTH_SEQ_NUM_			2
 #define _BEACON_ITERVAL_		2
@@ -448,25 +450,28 @@ static inline unsigned char *get_hdr_bssid(unsigned char *pframe)
 
 /*-----------------------------------------------------------------------------
 				Below is the definition for 802.11i / 802.1x
-------------------------------------------------------------------------------*/
+ *------------------------------------------------------------------------------
+ */
 #define _IEEE8021X_MGT_			1	/*WPA */
 #define _IEEE8021X_PSK_			2	/* WPA with pre-shared key */
 
 /*-----------------------------------------------------------------------------
 				Below is the definition for WMM
-------------------------------------------------------------------------------*/
+ *------------------------------------------------------------------------------
+ */
 #define _WMM_IE_Length_				7  /* for WMM STA */
 #define _WMM_Para_Element_Length_		24
 
 
 /*-----------------------------------------------------------------------------
 				Below is the definition for 802.11n
-------------------------------------------------------------------------------*/
+ *------------------------------------------------------------------------------
+ */
 
 /* block-ack parameters */
 #define IEEE80211_ADDBA_PARAM_POLICY_MASK 0x0002
 #define IEEE80211_ADDBA_PARAM_TID_MASK 0x003C
-#define IEEE80211_ADDBA_PARAM_BUF_SIZE_MASK 0xFFA0
+#define IEEE80211_ADDBA_PARAM_BUF_SIZE_MASK 0xFFC0
 #define IEEE80211_DELBA_PARAM_TID_MASK 0xF000
 #define IEEE80211_DELBA_PARAM_INITIATOR_MASK 0x0800
 
@@ -559,13 +564,6 @@ struct ieee80211_ht_addt_info {
 #define IEEE80211_HT_IE_HT_PROTECTION		0x0003
 #define IEEE80211_HT_IE_NON_GF_STA_PRSNT	0x0004
 #define IEEE80211_HT_IE_NON_HT_STA_PRSNT	0x0010
-
-/* block-ack parameters */
-#define IEEE80211_ADDBA_PARAM_POLICY_MASK 0x0002
-#define IEEE80211_ADDBA_PARAM_TID_MASK 0x003C
-#define IEEE80211_ADDBA_PARAM_BUF_SIZE_MASK 0xFFA0
-#define IEEE80211_DELBA_PARAM_TID_MASK 0xF000
-#define IEEE80211_DELBA_PARAM_INITIATOR_MASK 0x0800
 
 /*
  * A-PMDU buffer sizes

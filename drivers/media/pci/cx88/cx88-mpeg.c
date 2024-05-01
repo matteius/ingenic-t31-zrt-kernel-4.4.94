@@ -175,6 +175,9 @@ int cx8802_start_dma(struct cx8802_dev    *dev,
 	cx_write(MO_TS_GPCNTRL, GP_COUNT_CONTROL_RESET);
 	q->count = 0;
 
+	/* clear interrupt status register */
+	cx_write(MO_TS_INTSTAT,  0x1f1111);
+
 	/* enable irqs */
 	dprintk( 1, "setting the interrupt mask\n" );
 	cx_set(MO_PCI_INTMSK, core->pci_irqmask | PCI_INT_TSINT);
@@ -726,11 +729,6 @@ static int cx8802_probe(struct pci_dev *pci_dev,
 	if (NULL == dev)
 		goto fail_core;
 	dev->pci = pci_dev;
-	dev->alloc_ctx = vb2_dma_sg_init_ctx(&pci_dev->dev);
-	if (IS_ERR(dev->alloc_ctx)) {
-		err = PTR_ERR(dev->alloc_ctx);
-		goto fail_dev;
-	}
 	dev->core = core;
 
 	/* Maintain a reference so cx88-video can query the 8802 device. */
@@ -738,7 +736,7 @@ static int cx8802_probe(struct pci_dev *pci_dev,
 
 	err = cx8802_init_common(dev);
 	if (err != 0)
-		goto fail_free;
+		goto fail_dev;
 
 	INIT_LIST_HEAD(&dev->drvlist);
 	mutex_lock(&cx8802_mutex);
@@ -749,8 +747,6 @@ static int cx8802_probe(struct pci_dev *pci_dev,
 	request_modules(dev);
 	return 0;
 
- fail_free:
-	vb2_dma_sg_cleanup_ctx(dev->alloc_ctx);
  fail_dev:
 	kfree(dev);
  fail_core:
@@ -798,7 +794,6 @@ static void cx8802_remove(struct pci_dev *pci_dev)
 	/* common */
 	cx8802_fini_common(dev);
 	cx88_core_put(dev->core,dev->pci);
-	vb2_dma_sg_cleanup_ctx(dev->alloc_ctx);
 	kfree(dev);
 }
 

@@ -32,7 +32,7 @@
 #include <nvif/class.h>
 #include <nvif/if0001.h>
 #include "nouveau_debugfs.h"
-#include "nouveau_drm.h"
+#include "nouveau_drv.h"
 
 static int
 nouveau_debugfs_vbios_image(struct seq_file *m, void *data)
@@ -178,6 +178,7 @@ static const struct file_operations nouveau_pstate_fops = {
 	.open = nouveau_debugfs_pstate_open,
 	.read = seq_read,
 	.write = nouveau_debugfs_pstate_set,
+	.release = single_release,
 };
 
 static struct drm_info_list nouveau_debugfs_list[] = {

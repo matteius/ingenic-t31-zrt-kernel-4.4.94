@@ -14,7 +14,9 @@
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/thread_info.h>
+#include <linux/string.h>
 #include <asm/asm-eva.h>
+#include <asm/extable.h>
 
 /*
  * The fs value determines whether argument validity checking should be
@@ -88,7 +90,7 @@ extern u64 __ua_limit;
  */
 static inline bool eva_kernel_access(void)
 {
-	if (!config_enabled(CONFIG_EVA))
+	if (!IS_ENABLED(CONFIG_EVA))
 		return false;
 
 	return segment_eq(get_fs(), get_ds());
@@ -857,7 +859,10 @@ extern size_t __copy_user(void *__to, const void *__from, size_t __n);
 	__cu_to = (to);							\
 	__cu_from = (from);						\
 	__cu_len = (n);							\
+									\
+	check_object_size(__cu_from, __cu_len, true);			\
 	might_fault();							\
+									\
 	if (eva_kernel_access())					\
 		__cu_len = __invoke_copy_to_kernel(__cu_to, __cu_from,	\
 						   __cu_len);		\
@@ -878,6 +883,9 @@ extern size_t __copy_user_inatomic(void *__to, const void *__from, size_t __n);
 	__cu_to = (to);							\
 	__cu_from = (from);						\
 	__cu_len = (n);							\
+									\
+	check_object_size(__cu_from, __cu_len, true);			\
+									\
 	if (eva_kernel_access())					\
 		__cu_len = __invoke_copy_to_kernel(__cu_to, __cu_from,	\
 						   __cu_len);		\
@@ -896,6 +904,9 @@ extern size_t __copy_user_inatomic(void *__to, const void *__from, size_t __n);
 	__cu_to = (to);							\
 	__cu_from = (from);						\
 	__cu_len = (n);							\
+									\
+	check_object_size(__cu_to, __cu_len, false);			\
+									\
 	if (eva_kernel_access())					\
 		__cu_len = __invoke_copy_from_kernel_inatomic(__cu_to,	\
 							      __cu_from,\
@@ -930,6 +941,9 @@ extern size_t __copy_user_inatomic(void *__to, const void *__from, size_t __n);
 	__cu_to = (to);							\
 	__cu_from = (from);						\
 	__cu_len = (n);							\
+									\
+	check_object_size(__cu_from, __cu_len, true);			\
+									\
 	if (eva_kernel_access()) {					\
 		__cu_len = __invoke_copy_to_kernel(__cu_to,		\
 						   __cu_from,		\
@@ -1122,6 +1136,9 @@ extern size_t __copy_in_user_eva(void *__to, const void *__from, size_t __n);
 	__cu_to = (to);							\
 	__cu_from = (from);						\
 	__cu_len = (n);							\
+									\
+	check_object_size(__cu_to, __cu_len, false);			\
+									\
 	if (eva_kernel_access()) {					\
 		__cu_len = __invoke_copy_from_kernel(__cu_to,		\
 						     __cu_from,		\
@@ -1160,6 +1177,9 @@ extern size_t __copy_in_user_eva(void *__to, const void *__from, size_t __n);
 	__cu_to = (to);							\
 	__cu_from = (from);						\
 	__cu_len = (n);							\
+									\
+	check_object_size(__cu_to, __cu_len, false);			\
+									\
 	if (eva_kernel_access()) {					\
 		__cu_len = __invoke_copy_from_kernel(__cu_to,		\
 						     __cu_from,		\
@@ -1170,6 +1190,8 @@ extern size_t __copy_in_user_eva(void *__to, const void *__from, size_t __n);
 			__cu_len = __invoke_copy_from_user(__cu_to,	\
 							   __cu_from,	\
 							   __cu_len);   \
+		} else {						\
+			memset(__cu_to, 0, __cu_len);			\
 		}							\
 	}								\
 	__cu_len;							\
@@ -1235,6 +1257,13 @@ __clear_user(void __user *addr, __kernel_size_t size)
 {
 	__kernel_size_t res;
 
+#ifdef CONFIG_CPU_MICROMIPS
+/* micromips memset / bzero also clobbers t7 & t8 */
+#define bzero_clobbers "$4", "$5", "$6", __UA_t0, __UA_t1, "$15", "$24", "$31"
+#else
+#define bzero_clobbers "$4", "$5", "$6", __UA_t0, __UA_t1, "$31"
+#endif /* CONFIG_CPU_MICROMIPS */
+
 	if (eva_kernel_access()) {
 		__asm__ __volatile__(
 			"move\t$4, %1\n\t"
@@ -1244,7 +1273,7 @@ __clear_user(void __user *addr, __kernel_size_t size)
 			"move\t%0, $6"
 			: "=r" (res)
 			: "r" (addr), "r" (size)
-			: "$4", "$5", "$6", __UA_t0, __UA_t1, "$31");
+			: bzero_clobbers);
 	} else {
 		might_fault();
 		__asm__ __volatile__(
@@ -1255,7 +1284,7 @@ __clear_user(void __user *addr, __kernel_size_t size)
 			"move\t%0, $6"
 			: "=r" (res)
 			: "r" (addr), "r" (size)
-			: "$4", "$5", "$6", __UA_t0, __UA_t1, "$31");
+			: bzero_clobbers);
 	}
 
 	return res;
@@ -1481,13 +1510,5 @@ static inline long strnlen_user(const char __user *s, long n)
 
 	return res;
 }
-
-struct exception_table_entry
-{
-	unsigned long insn;
-	unsigned long nextinsn;
-};
-
-extern int fixup_exception(struct pt_regs *regs);
 
 #endif /* _ASM_UACCESS_H */

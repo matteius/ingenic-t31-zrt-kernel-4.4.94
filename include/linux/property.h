@@ -33,6 +33,8 @@ enum dev_dma_attr {
 	DEV_DMA_COHERENT,
 };
 
+struct fwnode_handle *dev_fwnode(struct device *dev);
+
 bool device_property_present(struct device *dev, const char *propname);
 int device_property_read_u8_array(struct device *dev, const char *propname,
 				  u8 *val, size_t nval);
@@ -76,6 +78,9 @@ struct fwnode_handle *device_get_next_child_node(struct device *dev,
 #define device_for_each_child_node(dev, child)				\
 	for (child = device_get_next_child_node(dev, NULL); child;	\
 	     child = device_get_next_child_node(dev, child))
+
+struct fwnode_handle *device_get_named_child_node(struct device *dev,
+						  const char *childname);
 
 void fwnode_handle_put(struct fwnode_handle *fwnode);
 
@@ -182,12 +187,12 @@ struct property_entry {
  */
 
 #define PROPERTY_ENTRY_INTEGER_ARRAY(_name_, _type_, _val_)	\
-{								\
+(struct property_entry) {					\
 	.name = _name_,						\
 	.length = ARRAY_SIZE(_val_) * sizeof(_type_),		\
 	.is_array = true,					\
 	.is_string = false,					\
-	{ .pointer = { _type_##_data = _val_ } },		\
+	{ .pointer = { ._type_##_data = _val_ } },		\
 }
 
 #define PROPERTY_ENTRY_U8_ARRAY(_name_, _val_)			\
@@ -200,7 +205,7 @@ struct property_entry {
 	PROPERTY_ENTRY_INTEGER_ARRAY(_name_, u64, _val_)
 
 #define PROPERTY_ENTRY_STRING_ARRAY(_name_, _val_)		\
-{								\
+(struct property_entry) {					\
 	.name = _name_,						\
 	.length = ARRAY_SIZE(_val_) * sizeof(const char *),	\
 	.is_array = true,					\
@@ -209,7 +214,7 @@ struct property_entry {
 }
 
 #define PROPERTY_ENTRY_INTEGER(_name_, _type_, _val_)	\
-{							\
+(struct property_entry) {				\
 	.name = _name_,					\
 	.length = sizeof(_type_),			\
 	.is_string = false,				\
@@ -226,30 +231,21 @@ struct property_entry {
 	PROPERTY_ENTRY_INTEGER(_name_, u64, _val_)
 
 #define PROPERTY_ENTRY_STRING(_name_, _val_)		\
-{							\
+(struct property_entry) {				\
 	.name = _name_,					\
-	.length = sizeof(_val_),			\
+	.length = sizeof(const char *),			\
 	.is_string = true,				\
 	{ .value = { .str = _val_ } },			\
 }
 
 #define PROPERTY_ENTRY_BOOL(_name_)		\
-{						\
+(struct property_entry) {			\
 	.name = _name_,				\
 }
 
-/**
- * struct property_set - Collection of "built-in" device properties.
- * @fwnode: Handle to be pointed to by the fwnode field of struct device.
- * @properties: Array of properties terminated with a null entry.
- */
-struct property_set {
-	struct fwnode_handle fwnode;
-	struct property_entry *properties;
-};
-
-int device_add_property_set(struct device *dev, const struct property_set *pset);
-void device_remove_property_set(struct device *dev);
+int device_add_properties(struct device *dev,
+			  struct property_entry *properties);
+void device_remove_properties(struct device *dev);
 
 bool device_dma_supported(struct device *dev);
 

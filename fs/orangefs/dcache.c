@@ -25,8 +25,10 @@ static int orangefs_revalidate_lookup(struct dentry *dentry)
 	gossip_debug(GOSSIP_DCACHE_DEBUG, "%s: attempting lookup.\n", __func__);
 
 	new_op = op_alloc(ORANGEFS_VFS_OP_LOOKUP);
-	if (!new_op)
+	if (!new_op) {
+		ret = -ENOMEM;
 		goto out_put_parent;
+	}
 
 	new_op->upcall.req.lookup.sym_follow = ORANGEFS_LOOKUP_LINK_NO_FOLLOW;
 	new_op->upcall.req.lookup.parent_refn = parent->refn;
@@ -73,6 +75,7 @@ static int orangefs_revalidate_lookup(struct dentry *dentry)
 		}
 	}
 
+	orangefs_set_timeout(dentry);
 	ret = 1;
 out_release_op:
 	op_release(new_op);
@@ -93,6 +96,10 @@ out_drop:
 static int orangefs_d_revalidate(struct dentry *dentry, unsigned int flags)
 {
 	int ret;
+	unsigned long time = (unsigned long) dentry->d_fsdata;
+
+	if (time_before(jiffies, time))
+		return 1;
 
 	if (flags & LOOKUP_RCU)
 		return -ECHILD;

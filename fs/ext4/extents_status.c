@@ -707,7 +707,7 @@ int ext4_es_insert_extent(struct inode *inode, ext4_lblk_t lblk,
 	    (status & EXTENT_STATUS_WRITTEN)) {
 		ext4_warning(inode->i_sb, "Inserting extent [%u/%u] as "
 				" delayed and written which can potentially "
-				" cause data loss.\n", lblk, len);
+				" cause data loss.", lblk, len);
 		WARN_ON(1);
 	}
 
@@ -1080,11 +1080,9 @@ static unsigned long ext4_es_scan(struct shrinker *shrink,
 	ret = percpu_counter_read_positive(&sbi->s_es_stats.es_stats_shk_cnt);
 	trace_ext4_es_shrink_scan_enter(sbi->s_sb, nr_to_scan, ret);
 
-	if (!nr_to_scan)
-		return ret;
-
 	nr_shrunk = __es_shrink(sbi, nr_to_scan, NULL);
 
+	ret = percpu_counter_read_positive(&sbi->s_es_stats.es_stats_shk_cnt);
 	trace_ext4_es_shrink_scan_exit(sbi->s_sb, nr_shrunk, ret);
 	return nr_shrunk;
 }

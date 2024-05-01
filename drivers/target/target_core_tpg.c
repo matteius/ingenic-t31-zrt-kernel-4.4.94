@@ -336,44 +336,39 @@ struct se_node_acl *core_tpg_add_initiator_node_acl(
 	return acl;
 }
 
+static void target_shutdown_sessions(struct se_node_acl *acl)
+{
+	struct se_session *sess;
+	unsigned long flags;
+
+restart:
+	spin_lock_irqsave(&acl->nacl_sess_lock, flags);
+	list_for_each_entry(sess, &acl->acl_sess_list, sess_acl_list) {
+		if (sess->sess_tearing_down)
+			continue;
+
+		list_del_init(&sess->sess_acl_list);
+		spin_unlock_irqrestore(&acl->nacl_sess_lock, flags);
+
+		if (acl->se_tpg->se_tpg_tfo->close_session)
+			acl->se_tpg->se_tpg_tfo->close_session(sess);
+		goto restart;
+	}
+	spin_unlock_irqrestore(&acl->nacl_sess_lock, flags);
+}
+
 void core_tpg_del_initiator_node_acl(struct se_node_acl *acl)
 {
 	struct se_portal_group *tpg = acl->se_tpg;
-	LIST_HEAD(sess_list);
-	struct se_session *sess, *sess_tmp;
-	unsigned long flags;
-	int rc;
 
 	mutex_lock(&tpg->acl_node_mutex);
-	if (acl->dynamic_node_acl) {
+	if (acl->dynamic_node_acl)
 		acl->dynamic_node_acl = 0;
-	}
-	list_del(&acl->acl_list);
+	list_del_init(&acl->acl_list);
 	mutex_unlock(&tpg->acl_node_mutex);
 
-	spin_lock_irqsave(&acl->nacl_sess_lock, flags);
-	acl->acl_stop = 1;
+	target_shutdown_sessions(acl);
 
-	list_for_each_entry_safe(sess, sess_tmp, &acl->acl_sess_list,
-				sess_acl_list) {
-		if (sess->sess_tearing_down != 0)
-			continue;
-
-		if (!target_get_session(sess))
-			continue;
-		list_move(&sess->sess_acl_list, &sess_list);
-	}
-	spin_unlock_irqrestore(&acl->nacl_sess_lock, flags);
-
-	list_for_each_entry_safe(sess, sess_tmp, &sess_list, sess_acl_list) {
-		list_del(&sess->sess_acl_list);
-
-		rc = tpg->se_tpg_tfo->shutdown_session(sess);
-		target_put_session(sess);
-		if (!rc)
-			continue;
-		target_put_session(sess);
-	}
 	target_put_nacl(acl);
 	/*
 	 * Wait for last target_put_nacl() to complete in target_complete_nacl()
@@ -400,11 +395,7 @@ int core_tpg_set_initiator_node_queue_depth(
 	struct se_node_acl *acl,
 	u32 queue_depth)
 {
-	LIST_HEAD(sess_list);
 	struct se_portal_group *tpg = acl->se_tpg;
-	struct se_session *sess, *sess_tmp;
-	unsigned long flags;
-	int rc;
 
 	/*
 	 * User has requested to change the queue depth for a Initiator Node.
@@ -413,30 +404,10 @@ int core_tpg_set_initiator_node_queue_depth(
 	 */
 	target_set_nacl_queue_depth(tpg, acl, queue_depth);
 
-	spin_lock_irqsave(&acl->nacl_sess_lock, flags);
-	list_for_each_entry_safe(sess, sess_tmp, &acl->acl_sess_list,
-				 sess_acl_list) {
-		if (sess->sess_tearing_down != 0)
-			continue;
-		if (!target_get_session(sess))
-			continue;
-		spin_unlock_irqrestore(&acl->nacl_sess_lock, flags);
-
-		/*
-		 * Finally call tpg->se_tpg_tfo->close_session() to force session
-		 * reinstatement to occur if there is an active session for the
-		 * $FABRIC_MOD Initiator Node in question.
-		 */
-		rc = tpg->se_tpg_tfo->shutdown_session(sess);
-		target_put_session(sess);
-		if (!rc) {
-			spin_lock_irqsave(&acl->nacl_sess_lock, flags);
-			continue;
-		}
-		target_put_session(sess);
-		spin_lock_irqsave(&acl->nacl_sess_lock, flags);
-	}
-	spin_unlock_irqrestore(&acl->nacl_sess_lock, flags);
+	/*
+	 * Shutdown all pending sessions to force session reinstatement.
+	 */
+	target_shutdown_sessions(acl);
 
 	pr_debug("Successfully changed queue depth to: %d for Initiator"
 		" Node: %s on %s Target Portal Group: %u\n", acl->queue_depth,
@@ -474,7 +445,7 @@ static void core_tpg_lun_ref_release(struct percpu_ref *ref)
 {
 	struct se_lun *lun = container_of(ref, struct se_lun, lun_ref);
 
-	complete(&lun->lun_ref_comp);
+	complete(&lun->lun_shutdown_comp);
 }
 
 int core_tpg_register(
@@ -569,7 +540,7 @@ int core_tpg_deregister(struct se_portal_group *se_tpg)
 	 * in transport_deregister_session().
 	 */
 	list_for_each_entry_safe(nacl, nacl_tmp, &node_list, acl_list) {
-		list_del(&nacl->acl_list);
+		list_del_init(&nacl->acl_list);
 
 		core_tpg_wait_for_nacl_pr_ref(nacl);
 		core_free_device_list_for_node(nacl, se_tpg);
@@ -600,6 +571,7 @@ struct se_lun *core_tpg_alloc_lun(
 	lun->lun_link_magic = SE_LUN_LINK_MAGIC;
 	atomic_set(&lun->lun_acl_count, 0);
 	init_completion(&lun->lun_ref_comp);
+	init_completion(&lun->lun_shutdown_comp);
 	INIT_LIST_HEAD(&lun->lun_deve_list);
 	INIT_LIST_HEAD(&lun->lun_dev_link);
 	atomic_set(&lun->lun_tg_pt_secondary_offline, 0);
@@ -668,6 +640,8 @@ void core_tpg_remove_lun(
 	 */
 	struct se_device *dev = rcu_dereference_raw(lun->lun_se_dev);
 
+	lun->lun_shutdown = true;
+
 	core_clear_lun_from_tpg(lun, tpg);
 	/*
 	 * Wait for any active I/O references to percpu se_lun->lun_ref to
@@ -689,6 +663,8 @@ void core_tpg_remove_lun(
 	}
 	if (!(dev->se_hba->hba_flags & HBA_FLAGS_INTERNAL_USE))
 		hlist_del_rcu(&lun->link);
+
+	lun->lun_shutdown = false;
 	mutex_unlock(&tpg->tpg_lun_mutex);
 
 	percpu_ref_exit(&lun->lun_ref);

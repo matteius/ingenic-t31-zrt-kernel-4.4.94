@@ -109,29 +109,6 @@ static void adf_vf_void_noop(struct adf_accel_dev *accel_dev)
 {
 }
 
-static int adf_vf2pf_init(struct adf_accel_dev *accel_dev)
-{
-	u32 msg = (ADF_VF2PF_MSGORIGIN_SYSTEM |
-		(ADF_VF2PF_MSGTYPE_INIT << ADF_VF2PF_MSGTYPE_SHIFT));
-
-	if (adf_iov_putmsg(accel_dev, msg, 0)) {
-		dev_err(&GET_DEV(accel_dev),
-			"Failed to send Init event to PF\n");
-		return -EFAULT;
-	}
-	return 0;
-}
-
-static void adf_vf2pf_shutdown(struct adf_accel_dev *accel_dev)
-{
-	u32 msg = (ADF_VF2PF_MSGORIGIN_SYSTEM |
-	    (ADF_VF2PF_MSGTYPE_SHUTDOWN << ADF_VF2PF_MSGTYPE_SHIFT));
-
-	if (adf_iov_putmsg(accel_dev, msg, 0))
-		dev_err(&GET_DEV(accel_dev),
-			"Failed to send Shutdown event to PF\n");
-}
-
 void adf_init_hw_data_c3xxxiov(struct adf_hw_device_data *hw_data)
 {
 	hw_data->dev_class = &c3xxxiov_class;
@@ -146,10 +123,10 @@ void adf_init_hw_data_c3xxxiov(struct adf_hw_device_data *hw_data)
 	hw_data->enable_error_correction = adf_vf_void_noop;
 	hw_data->init_admin_comms = adf_vf_int_noop;
 	hw_data->exit_admin_comms = adf_vf_void_noop;
-	hw_data->send_admin_init = adf_vf2pf_init;
+	hw_data->send_admin_init = adf_vf2pf_notify_init;
 	hw_data->init_arb = adf_vf_int_noop;
 	hw_data->exit_arb = adf_vf_void_noop;
-	hw_data->disable_iov = adf_vf2pf_shutdown;
+	hw_data->disable_iov = adf_vf2pf_notify_shutdown;
 	hw_data->get_accel_mask = get_accel_mask;
 	hw_data->get_ae_mask = get_ae_mask;
 	hw_data->get_num_accels = get_num_accels;

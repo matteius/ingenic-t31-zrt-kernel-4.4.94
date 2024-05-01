@@ -153,16 +153,12 @@ static int armada_370_xp_msi_alloc(struct irq_domain *domain, unsigned int virq,
 	int hwirq, i;
 
 	mutex_lock(&msi_used_lock);
-
-	hwirq = bitmap_find_next_zero_area(msi_used, PCI_MSI_DOORBELL_NR,
-					   0, nr_irqs, 0);
-	if (hwirq >= PCI_MSI_DOORBELL_NR) {
-		mutex_unlock(&msi_used_lock);
-		return -ENOSPC;
-	}
-
-	bitmap_set(msi_used, hwirq, nr_irqs);
+	hwirq = bitmap_find_free_region(msi_used, PCI_MSI_DOORBELL_NR,
+					order_base_2(nr_irqs));
 	mutex_unlock(&msi_used_lock);
+
+	if (hwirq < 0)
+		return -ENOSPC;
 
 	for (i = 0; i < nr_irqs; i++) {
 		irq_domain_set_info(domain, virq + i, hwirq + i,
@@ -171,7 +167,7 @@ static int armada_370_xp_msi_alloc(struct irq_domain *domain, unsigned int virq,
 				    NULL, NULL);
 	}
 
-	return hwirq;
+	return 0;
 }
 
 static void armada_370_xp_msi_free(struct irq_domain *domain,
@@ -180,7 +176,7 @@ static void armada_370_xp_msi_free(struct irq_domain *domain,
 	struct irq_data *d = irq_domain_get_irq_data(domain, virq);
 
 	mutex_lock(&msi_used_lock);
-	bitmap_clear(msi_used, d->hwirq, nr_irqs);
+	bitmap_release_region(msi_used, d->hwirq, order_base_2(nr_irqs));
 	mutex_unlock(&msi_used_lock);
 }
 
@@ -316,7 +312,16 @@ static void armada_xp_mpic_smp_cpu_init(void)
 
 static void armada_xp_mpic_perf_init(void)
 {
-	unsigned long cpuid = cpu_logical_map(smp_processor_id());
+	unsigned long cpuid;
+
+	/*
+	 * This Performance Counter Overflow interrupt is specific for
+	 * Armada 370 and XP. It is not available on Armada 375, 38x and 39x.
+	 */
+	if (!of_machine_is_compatible("marvell,armada-370-xp"))
+		return;
+
+	cpuid = cpu_logical_map(smp_processor_id());
 
 	/* Enable Performance Counter Overflow interrupts */
 	writel(ARMADA_370_XP_INT_CAUSE_PERF(cpuid),
@@ -345,38 +350,20 @@ static void armada_mpic_send_doorbell(const struct cpumask *mask,
 		ARMADA_370_XP_SW_TRIG_INT_OFFS);
 }
 
-static int armada_xp_mpic_secondary_init(struct notifier_block *nfb,
-					 unsigned long action, void *hcpu)
+static int armada_xp_mpic_starting_cpu(unsigned int cpu)
 {
-	if (action == CPU_STARTING || action == CPU_STARTING_FROZEN) {
-		armada_xp_mpic_perf_init();
-		armada_xp_mpic_smp_cpu_init();
-	}
-
-	return NOTIFY_OK;
+	armada_xp_mpic_perf_init();
+	armada_xp_mpic_smp_cpu_init();
+	return 0;
 }
 
-static struct notifier_block armada_370_xp_mpic_cpu_notifier = {
-	.notifier_call = armada_xp_mpic_secondary_init,
-	.priority = 100,
-};
-
-static int mpic_cascaded_secondary_init(struct notifier_block *nfb,
-					unsigned long action, void *hcpu)
+static int mpic_cascaded_starting_cpu(unsigned int cpu)
 {
-	if (action == CPU_STARTING || action == CPU_STARTING_FROZEN) {
-		armada_xp_mpic_perf_init();
-		enable_percpu_irq(parent_irq, IRQ_TYPE_NONE);
-	}
-
-	return NOTIFY_OK;
+	armada_xp_mpic_perf_init();
+	enable_percpu_irq(parent_irq, IRQ_TYPE_NONE);
+	return 0;
 }
-
-static struct notifier_block mpic_cascaded_cpu_notifier = {
-	.notifier_call = mpic_cascaded_secondary_init,
-	.priority = 100,
-};
-#endif /* CONFIG_SMP */
+#endif
 
 static const struct irq_domain_ops armada_370_xp_mpic_irq_ops = {
 	.map = armada_370_xp_mpic_irq_map,
@@ -541,7 +528,7 @@ static void armada_370_xp_mpic_resume(void)
 		writel(1, per_cpu_int_base + ARMADA_370_XP_INT_CLEAR_MASK_OFFS);
 }
 
-struct syscore_ops armada_370_xp_mpic_syscore_ops = {
+static struct syscore_ops armada_370_xp_mpic_syscore_ops = {
 	.suspend	= armada_370_xp_mpic_suspend,
 	.resume		= armada_370_xp_mpic_resume,
 };
@@ -595,11 +582,15 @@ static int __init armada_370_xp_mpic_of_init(struct device_node *node,
 		set_handle_irq(armada_370_xp_handle_irq);
 #ifdef CONFIG_SMP
 		set_smp_cross_call(armada_mpic_send_doorbell);
-		register_cpu_notifier(&armada_370_xp_mpic_cpu_notifier);
+		cpuhp_setup_state_nocalls(CPUHP_AP_IRQ_ARMADA_XP_STARTING,
+					  "AP_IRQ_ARMADA_XP_STARTING",
+					  armada_xp_mpic_starting_cpu, NULL);
 #endif
 	} else {
 #ifdef CONFIG_SMP
-		register_cpu_notifier(&mpic_cascaded_cpu_notifier);
+		cpuhp_setup_state_nocalls(CPUHP_AP_IRQ_ARMADA_CASC_STARTING,
+					  "AP_IRQ_ARMADA_CASC_STARTING",
+					  mpic_cascaded_starting_cpu, NULL);
 #endif
 		irq_set_chained_handler(parent_irq,
 					armada_370_xp_mpic_handle_cascade_irq);

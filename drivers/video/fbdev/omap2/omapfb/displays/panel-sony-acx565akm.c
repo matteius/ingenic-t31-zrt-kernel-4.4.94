@@ -33,7 +33,7 @@
 #include <linux/of.h>
 #include <linux/of_gpio.h>
 
-#include <video/omapdss.h>
+#include <video/omapfb_dss.h>
 #include <video/omap-panel-data.h>
 
 #define MIPID_CMD_READ_DISP_ID		0x04
@@ -487,7 +487,7 @@ static ssize_t show_cabc_available_modes(struct device *dev,
 	int i;
 
 	if (!ddata->has_cabc)
-		return snprintf(buf, PAGE_SIZE, "%s\n", cabc_modes[0]);
+		return sysfs_emit(buf, "%s\n", cabc_modes[0]);
 
 	for (i = 0, len = 0;
 	     len < PAGE_SIZE && i < ARRAY_SIZE(cabc_modes); i++)

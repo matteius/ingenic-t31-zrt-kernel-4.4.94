@@ -1,5 +1,6 @@
 #include <linux/types.h>
-#include <sys/mman.h>
+#include <uapi/linux/mman.h> /* To get things like MAP_HUGETLB even on older libc headers */
+#include <api/fs/fs.h>
 #include "event.h"
 #include "debug.h"
 #include "hist.h"
@@ -45,6 +46,7 @@ static const char *perf_event__names[] = {
 	[PERF_RECORD_STAT]			= "STAT",
 	[PERF_RECORD_STAT_ROUND]		= "STAT_ROUND",
 	[PERF_RECORD_EVENT_UPDATE]		= "EVENT_UPDATE",
+	[PERF_RECORD_TIME_CONV]			= "TIME_CONV",
 };
 
 const char *perf_event__name(unsigned int id)
@@ -247,12 +249,14 @@ int perf_event__synthesize_mmap_events(struct perf_tool *tool,
 	bool truncation = false;
 	unsigned long long timeout = proc_map_timeout * 1000000ULL;
 	int rc = 0;
+	const char *hugetlbfs_mnt = hugetlbfs__mountpoint();
+	int hugetlbfs_mnt_len = hugetlbfs_mnt ? strlen(hugetlbfs_mnt) : 0;
 
 	if (machine__is_default_guest(machine))
 		return 0;
 
-	snprintf(filename, sizeof(filename), "%s/proc/%d/maps",
-		 machine->root_dir, pid);
+	snprintf(filename, sizeof(filename), "%s/proc/%d/task/%d/maps",
+		 machine->root_dir, pid, pid);
 
 	fp = fopen(filename, "r");
 	if (fp == NULL) {
@@ -341,6 +345,12 @@ out:
 
 		if (!strcmp(execname, ""))
 			strcpy(execname, anonstr);
+
+		if (hugetlbfs_mnt_len &&
+		    !strncmp(execname, hugetlbfs_mnt, hugetlbfs_mnt_len)) {
+			strcpy(execname, anonstr);
+			event->mmap2.flags |= MAP_HUGETLB;
+		}
 
 		size = strlen(execname) + 1;
 		memcpy(event->mmap2.filename, execname, size);
@@ -675,6 +685,10 @@ int perf_event__synthesize_kernel_mmap(struct perf_tool *tool,
 	if (map == NULL)
 		return -1;
 
+	kmap = map__kmap(map);
+	if (!kmap->ref_reloc_sym)
+		return -1;
+
 	/*
 	 * We should get this from /sys/kernel/sections/.text, but till that is
 	 * available use this, and after it is use this as a fallback for older
@@ -698,7 +712,6 @@ int perf_event__synthesize_kernel_mmap(struct perf_tool *tool,
 		event->header.misc = PERF_RECORD_MISC_GUEST_KERNEL;
 	}
 
-	kmap = map__kmap(map);
 	size = snprintf(event->mmap.filename, sizeof(event->mmap.filename),
 			"%s%s", mmap_name, kmap->ref_reloc_sym->name) + 1;
 	size = PERF_ALIGN(size, sizeof(u64));
@@ -827,6 +840,7 @@ void *cpu_map_data__alloc(struct cpu_map *map, size_t *size, u16 *type, int *max
 	}
 
 	*size += sizeof(struct cpu_map_data);
+	*size = PERF_ALIGN(*size, sizeof(u64));
 	return zalloc(*size);
 }
 
@@ -1089,7 +1103,7 @@ size_t perf_event__fprintf_cpu_map(union perf_event *event, FILE *fp)
 	struct cpu_map *cpus = cpu_map__new_data(&event->cpu_map.data);
 	size_t ret;
 
-	ret = fprintf(fp, " nr: ");
+	ret = fprintf(fp, ": ");
 
 	if (cpus)
 		ret += cpu_map__fprintf(cpus, fp);
@@ -1283,7 +1297,7 @@ try_again:
 		 * must be done prior to using kernel maps.
 		 */
 		if (load_map)
-			map__load(al->map, machine->symbol_filter);
+			map__load(al->map);
 		al->addr = al->map->map_ip(al->map, al->addr);
 	}
 }
@@ -1294,8 +1308,7 @@ void thread__find_addr_location(struct thread *thread,
 {
 	thread__find_addr_map(thread, cpumode, type, addr, al);
 	if (al->map != NULL)
-		al->sym = map__find_symbol(al->map, al->addr,
-					   thread->mg->machine->symbol_filter);
+		al->sym = map__find_symbol(al->map, al->addr);
 	else
 		al->sym = NULL;
 }
@@ -1356,8 +1369,9 @@ int machine__resolve(struct machine *machine, struct addr_location *al,
 			al->filtered |= (1 << HIST_FILTER__DSO);
 		}
 
-		al->sym = map__find_symbol(al->map, al->addr,
-					   machine->symbol_filter);
+		al->sym = map__find_symbol(al->map, al->addr);
+	} else if (symbol_conf.dso_list) {
+		al->filtered |= (1 << HIST_FILTER__DSO);
 	}
 
 	if (symbol_conf.sym_list &&
@@ -1413,5 +1427,5 @@ void thread__resolve(struct thread *thread, struct addr_location *al,
 	al->sym = NULL;
 
 	if (al->map)
-		al->sym = map__find_symbol(al->map, al->addr, NULL);
+		al->sym = map__find_symbol(al->map, al->addr);
 }

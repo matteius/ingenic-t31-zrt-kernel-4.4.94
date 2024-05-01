@@ -93,6 +93,7 @@ int mb_cache_entry_create(struct mb_cache *cache, gfp_t mask, u32 key,
 	entry->e_key = key;
 	entry->e_block = block;
 	entry->e_reusable = reusable;
+	entry->e_referenced = 0;
 	head = mb_cache_entry_head(cache, key);
 	hlist_bl_lock(head);
 	hlist_bl_for_each_entry(dup, dup_node, head, e_hash_list) {
@@ -366,7 +367,11 @@ struct mb_cache *mb_cache_create(int bucket_bits)
 	cache->c_shrink.count_objects = mb_cache_count;
 	cache->c_shrink.scan_objects = mb_cache_scan;
 	cache->c_shrink.seeks = DEFAULT_SEEKS;
-	register_shrinker(&cache->c_shrink);
+	if (register_shrinker(&cache->c_shrink)) {
+		kfree(cache->c_hash);
+		kfree(cache);
+		goto err_out;
+	}
 
 	INIT_WORK(&cache->c_shrink_work, mb_cache_shrink_worker);
 

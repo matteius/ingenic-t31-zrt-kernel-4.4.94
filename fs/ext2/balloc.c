@@ -46,10 +46,9 @@ struct ext2_group_desc * ext2_get_group_desc(struct super_block * sb,
 	struct ext2_sb_info *sbi = EXT2_SB(sb);
 
 	if (block_group >= sbi->s_groups_count) {
-		ext2_error (sb, "ext2_get_group_desc",
-			    "block_group >= groups_count - "
-			    "block_group = %d, groups_count = %lu",
-			    block_group, sbi->s_groups_count);
+		WARN(1, "block_group >= groups_count - "
+		     "block_group = %d, groups_count = %lu",
+		     block_group, sbi->s_groups_count);
 
 		return NULL;
 	}
@@ -57,10 +56,9 @@ struct ext2_group_desc * ext2_get_group_desc(struct super_block * sb,
 	group_desc = block_group >> EXT2_DESC_PER_BLOCK_BITS(sb);
 	offset = block_group & (EXT2_DESC_PER_BLOCK(sb) - 1);
 	if (!sbi->s_group_desc[group_desc]) {
-		ext2_error (sb, "ext2_get_group_desc",
-			    "Group descriptor not loaded - "
-			    "block_group = %d, group_desc = %lu, desc = %lu",
-			     block_group, group_desc, offset);
+		WARN(1, "Group descriptor not loaded - "
+		     "block_group = %d, group_desc = %lu, desc = %lu",
+		      block_group, group_desc, offset);
 		return NULL;
 	}
 
@@ -1190,6 +1188,27 @@ static int ext2_has_free_blocks(struct ext2_sb_info *sbi)
 		 !in_group_p (sbi->s_resgid))) {
 		return 0;
 	}
+	return 1;
+}
+
+/*
+ * Returns 1 if the passed-in block region is valid; 0 if some part overlaps
+ * with filesystem metadata blocksi.
+ */
+int ext2_data_block_valid(struct ext2_sb_info *sbi, ext2_fsblk_t start_blk,
+			  unsigned int count)
+{
+	if ((start_blk <= le32_to_cpu(sbi->s_es->s_first_data_block)) ||
+	    (start_blk + count < start_blk) ||
+	    (start_blk > le32_to_cpu(sbi->s_es->s_blocks_count)))
+		return 0;
+
+	/* Ensure we do not step over superblock */
+	if ((start_blk <= sbi->s_sb_block) &&
+	    (start_blk + count >= sbi->s_sb_block))
+		return 0;
+
+
 	return 1;
 }
 

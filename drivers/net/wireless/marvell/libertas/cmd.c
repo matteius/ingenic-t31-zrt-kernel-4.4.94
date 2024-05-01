@@ -305,7 +305,7 @@ int lbs_cmd_802_11_sleep_params(struct lbs_private *priv, uint16_t cmd_action,
 	}
 
 	lbs_deb_leave_args(LBS_DEB_CMD, "ret %d", ret);
-	return 0;
+	return ret;
 }
 
 static int lbs_wait_for_ds_awake(struct lbs_private *priv)
@@ -743,7 +743,7 @@ int lbs_set_11d_domain_info(struct lbs_private *priv)
 	struct cmd_ds_802_11d_domain_info cmd;
 	struct mrvl_ie_domain_param_set *domain = &cmd.domain;
 	struct ieee80211_country_ie_triplet *t;
-	enum ieee80211_band band;
+	enum nl80211_band band;
 	struct ieee80211_channel *ch;
 	u8 num_triplet = 0;
 	u8 num_parsed_chan = 0;
@@ -777,7 +777,7 @@ int lbs_set_11d_domain_info(struct lbs_private *priv)
 	 * etc.
 	 */
 	for (band = 0;
-	     (band < IEEE80211_NUM_BANDS) && (num_triplet < MAX_11D_TRIPLETS);
+	     (band < NUM_NL80211_BANDS) && (num_triplet < MAX_11D_TRIPLETS);
 	     band++) {
 
 		if (!bands[band])

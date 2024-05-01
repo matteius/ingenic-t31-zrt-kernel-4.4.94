@@ -43,7 +43,8 @@
 #include <linux/debugfs.h>
 #include <linux/bug.h>
 #include <linux/vmalloc.h>
-#include <linux/module.h>
+#include <linux/export.h>
+#include <linux/init.h>
 #include <linux/gfp.h>
 #include <linux/memblock.h>
 #include <linux/seq_file.h>
@@ -1113,7 +1114,7 @@ static void __init xen_cleanhighmap(unsigned long vaddr,
 
 	/* NOTE: The loop is more greedy than the cleanup_highmap variant.
 	 * We include the PMD passed in on _both_ boundaries. */
-	for (; vaddr <= vaddr_end && (pmd < (level2_kernel_pgt + PAGE_SIZE));
+	for (; vaddr <= vaddr_end && (pmd < (level2_kernel_pgt + PTRS_PER_PMD));
 			pmd++, vaddr += PMD_SIZE) {
 		if (pmd_none(*pmd))
 			continue;
@@ -1316,8 +1317,6 @@ void xen_flush_tlb_all(void)
 	struct mmuext_op *op;
 	struct multicall_space mcs;
 
-	trace_xen_mmu_flush_tlb_all(0);
-
 	preempt_disable();
 
 	mcs = xen_mc_entry(sizeof(*op));
@@ -1334,8 +1333,6 @@ static void xen_flush_tlb(void)
 {
 	struct mmuext_op *op;
 	struct multicall_space mcs;
-
-	trace_xen_mmu_flush_tlb(0);
 
 	preempt_disable();
 
@@ -1551,41 +1548,6 @@ static void xen_pgd_free(struct mm_struct *mm, pgd_t *pgd)
 #endif
 }
 
-#ifdef CONFIG_X86_32
-static pte_t __init mask_rw_pte(pte_t *ptep, pte_t pte)
-{
-	/* If there's an existing pte, then don't allow _PAGE_RW to be set */
-	if (pte_val_ma(*ptep) & _PAGE_PRESENT)
-		pte = __pte_ma(((pte_val_ma(*ptep) & _PAGE_RW) | ~_PAGE_RW) &
-			       pte_val_ma(pte));
-
-	return pte;
-}
-#else /* CONFIG_X86_64 */
-static pte_t __init mask_rw_pte(pte_t *ptep, pte_t pte)
-{
-	unsigned long pfn;
-
-	if (xen_feature(XENFEAT_writable_page_tables) ||
-	    xen_feature(XENFEAT_auto_translated_physmap) ||
-	    xen_start_info->mfn_list >= __START_KERNEL_map)
-		return pte;
-
-	/*
-	 * Pages belonging to the initial p2m list mapped outside the default
-	 * address range must be mapped read-only. This region contains the
-	 * page tables for mapping the p2m list, too, and page tables MUST be
-	 * mapped read-only.
-	 */
-	pfn = pte_pfn(pte);
-	if (pfn >= xen_start_info->first_p2m_pfn &&
-	    pfn < xen_start_info->first_p2m_pfn + xen_start_info->nr_p2m_frames)
-		pte = __pte_ma(pte_val_ma(pte) & ~_PAGE_RW);
-
-	return pte;
-}
-#endif /* CONFIG_X86_64 */
-
 /*
  * Init-time set_pte while constructing initial pagetables, which
  * doesn't allow RO page table pages to be remapped RW.
@@ -1600,13 +1562,37 @@ static pte_t __init mask_rw_pte(pte_t *ptep, pte_t pte)
  * so always write the PTE directly and rely on Xen trapping and
  * emulating any updates as necessary.
  */
+__visible pte_t xen_make_pte_init(pteval_t pte)
+{
+#ifdef CONFIG_X86_64
+	unsigned long pfn;
+
+	/*
+	 * Pages belonging to the initial p2m list mapped outside the default
+	 * address range must be mapped read-only. This region contains the
+	 * page tables for mapping the p2m list, too, and page tables MUST be
+	 * mapped read-only.
+	 */
+	pfn = (pte & PTE_PFN_MASK) >> PAGE_SHIFT;
+	if (xen_start_info->mfn_list < __START_KERNEL_map &&
+	    pfn >= xen_start_info->first_p2m_pfn &&
+	    pfn < xen_start_info->first_p2m_pfn + xen_start_info->nr_p2m_frames)
+		pte &= ~_PAGE_RW;
+#endif
+	pte = pte_pfn_to_mfn(pte);
+	return native_make_pte(pte);
+}
+PV_CALLEE_SAVE_REGS_THUNK(xen_make_pte_init);
+
 static void __init xen_set_pte_init(pte_t *ptep, pte_t pte)
 {
-	if (pte_mfn(pte) != INVALID_P2M_ENTRY)
-		pte = mask_rw_pte(ptep, pte);
-	else
-		pte = __pte_ma(0);
-
+#ifdef CONFIG_X86_32
+	/* If there's an existing pte, then don't allow _PAGE_RW to be set */
+	if (pte_mfn(pte) != INVALID_P2M_ENTRY
+	    && pte_val_ma(*ptep) & _PAGE_PRESENT)
+		pte = __pte_ma(((pte_val_ma(*ptep) & _PAGE_RW) | ~_PAGE_RW) &
+			       pte_val_ma(pte));
+#endif
 	native_set_pte(ptep, pte);
 }
 
@@ -2038,7 +2024,8 @@ static unsigned long __init xen_read_phys_ulong(phys_addr_t addr)
 
 /*
  * Translate a virtual address to a physical one without relying on mapped
- * page tables.
+ * page tables. Don't rely on big pages being aligned in (guest) physical
+ * space!
  */
 static phys_addr_t __init xen_early_virt_to_phys(unsigned long vaddr)
 {
@@ -2059,7 +2046,7 @@ static phys_addr_t __init xen_early_virt_to_phys(unsigned long vaddr)
 						       sizeof(pud)));
 	if (!pud_present(pud))
 		return 0;
-	pa = pud_pfn(pud) << PAGE_SHIFT;
+	pa = pud_val(pud) & PTE_PFN_MASK;
 	if (pud_large(pud))
 		return pa + (vaddr & ~PUD_MASK);
 
@@ -2067,7 +2054,7 @@ static phys_addr_t __init xen_early_virt_to_phys(unsigned long vaddr)
 						       sizeof(pmd)));
 	if (!pmd_present(pmd))
 		return 0;
-	pa = pmd_pfn(pmd) << PAGE_SHIFT;
+	pa = pmd_val(pmd) & PTE_PFN_MASK;
 	if (pmd_large(pmd))
 		return pa + (vaddr & ~PMD_MASK);
 
@@ -2407,6 +2394,7 @@ static void __init xen_post_allocator_init(void)
 	pv_mmu_ops.alloc_pud = xen_alloc_pud;
 	pv_mmu_ops.release_pud = xen_release_pud;
 #endif
+	pv_mmu_ops.make_pte = PV_CALLEE_SAVE(xen_make_pte);
 
 #ifdef CONFIG_X86_64
 	pv_mmu_ops.write_cr3 = &xen_write_cr3;
@@ -2455,7 +2443,7 @@ static const struct pv_mmu_ops xen_mmu_ops __initconst = {
 	.pte_val = PV_CALLEE_SAVE(xen_pte_val),
 	.pgd_val = PV_CALLEE_SAVE(xen_pgd_val),
 
-	.make_pte = PV_CALLEE_SAVE(xen_make_pte),
+	.make_pte = PV_CALLEE_SAVE(xen_make_pte_init),
 	.make_pgd = PV_CALLEE_SAVE(xen_make_pgd),
 
 #ifdef CONFIG_X86_PAE

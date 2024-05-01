@@ -102,7 +102,8 @@ static int fdp_nci_create_conn(struct nci_dev *ndev)
 	if (r)
 		return r;
 
-	return nci_get_conn_info_by_id(ndev, 0);
+	return nci_get_conn_info_by_dest_type_params(ndev,
+						     FDP_PATCH_CONN_DEST, NULL);
 }
 
 static inline int fdp_nci_get_versions(struct nci_dev *ndev)
@@ -191,7 +192,7 @@ static int fdp_nci_send_patch(struct nci_dev *ndev, u8 conn_id, u8 type)
 	const struct firmware *fw;
 	struct sk_buff *skb;
 	unsigned long len;
-	u8 max_size, payload_size;
+	int max_size, payload_size;
 	int rc = 0;
 
 	if ((type == NCI_PATCH_TYPE_OTP && !info->otp_patch) ||
@@ -214,8 +215,7 @@ static int fdp_nci_send_patch(struct nci_dev *ndev, u8 conn_id, u8 type)
 
 	while (len) {
 
-		payload_size = min_t(unsigned long, (unsigned long) max_size,
-				     len);
+		payload_size = min_t(unsigned long, max_size, len);
 
 		skb = nci_skb_alloc(ndev, (NCI_CTRL_HDR_SIZE + payload_size),
 				    GFP_KERNEL);
@@ -344,7 +344,7 @@ static void fdp_nci_release_firmware(struct nci_dev *ndev)
 
 	if (info->ram_patch) {
 		release_firmware(info->ram_patch);
-		info->otp_patch = NULL;
+		info->ram_patch = NULL;
 	}
 }
 
@@ -352,7 +352,7 @@ static int fdp_nci_patch_otp(struct nci_dev *ndev)
 {
 	struct fdp_nci_info *info = nci_get_drvdata(ndev);
 	struct device *dev = &info->phy->i2c_dev->dev;
-	u8 conn_id;
+	int conn_id;
 	int r = 0;
 
 	if (info->otp_version >= info->otp_patch_version)
@@ -423,7 +423,7 @@ static int fdp_nci_patch_ram(struct nci_dev *ndev)
 {
 	struct fdp_nci_info *info = nci_get_drvdata(ndev);
 	struct device *dev = &info->phy->i2c_dev->dev;
-	u8 conn_id;
+	int conn_id;
 	int r = 0;
 
 	if (info->ram_version >= info->ram_patch_version)

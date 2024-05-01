@@ -28,6 +28,7 @@ static inline int rtnl_msg_family(const struct nlmsghdr *nlh)
  *
  *	@list: Used internally
  *	@kind: Identifier
+ *	@netns_refund: Physical device, move to init_net on netns exit
  *	@maxtype: Highest device specific netlink attribute number
  *	@policy: Netlink policy for device specific attribute validation
  *	@validate: Optional validation function for netlink/changelink parameters
@@ -47,6 +48,9 @@ static inline int rtnl_msg_family(const struct nlmsghdr *nlh)
  *	@get_num_rx_queues: Function to determine number of receive queues
  *			    to create when creating a new device.
  *	@get_link_net: Function to get the i/o netns of the device
+ *	@get_linkxstats_size: Function to calculate the required room for
+ *			      dumping device-specific extended link stats
+ *	@fill_linkxstats: Function to dump device-specific extended link stats
  */
 struct rtnl_link_ops {
 	struct list_head	list;
@@ -81,6 +85,7 @@ struct rtnl_link_ops {
 	unsigned int		(*get_num_tx_queues)(void);
 	unsigned int		(*get_num_rx_queues)(void);
 
+	bool			netns_refund;
 	int			slave_maxtype;
 	const struct nla_policy	*slave_policy;
 	int			(*slave_validate)(struct nlattr *tb[],
@@ -95,6 +100,11 @@ struct rtnl_link_ops {
 						   const struct net_device *dev,
 						   const struct net_device *slave_dev);
 	struct net		*(*get_link_net)(const struct net_device *dev);
+	size_t			(*get_linkxstats_size)(const struct net_device *dev,
+						       int attr);
+	int			(*fill_linkxstats)(struct sk_buff *skb,
+						   const struct net_device *dev,
+						   int *prividx, int attr);
 };
 
 int __rtnl_link_register(struct rtnl_link_ops *ops);

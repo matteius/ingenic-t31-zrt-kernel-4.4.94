@@ -7,7 +7,7 @@
  *
  * Copyright (C) 2008-2011 Gabor Juhos <juhosg@openwrt.org>
  * Copyright (C) 2008 Imre Kaloz <kaloz@openwrt.org>
- * Copyright (C) 2013 John Crispin <blogic@openwrt.org>
+ * Copyright (C) 2013 John Crispin <john@phrozen.org>
  */
 
 #include <linux/kernel.h>
@@ -88,17 +88,6 @@ static struct rt2880_pmx_group rt5350_pinmux_data[] = {
 	GRP("spi_cs1", rt5350_cs1_func, 2, RT5350_GPIO_MODE_SPI_CS1),
 	{ 0 }
 };
-
-static void rt305x_wdt_reset(void)
-{
-	u32 t;
-
-	/* enable WDT reset output on pin SRAM_CS_N */
-	t = rt_sysc_r32(SYSC_REG_SYSTEM_CONFIG);
-	t |= RT305X_SYSCFG_SRAM_CS0_MODE_WDT <<
-		RT305X_SYSCFG_SRAM_CS0_MODE_SHIFT;
-	rt_sysc_w32(t, SYSC_REG_SYSTEM_CONFIG);
-}
 
 static unsigned long rt5350_get_mem_size(void)
 {

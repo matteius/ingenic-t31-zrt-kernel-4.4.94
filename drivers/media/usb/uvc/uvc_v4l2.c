@@ -142,6 +142,21 @@ static __u32 uvc_try_frame_interval(struct uvc_frame *frame, __u32 interval)
 	return interval;
 }
 
+static __u32 uvc_v4l2_get_bytesperline(const struct uvc_format *format,
+	const struct uvc_frame *frame)
+{
+	switch (format->fcc) {
+	case V4L2_PIX_FMT_NV12:
+	case V4L2_PIX_FMT_YVU420:
+	case V4L2_PIX_FMT_YUV420:
+	case V4L2_PIX_FMT_M420:
+		return frame->wWidth;
+
+	default:
+		return format->bpp * frame->wWidth / 8;
+	}
+}
+
 static int uvc_v4l2_try_format(struct uvc_streaming *stream,
 	struct v4l2_format *fmt, struct uvc_streaming_control *probe,
 	struct uvc_format **uvc_format, struct uvc_frame **uvc_frame)
@@ -242,11 +257,41 @@ static int uvc_v4l2_try_format(struct uvc_streaming *stream,
 	if (ret < 0)
 		goto done;
 
+	/* After the probe, update fmt with the values returned from
+	 * negotiation with the device. Some devices return invalid bFormatIndex
+	 * and bFrameIndex values, in which case we can only assume they have
+	 * accepted the requested format as-is.
+	 */
+	for (i = 0; i < stream->nformats; ++i) {
+		if (probe->bFormatIndex == stream->format[i].index) {
+			format = &stream->format[i];
+			break;
+		}
+	}
+
+	if (i == stream->nformats)
+		uvc_trace(UVC_TRACE_FORMAT,
+			  "Unknown bFormatIndex %u, using default\n",
+			  probe->bFormatIndex);
+
+	for (i = 0; i < format->nframes; ++i) {
+		if (probe->bFrameIndex == format->frame[i].bFrameIndex) {
+			frame = &format->frame[i];
+			break;
+		}
+	}
+
+	if (i == format->nframes)
+		uvc_trace(UVC_TRACE_FORMAT,
+			  "Unknown bFrameIndex %u, using default\n",
+			  probe->bFrameIndex);
+
 	fmt->fmt.pix.width = frame->wWidth;
 	fmt->fmt.pix.height = frame->wHeight;
 	fmt->fmt.pix.field = V4L2_FIELD_NONE;
-	fmt->fmt.pix.bytesperline = format->bpp * frame->wWidth / 8;
+	fmt->fmt.pix.bytesperline = uvc_v4l2_get_bytesperline(format, frame);
 	fmt->fmt.pix.sizeimage = probe->dwMaxVideoFrameSize;
+	fmt->fmt.pix.pixelformat = format->fcc;
 	fmt->fmt.pix.colorspace = format->colorspace;
 	fmt->fmt.pix.priv = 0;
 
@@ -282,7 +327,7 @@ static int uvc_v4l2_get_format(struct uvc_streaming *stream,
 	fmt->fmt.pix.width = frame->wWidth;
 	fmt->fmt.pix.height = frame->wHeight;
 	fmt->fmt.pix.field = V4L2_FIELD_NONE;
-	fmt->fmt.pix.bytesperline = format->bpp * frame->wWidth / 8;
+	fmt->fmt.pix.bytesperline = uvc_v4l2_get_bytesperline(format, frame);
 	fmt->fmt.pix.sizeimage = stream->ctrl.dwMaxVideoFrameSize;
 	fmt->fmt.pix.colorspace = format->colorspace;
 	fmt->fmt.pix.priv = 0;
@@ -406,10 +451,13 @@ static int uvc_v4l2_set_streamparm(struct uvc_streaming *stream,
 	uvc_simplify_fraction(&timeperframe.numerator,
 		&timeperframe.denominator, 8, 333);
 
-	if (parm->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (parm->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 		parm->parm.capture.timeperframe = timeperframe;
-	else
+		parm->parm.capture.capability = V4L2_CAP_TIMEPERFRAME;
+	} else {
 		parm->parm.output.timeperframe = timeperframe;
+		parm->parm.output.capability = V4L2_CAP_TIMEPERFRAME;
+	}
 
 	return 0;
 }
@@ -798,29 +846,31 @@ static int uvc_ioctl_enum_input(struct file *file, void *fh,
 	struct uvc_video_chain *chain = handle->chain;
 	const struct uvc_entity *selector = chain->selector;
 	struct uvc_entity *iterm = NULL;
+	struct uvc_entity *it;
 	u32 index = input->index;
-	int pin = 0;
 
 	if (selector == NULL ||
 	    (chain->dev->quirks & UVC_QUIRK_IGNORE_SELECTOR_UNIT)) {
 		if (index != 0)
 			return -EINVAL;
-		list_for_each_entry(iterm, &chain->entities, chain) {
-			if (UVC_ENTITY_IS_ITERM(iterm))
+		list_for_each_entry(it, &chain->entities, chain) {
+			if (UVC_ENTITY_IS_ITERM(it)) {
+				iterm = it;
 				break;
+			}
 		}
-		pin = iterm->id;
 	} else if (index < selector->bNrInPins) {
-		pin = selector->baSourceID[index];
-		list_for_each_entry(iterm, &chain->entities, chain) {
-			if (!UVC_ENTITY_IS_ITERM(iterm))
+		list_for_each_entry(it, &chain->entities, chain) {
+			if (!UVC_ENTITY_IS_ITERM(it))
 				continue;
-			if (iterm->id == pin)
+			if (it->id == selector->baSourceID[index]) {
+				iterm = it;
 				break;
+			}
 		}
 	}
 
-	if (iterm == NULL || iterm->id != pin)
+	if (iterm == NULL)
 		return -EINVAL;
 
 	memset(input, 0, sizeof(*input));
@@ -836,8 +886,8 @@ static int uvc_ioctl_g_input(struct file *file, void *fh, unsigned int *input)
 {
 	struct uvc_fh *handle = fh;
 	struct uvc_video_chain *chain = handle->chain;
+	u8 *buf;
 	int ret;
-	u8 i;
 
 	if (chain->selector == NULL ||
 	    (chain->dev->quirks & UVC_QUIRK_IGNORE_SELECTOR_UNIT)) {
@@ -845,22 +895,27 @@ static int uvc_ioctl_g_input(struct file *file, void *fh, unsigned int *input)
 		return 0;
 	}
 
+	buf = kmalloc(1, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
 	ret = uvc_query_ctrl(chain->dev, UVC_GET_CUR, chain->selector->id,
 			     chain->dev->intfnum,  UVC_SU_INPUT_SELECT_CONTROL,
-			     &i, 1);
-	if (ret < 0)
-		return ret;
+			     buf, 1);
+	if (!ret)
+		*input = *buf - 1;
 
-	*input = i - 1;
-	return 0;
+	kfree(buf);
+
+	return ret;
 }
 
 static int uvc_ioctl_s_input(struct file *file, void *fh, unsigned int input)
 {
 	struct uvc_fh *handle = fh;
 	struct uvc_video_chain *chain = handle->chain;
+	u8 *buf;
 	int ret;
-	u32 i;
 
 	ret = uvc_acquire_privileges(handle);
 	if (ret < 0)
@@ -876,10 +931,17 @@ static int uvc_ioctl_s_input(struct file *file, void *fh, unsigned int input)
 	if (input >= chain->selector->bNrInPins)
 		return -EINVAL;
 
-	i = input + 1;
-	return uvc_query_ctrl(chain->dev, UVC_SET_CUR, chain->selector->id,
-			      chain->dev->intfnum, UVC_SU_INPUT_SELECT_CONTROL,
-			      &i, 1);
+	buf = kmalloc(1, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	*buf = input + 1;
+	ret = uvc_query_ctrl(chain->dev, UVC_SET_CUR, chain->selector->id,
+			     chain->dev->intfnum, UVC_SU_INPUT_SELECT_CONTROL,
+			     buf, 1);
+	kfree(buf);
+
+	return ret;
 }
 
 static int uvc_ioctl_queryctrl(struct file *file, void *fh,
@@ -1274,8 +1336,6 @@ struct uvc_xu_control_mapping32 {
 static int uvc_v4l2_get_xu_mapping(struct uvc_xu_control_mapping *kp,
 			const struct uvc_xu_control_mapping32 __user *up)
 {
-	struct uvc_menu_info __user *umenus;
-	struct uvc_menu_info __user *kmenus;
 	compat_caddr_t p;
 
 	if (!access_ok(VERIFY_READ, up, sizeof(*up)) ||
@@ -1292,17 +1352,7 @@ static int uvc_v4l2_get_xu_mapping(struct uvc_xu_control_mapping *kp,
 
 	if (__get_user(p, &up->menu_info))
 		return -EFAULT;
-	umenus = compat_ptr(p);
-	if (!access_ok(VERIFY_READ, umenus, kp->menu_count * sizeof(*umenus)))
-		return -EFAULT;
-
-	kmenus = compat_alloc_user_space(kp->menu_count * sizeof(*kmenus));
-	if (kmenus == NULL)
-		return -EFAULT;
-	kp->menu_info = kmenus;
-
-	if (copy_in_user(kmenus, umenus, kp->menu_count * sizeof(*umenus)))
-		return -EFAULT;
+	kp->menu_info = compat_ptr(p);
 
 	return 0;
 }
@@ -1310,26 +1360,12 @@ static int uvc_v4l2_get_xu_mapping(struct uvc_xu_control_mapping *kp,
 static int uvc_v4l2_put_xu_mapping(const struct uvc_xu_control_mapping *kp,
 			struct uvc_xu_control_mapping32 __user *up)
 {
-	struct uvc_menu_info __user *umenus;
-	struct uvc_menu_info __user *kmenus = kp->menu_info;
-	compat_caddr_t p;
-
 	if (!access_ok(VERIFY_WRITE, up, sizeof(*up)) ||
 	    __copy_to_user(up, kp, offsetof(typeof(*up), menu_info)) ||
 	    __put_user(kp->menu_count, &up->menu_count))
 		return -EFAULT;
 
 	if (__clear_user(up->reserved, sizeof(up->reserved)))
-		return -EFAULT;
-
-	if (kp->menu_count == 0)
-		return 0;
-
-	if (get_user(p, &up->menu_info))
-		return -EFAULT;
-	umenus = compat_ptr(p);
-
-	if (copy_in_user(umenus, kmenus, kp->menu_count * sizeof(*umenus)))
 		return -EFAULT;
 
 	return 0;
@@ -1346,8 +1382,6 @@ struct uvc_xu_control_query32 {
 static int uvc_v4l2_get_xu_query(struct uvc_xu_control_query *kp,
 			const struct uvc_xu_control_query32 __user *up)
 {
-	u8 __user *udata;
-	u8 __user *kdata;
 	compat_caddr_t p;
 
 	if (!access_ok(VERIFY_READ, up, sizeof(*up)) ||
@@ -1361,17 +1395,7 @@ static int uvc_v4l2_get_xu_query(struct uvc_xu_control_query *kp,
 
 	if (__get_user(p, &up->data))
 		return -EFAULT;
-	udata = compat_ptr(p);
-	if (!access_ok(VERIFY_READ, udata, kp->size))
-		return -EFAULT;
-
-	kdata = compat_alloc_user_space(kp->size);
-	if (kdata == NULL)
-		return -EFAULT;
-	kp->data = kdata;
-
-	if (copy_in_user(kdata, udata, kp->size))
-		return -EFAULT;
+	kp->data = compat_ptr(p);
 
 	return 0;
 }
@@ -1379,24 +1403,8 @@ static int uvc_v4l2_get_xu_query(struct uvc_xu_control_query *kp,
 static int uvc_v4l2_put_xu_query(const struct uvc_xu_control_query *kp,
 			struct uvc_xu_control_query32 __user *up)
 {
-	u8 __user *udata;
-	u8 __user *kdata = kp->data;
-	compat_caddr_t p;
-
 	if (!access_ok(VERIFY_WRITE, up, sizeof(*up)) ||
 	    __copy_to_user(up, kp, offsetof(typeof(*up), data)))
-		return -EFAULT;
-
-	if (kp->size == 0)
-		return 0;
-
-	if (get_user(p, &up->data))
-		return -EFAULT;
-	udata = compat_ptr(p);
-	if (!access_ok(VERIFY_READ, udata, kp->size))
-		return -EFAULT;
-
-	if (copy_in_user(udata, kdata, kp->size))
 		return -EFAULT;
 
 	return 0;
@@ -1408,45 +1416,42 @@ static int uvc_v4l2_put_xu_query(const struct uvc_xu_control_query *kp,
 static long uvc_v4l2_compat_ioctl32(struct file *file,
 		     unsigned int cmd, unsigned long arg)
 {
+	struct uvc_fh *handle = file->private_data;
 	union {
 		struct uvc_xu_control_mapping xmap;
 		struct uvc_xu_control_query xqry;
 	} karg;
 	void __user *up = compat_ptr(arg);
-	mm_segment_t old_fs;
 	long ret;
 
 	switch (cmd) {
 	case UVCIOC_CTRL_MAP32:
-		cmd = UVCIOC_CTRL_MAP;
 		ret = uvc_v4l2_get_xu_mapping(&karg.xmap, up);
+		if (ret)
+			return ret;
+		ret = uvc_ioctl_ctrl_map(handle->chain, &karg.xmap);
+		if (ret)
+			return ret;
+		ret = uvc_v4l2_put_xu_mapping(&karg.xmap, up);
+		if (ret)
+			return ret;
+
 		break;
 
 	case UVCIOC_CTRL_QUERY32:
-		cmd = UVCIOC_CTRL_QUERY;
 		ret = uvc_v4l2_get_xu_query(&karg.xqry, up);
+		if (ret)
+			return ret;
+		ret = uvc_xu_ctrl_query(handle->chain, &karg.xqry);
+		if (ret)
+			return ret;
+		ret = uvc_v4l2_put_xu_query(&karg.xqry, up);
+		if (ret)
+			return ret;
 		break;
 
 	default:
 		return -ENOIOCTLCMD;
-	}
-
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
-	ret = video_ioctl2(file, cmd, (unsigned long)&karg);
-	set_fs(old_fs);
-
-	if (ret < 0)
-		return ret;
-
-	switch (cmd) {
-	case UVCIOC_CTRL_MAP:
-		ret = uvc_v4l2_put_xu_mapping(&karg.xmap, up);
-		break;
-
-	case UVCIOC_CTRL_QUERY:
-		ret = uvc_v4l2_put_xu_query(&karg.xqry, up);
-		break;
 	}
 
 	return ret;

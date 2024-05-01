@@ -24,8 +24,8 @@ struct ai_header {
 };
 
 static struct semaphore sem;
-unsigned long *buffer[CXL_AI_MAX_ENTRIES];
-struct sg_list *le;
+static unsigned long *buffer[CXL_AI_MAX_ENTRIES];
+static struct sg_list *le;
 static u64 continue_token;
 static unsigned int transfer;
 
@@ -401,8 +401,10 @@ static int device_open(struct inode *inode, struct file *file)
 	if (down_interruptible(&sem) != 0)
 		return -EPERM;
 
-	if (!(adapter = get_cxl_adapter(adapter_num)))
-		return -ENODEV;
+	if (!(adapter = get_cxl_adapter(adapter_num))) {
+		rc = -ENODEV;
+		goto err_unlock;
+	}
 
 	file->private_data = adapter;
 	continue_token = 0;
@@ -446,6 +448,8 @@ err1:
 		free_page((unsigned long) le);
 err:
 	put_device(&adapter->dev);
+err_unlock:
+	up(&sem);
 
 	return rc;
 }

@@ -301,7 +301,7 @@ static inline void emac_netif_stop(struct emac_instance *dev)
 	dev->no_mcast = 1;
 	netif_addr_unlock(dev->ndev);
 	netif_tx_unlock_bh(dev->ndev);
-	dev->ndev->trans_start = jiffies;	/* prevent tx timeout */
+	netif_trans_update(dev->ndev);	/* prevent tx timeout */
 	mal_poll_disable(dev->mal, &dev->commac);
 	netif_tx_disable(dev->ndev);
 }
@@ -342,6 +342,7 @@ static int emac_reset(struct emac_instance *dev)
 {
 	struct emac_regs __iomem *p = dev->emacp;
 	int n = 20;
+	bool __maybe_unused try_internal_clock = false;
 
 	DBG(dev, "reset" NL);
 
@@ -354,6 +355,7 @@ static int emac_reset(struct emac_instance *dev)
 	}
 
 #ifdef CONFIG_PPC_DCR_NATIVE
+do_retry:
 	/*
 	 * PPC460EX/GT Embedded Processor Advanced User's Manual
 	 * section 28.10.1 Mode Register 0 (EMACx_MR0) states:
@@ -361,10 +363,19 @@ static int emac_reset(struct emac_instance *dev)
 	 * of the EMAC. If none is present, select the internal clock
 	 * (SDR0_ETH_CFG[EMACx_PHY_CLK] = 1).
 	 * After a soft reset, select the external clock.
+	 *
+	 * The AR8035-A PHY Meraki MR24 does not provide a TX Clk if the
+	 * ethernet cable is not attached. This causes the reset to timeout
+	 * and the PHY detection code in emac_init_phy() is unable to
+	 * communicate and detect the AR8035-A PHY. As a result, the emac
+	 * driver bails out early and the user has no ethernet.
+	 * In order to stay compatible with existing configurations, the
+	 * driver will temporarily switch to the internal clock, after
+	 * the first reset fails.
 	 */
 	if (emac_has_feature(dev, EMAC_FTR_460EX_PHY_CLK_FIX)) {
-		if (dev->phy_address == 0xffffffff &&
-		    dev->phy_map == 0xffffffff) {
+		if (try_internal_clock || (dev->phy_address == 0xffffffff &&
+					   dev->phy_map == 0xffffffff)) {
 			/* No PHY: select internal loop clock before reset */
 			dcri_clrset(SDR0, SDR0_ETH_CFG,
 				    0, SDR0_ETH_CFG_ECS << dev->cell_index);
@@ -382,8 +393,15 @@ static int emac_reset(struct emac_instance *dev)
 
 #ifdef CONFIG_PPC_DCR_NATIVE
 	if (emac_has_feature(dev, EMAC_FTR_460EX_PHY_CLK_FIX)) {
-		if (dev->phy_address == 0xffffffff &&
-		    dev->phy_map == 0xffffffff) {
+		if (!n && !try_internal_clock) {
+			/* first attempt has timed out. */
+			n = 20;
+			try_internal_clock = true;
+			goto do_retry;
+		}
+
+		if (try_internal_clock || (dev->phy_address == 0xffffffff &&
+					   dev->phy_map == 0xffffffff)) {
 			/* No PHY: restore external clock source after reset */
 			dcri_clrset(SDR0, SDR0_ETH_CFG,
 				    SDR0_ETH_CFG_ECS << dev->cell_index, 0);
@@ -977,7 +995,37 @@ static void emac_set_multicast_list(struct net_device *ndev)
 		dev->mcast_pending = 1;
 		return;
 	}
+
+	mutex_lock(&dev->link_lock);
 	__emac_set_multicast_list(dev);
+	mutex_unlock(&dev->link_lock);
+}
+
+static int emac_set_mac_address(struct net_device *ndev, void *sa)
+{
+	struct emac_instance *dev = netdev_priv(ndev);
+	struct sockaddr *addr = sa;
+	struct emac_regs __iomem *p = dev->emacp;
+
+	if (!is_valid_ether_addr(addr->sa_data))
+	       return -EADDRNOTAVAIL;
+
+	mutex_lock(&dev->link_lock);
+
+	memcpy(ndev->dev_addr, addr->sa_data, ndev->addr_len);
+
+	emac_rx_disable(dev);
+	emac_tx_disable(dev);
+	out_be32(&p->iahr, (ndev->dev_addr[0] << 8) | ndev->dev_addr[1]);
+	out_be32(&p->ialr, (ndev->dev_addr[2] << 24) |
+		(ndev->dev_addr[3] << 16) | (ndev->dev_addr[4] << 8) |
+		ndev->dev_addr[5]);
+	emac_tx_enable(dev);
+	emac_rx_enable(dev);
+
+	mutex_unlock(&dev->link_lock);
+
+	return 0;
 }
 
 static int emac_resize_rx_ring(struct emac_instance *dev, int new_mtu)
@@ -1377,7 +1425,7 @@ static inline int emac_xmit_finish(struct emac_instance *dev, int len)
 		DBG2(dev, "stopped TX queue" NL);
 	}
 
-	ndev->trans_start = jiffies;
+	netif_trans_update(ndev);
 	++dev->stats.tx_packets;
 	dev->stats.tx_bytes += len;
 
@@ -2686,7 +2734,7 @@ static const struct net_device_ops emac_netdev_ops = {
 	.ndo_do_ioctl		= emac_ioctl,
 	.ndo_tx_timeout		= emac_tx_timeout,
 	.ndo_validate_addr	= eth_validate_addr,
-	.ndo_set_mac_address	= eth_mac_addr,
+	.ndo_set_mac_address	= emac_set_mac_address,
 	.ndo_start_xmit		= emac_start_xmit,
 	.ndo_change_mtu		= eth_change_mtu,
 };
@@ -2699,7 +2747,7 @@ static const struct net_device_ops emac_gige_netdev_ops = {
 	.ndo_do_ioctl		= emac_ioctl,
 	.ndo_tx_timeout		= emac_tx_timeout,
 	.ndo_validate_addr	= eth_validate_addr,
-	.ndo_set_mac_address	= eth_mac_addr,
+	.ndo_set_mac_address	= emac_set_mac_address,
 	.ndo_start_xmit		= emac_start_xmit_sg,
 	.ndo_change_mtu		= emac_change_mtu,
 };
@@ -2750,7 +2798,7 @@ static int emac_probe(struct platform_device *ofdev)
 	/* Get interrupts. EMAC irq is mandatory, WOL irq is optional */
 	dev->emac_irq = irq_of_parse_and_map(np, 0);
 	dev->wol_irq = irq_of_parse_and_map(np, 1);
-	if (dev->emac_irq == NO_IRQ) {
+	if (!dev->emac_irq) {
 		printk(KERN_ERR "%s: Can't map main interrupt\n", np->full_name);
 		goto err_free;
 	}
@@ -2913,9 +2961,9 @@ static int emac_probe(struct platform_device *ofdev)
  err_reg_unmap:
 	iounmap(dev->emacp);
  err_irq_unmap:
-	if (dev->wol_irq != NO_IRQ)
+	if (dev->wol_irq)
 		irq_dispose_mapping(dev->wol_irq);
-	if (dev->emac_irq != NO_IRQ)
+	if (dev->emac_irq)
 		irq_dispose_mapping(dev->emac_irq);
  err_free:
 	free_netdev(ndev);
@@ -2957,9 +3005,9 @@ static int emac_remove(struct platform_device *ofdev)
 	emac_dbg_unregister(dev);
 	iounmap(dev->emacp);
 
-	if (dev->wol_irq != NO_IRQ)
+	if (dev->wol_irq)
 		irq_dispose_mapping(dev->wol_irq);
-	if (dev->emac_irq != NO_IRQ)
+	if (dev->emac_irq)
 		irq_dispose_mapping(dev->emac_irq);
 
 	free_netdev(dev->ndev);

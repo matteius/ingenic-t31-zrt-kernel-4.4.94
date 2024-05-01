@@ -15,6 +15,7 @@
 #include <linux/platform_data/gpio-ath79.h>
 #include <linux/of_device.h>
 #include <linux/interrupt.h>
+#include <linux/module.h>
 #include <linux/irq.h>
 
 #define AR71XX_GPIO_REG_OE		0x00
@@ -218,6 +219,7 @@ static const struct of_device_id ath79_gpio_of_match[] = {
 	{ .compatible = "qca,ar9340-gpio" },
 	{},
 };
+MODULE_DEVICE_TABLE(of, ath79_gpio_of_match);
 
 static int ath79_gpio_probe(struct platform_device *pdev)
 {
@@ -321,3 +323,6 @@ static struct platform_driver ath79_gpio_driver = {
 };
 
 module_platform_driver(ath79_gpio_driver);
+
+MODULE_DESCRIPTION("Atheros AR71XX/AR724X/AR913X GPIO API support");
+MODULE_LICENSE("GPL v2");

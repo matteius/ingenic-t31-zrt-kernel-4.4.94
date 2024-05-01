@@ -193,7 +193,7 @@ static int upload_code(struct usb_device *udev,
 			0, 0, p, sizeof(ret), 5000 /* ms */);
 		if (r != sizeof(ret)) {
 			dev_err(&udev->dev,
-				"control request firmeware confirmation failed."
+				"control request firmware confirmation failed."
 				" Return value %d\n", r);
 			if (r >= 0)
 				r = -ENODEV;
@@ -1272,11 +1272,14 @@ static void print_id(struct usb_device *udev)
 static int eject_installer(struct usb_interface *intf)
 {
 	struct usb_device *udev = interface_to_usbdev(intf);
-	struct usb_host_interface *iface_desc = &intf->altsetting[0];
+	struct usb_host_interface *iface_desc = intf->cur_altsetting;
 	struct usb_endpoint_descriptor *endpoint;
 	unsigned char *cmd;
 	u8 bulk_out_ep;
 	int r;
+
+	if (iface_desc->desc.bNumEndpoints < 2)
+		return -ENODEV;
 
 	/* Find bulk out endpoint */
 	for (r = 1; r >= 0; r--) {

@@ -93,6 +93,7 @@ enum MR_RAID_FLAGS_IO_SUB_TYPE {
 
 #define MEGASAS_FP_CMD_LEN	16
 #define MEGASAS_FUSION_IN_RESET 0
+#define MEGASAS_FUSION_OCR_NOT_POSSIBLE 1
 #define THRESHOLD_REPLY_COUNT 50
 #define JBOD_MAPS_COUNT	2
 
@@ -991,5 +992,14 @@ union desc_value {
 	} u;
 };
 
+void megasas_free_cmds_fusion(struct megasas_instance *instance);
+int megasas_ioc_init_fusion(struct megasas_instance *instance);
+u8 megasas_get_map_info(struct megasas_instance *instance);
+int megasas_sync_map_info(struct megasas_instance *instance);
+void megasas_release_fusion(struct megasas_instance *instance);
+void megasas_reset_reply_desc(struct megasas_instance *instance);
+int megasas_check_mpio_paths(struct megasas_instance *instance,
+			      struct scsi_cmnd *scmd);
+void megasas_fusion_ocr_wq(struct work_struct *work);
 
 #endif /* _MEGARAID_SAS_FUSION_H_ */

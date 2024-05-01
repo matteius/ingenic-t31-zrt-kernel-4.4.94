@@ -378,12 +378,15 @@ static void falcon_push_irq_moderation(struct efx_channel *channel)
 	struct efx_nic *efx = channel->efx;
 
 	/* Set timer register */
-	if (channel->irq_moderation) {
+	if (channel->irq_moderation_us) {
+		unsigned int ticks;
+
+		ticks = efx_usecs_to_ticks(efx, channel->irq_moderation_us);
 		EFX_POPULATE_DWORD_2(timer_cmd,
 				     FRF_AB_TC_TIMER_MODE,
 				     FFE_BB_TIMER_MODE_INT_HLDOFF,
 				     FRF_AB_TC_TIMER_VAL,
-				     channel->irq_moderation - 1);
+				     ticks - 1);
 	} else {
 		EFX_POPULATE_DWORD_2(timer_cmd,
 				     FRF_AB_TC_TIMER_MODE,
@@ -2373,6 +2376,8 @@ static int falcon_probe_nic(struct efx_nic *efx)
 			     EFX_MAX_CHANNELS);
 	efx->max_tx_channels = efx->max_channels;
 	efx->timer_quantum_ns = 4968; /* 621 cycles */
+	efx->timer_max_ns = efx->type->timer_period_max *
+			    efx->timer_quantum_ns;
 
 	/* Initialise I2C adapter */
 	board = falcon_board(efx);
@@ -2796,6 +2801,11 @@ const struct efx_nic_type falcon_a1_nic_type = {
 	.timer_period_max =  1 << FRF_AB_TC_TIMER_VAL_WIDTH,
 	.offload_features = NETIF_F_IP_CSUM,
 	.mcdi_max_ver = -1,
+#ifdef CONFIG_SFC_SRIOV
+	.vswitching_probe = efx_port_dummy_op_int,
+	.vswitching_restore = efx_port_dummy_op_int,
+	.vswitching_remove = efx_port_dummy_op_void,
+#endif
 };
 
 const struct efx_nic_type falcon_b0_nic_type = {
@@ -2897,4 +2907,9 @@ const struct efx_nic_type falcon_b0_nic_type = {
 	.offload_features = NETIF_F_IP_CSUM | NETIF_F_RXHASH | NETIF_F_NTUPLE,
 	.mcdi_max_ver = -1,
 	.max_rx_ip_filters = FR_BZ_RX_FILTER_TBL0_ROWS,
+#ifdef CONFIG_SFC_SRIOV
+	.vswitching_probe = efx_port_dummy_op_int,
+	.vswitching_restore = efx_port_dummy_op_int,
+	.vswitching_remove = efx_port_dummy_op_void,
+#endif
 };

@@ -989,7 +989,7 @@ static void pasemi_adjust_link(struct net_device *dev)
 	unsigned int flags;
 	unsigned int new_flags;
 
-	if (!mac->phydev->link) {
+	if (!dev->phydev->link) {
 		/* If no link, MAC speed settings don't matter. Just report
 		 * link down and return.
 		 */
@@ -1010,10 +1010,10 @@ static void pasemi_adjust_link(struct net_device *dev)
 	new_flags = flags & ~(PAS_MAC_CFG_PCFG_HD | PAS_MAC_CFG_PCFG_SPD_M |
 			      PAS_MAC_CFG_PCFG_TSR_M);
 
-	if (!mac->phydev->duplex)
+	if (!dev->phydev->duplex)
 		new_flags |= PAS_MAC_CFG_PCFG_HD;
 
-	switch (mac->phydev->speed) {
+	switch (dev->phydev->speed) {
 	case 1000:
 		new_flags |= PAS_MAC_CFG_PCFG_SPD_1G |
 			     PAS_MAC_CFG_PCFG_TSR_1G;
@@ -1027,15 +1027,15 @@ static void pasemi_adjust_link(struct net_device *dev)
 			     PAS_MAC_CFG_PCFG_TSR_10M;
 		break;
 	default:
-		printk("Unsupported speed %d\n", mac->phydev->speed);
+		printk("Unsupported speed %d\n", dev->phydev->speed);
 	}
 
 	/* Print on link or speed/duplex change */
-	msg = mac->link != mac->phydev->link || flags != new_flags;
+	msg = mac->link != dev->phydev->link || flags != new_flags;
 
-	mac->duplex = mac->phydev->duplex;
-	mac->speed = mac->phydev->speed;
-	mac->link = mac->phydev->link;
+	mac->duplex = dev->phydev->duplex;
+	mac->speed = dev->phydev->speed;
+	mac->link = dev->phydev->link;
 
 	if (new_flags != flags)
 		write_mac_reg(mac, PAS_MAC_CFG_PCFG, new_flags);
@@ -1053,7 +1053,6 @@ static int pasemi_mac_phy_init(struct net_device *dev)
 
 	dn = pci_device_to_OF_node(mac->pdev);
 	phy_dn = of_parse_phandle(dn, "phy-handle", 0);
-	of_node_put(phy_dn);
 
 	mac->link = 0;
 	mac->speed = 0;
@@ -1062,12 +1061,11 @@ static int pasemi_mac_phy_init(struct net_device *dev)
 	phydev = of_phy_connect(dev, phy_dn, &pasemi_adjust_link, 0,
 				PHY_INTERFACE_MODE_SGMII);
 
+	of_node_put(phy_dn);
 	if (!phydev) {
 		printk(KERN_ERR "%s: Could not attach to phy\n", dev->name);
 		return -ENODEV;
 	}
-
-	mac->phydev = phydev;
 
 	return 0;
 }
@@ -1091,16 +1089,20 @@ static int pasemi_mac_open(struct net_device *dev)
 
 	mac->tx = pasemi_mac_setup_tx_resources(dev);
 
-	if (!mac->tx)
+	if (!mac->tx) {
+		ret = -ENOMEM;
 		goto out_tx_ring;
+	}
 
 	/* We might already have allocated rings in case mtu was changed
 	 * before interface was brought up.
 	 */
 	if (dev->mtu > 1500 && !mac->num_cs) {
 		pasemi_mac_setup_csrings(mac);
-		if (!mac->num_cs)
+		if (!mac->num_cs) {
+			ret = -ENOMEM;
 			goto out_tx_ring;
+		}
 	}
 
 	/* Zero out rmon counters */
@@ -1198,8 +1200,8 @@ static int pasemi_mac_open(struct net_device *dev)
 		goto out_rx_int;
 	}
 
-	if (mac->phydev)
-		phy_start(mac->phydev);
+	if (dev->phydev)
+		phy_start(dev->phydev);
 
 	setup_timer(&mac->tx->clean_timer, pasemi_mac_tx_timer,
 		    (unsigned long)mac->tx);
@@ -1293,9 +1295,9 @@ static int pasemi_mac_close(struct net_device *dev)
 	rxch = rx_ring(mac)->chan.chno;
 	txch = tx_ring(mac)->chan.chno;
 
-	if (mac->phydev) {
-		phy_stop(mac->phydev);
-		phy_disconnect(mac->phydev);
+	if (dev->phydev) {
+		phy_stop(dev->phydev);
+		phy_disconnect(dev->phydev);
 	}
 
 	del_timer_sync(&mac->tx->clean_timer);

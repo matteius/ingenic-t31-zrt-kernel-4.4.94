@@ -196,7 +196,7 @@ static irqreturn_t qcom_smp2p_intr(int irq, void *data)
 	/* Match newly created entries */
 	for (i = smp2p->valid_entries; i < in->valid_entries; i++) {
 		list_for_each_entry(entry, &smp2p->inbound, node) {
-			memcpy_fromio(buf, in->entries[i].name, sizeof(buf));
+			memcpy(buf, in->entries[i].name, sizeof(buf));
 			if (!strcmp(buf, entry->name)) {
 				entry->value = &in->entries[i].value;
 				break;
@@ -314,15 +314,16 @@ static int qcom_smp2p_inbound_entry(struct qcom_smp2p *smp2p,
 static int smp2p_update_bits(void *data, u32 mask, u32 value)
 {
 	struct smp2p_entry *entry = data;
+	unsigned long flags;
 	u32 orig;
 	u32 val;
 
-	spin_lock(&entry->lock);
+	spin_lock_irqsave(&entry->lock, flags);
 	val = orig = readl(entry->value);
 	val &= ~mask;
 	val |= value;
 	writel(val, entry->value);
-	spin_unlock(&entry->lock);
+	spin_unlock_irqrestore(&entry->lock, flags);
 
 	if (val != orig)
 		qcom_smp2p_kick(entry->smp2p);
@@ -343,11 +344,12 @@ static int qcom_smp2p_outbound_entry(struct qcom_smp2p *smp2p,
 
 	/* Allocate an entry from the smem item */
 	strlcpy(buf, entry->name, SMP2P_MAX_ENTRY_NAME);
-	memcpy_toio(out->entries[out->valid_entries].name, buf, SMP2P_MAX_ENTRY_NAME);
-	out->valid_entries++;
+	memcpy(out->entries[out->valid_entries].name, buf, SMP2P_MAX_ENTRY_NAME);
 
 	/* Make the logical entry reference the physical value */
 	entry->value = &out->entries[out->valid_entries].value;
+
+	out->valid_entries++;
 
 	entry->state = qcom_smem_state_register(node, &smp2p_state_ops, entry);
 	if (IS_ERR(entry->state)) {
@@ -414,6 +416,7 @@ static int smp2p_parse_ipc(struct qcom_smp2p *smp2p)
 	}
 
 	smp2p->ipc_regmap = syscon_node_to_regmap(syscon);
+	of_node_put(syscon);
 	if (IS_ERR(smp2p->ipc_regmap))
 		return PTR_ERR(smp2p->ipc_regmap);
 

@@ -18,15 +18,19 @@
 
 #define TI_XBAR_DRA7		0
 #define TI_XBAR_AM335X		1
+static const u32 ti_xbar_type[] = {
+	[TI_XBAR_DRA7] = TI_XBAR_DRA7,
+	[TI_XBAR_AM335X] = TI_XBAR_AM335X,
+};
 
 static const struct of_device_id ti_dma_xbar_match[] = {
 	{
 		.compatible = "ti,dra7-dma-crossbar",
-		.data = (void *)TI_XBAR_DRA7,
+		.data = &ti_xbar_type[TI_XBAR_DRA7],
 	},
 	{
 		.compatible = "ti,am335x-edma-crossbar",
-		.data = (void *)TI_XBAR_AM335X,
+		.data = &ti_xbar_type[TI_XBAR_AM335X],
 	},
 	{},
 };
@@ -45,12 +49,20 @@ struct ti_am335x_xbar_data {
 
 struct ti_am335x_xbar_map {
 	u16 dma_line;
-	u16 mux_val;
+	u8 mux_val;
 };
 
-static inline void ti_am335x_xbar_write(void __iomem *iomem, int event, u16 val)
+static inline void ti_am335x_xbar_write(void __iomem *iomem, int event, u8 val)
 {
-	writeb_relaxed(val & 0x1f, iomem + event);
+	/*
+	 * TPCC_EVT_MUX_60_63 register layout is different than the
+	 * rest, in the sense, that event 63 is mapped to lowest byte
+	 * and event 60 is mapped to highest, handle it separately.
+	 */
+	if (event >= 60 && event <= 63)
+		writeb_relaxed(val, iomem + (63 - event % 4));
+	else
+		writeb_relaxed(val, iomem + event);
 }
 
 static void ti_am335x_xbar_free(struct device *dev, void *route_data)
@@ -101,7 +113,7 @@ static void *ti_am335x_xbar_route_allocate(struct of_phandle_args *dma_spec,
 	}
 
 	map->dma_line = (u16)dma_spec->args[0];
-	map->mux_val = (u16)dma_spec->args[2];
+	map->mux_val = (u8)dma_spec->args[2];
 
 	dma_spec->args[2] = 0;
 	dma_spec->args_count = 2;
@@ -145,6 +157,7 @@ static int ti_am335x_xbar_probe(struct platform_device *pdev)
 	match = of_match_node(ti_am335x_master_match, dma_node);
 	if (!match) {
 		dev_err(&pdev->dev, "DMA master is not supported\n");
+		of_node_put(dma_node);
 		return -EINVAL;
 	}
 
@@ -189,9 +202,6 @@ static int ti_am335x_xbar_probe(struct platform_device *pdev)
 /* Crossbar on DRA7xx family */
 #define TI_DRA7_XBAR_OUTPUTS	127
 #define TI_DRA7_XBAR_INPUTS	256
-
-#define TI_XBAR_EDMA_OFFSET	0
-#define TI_XBAR_SDMA_OFFSET	1
 
 struct ti_dra7_xbar_data {
 	void __iomem *iomem;
@@ -241,6 +251,7 @@ static void *ti_dra7_xbar_route_allocate(struct of_phandle_args *dma_spec,
 	if (dma_spec->args[0] >= xbar->xbar_requests) {
 		dev_err(&pdev->dev, "Invalid XBAR request number: %d\n",
 			dma_spec->args[0]);
+		put_device(&pdev->dev);
 		return ERR_PTR(-EINVAL);
 	}
 
@@ -248,25 +259,30 @@ static void *ti_dra7_xbar_route_allocate(struct of_phandle_args *dma_spec,
 	dma_spec->np = of_parse_phandle(ofdma->of_node, "dma-masters", 0);
 	if (!dma_spec->np) {
 		dev_err(&pdev->dev, "Can't get DMA master\n");
+		put_device(&pdev->dev);
 		return ERR_PTR(-EINVAL);
 	}
 
 	map = kzalloc(sizeof(*map), GFP_KERNEL);
 	if (!map) {
 		of_node_put(dma_spec->np);
+		put_device(&pdev->dev);
 		return ERR_PTR(-ENOMEM);
 	}
 
 	mutex_lock(&xbar->mutex);
 	map->xbar_out = find_first_zero_bit(xbar->dma_inuse,
 					    xbar->dma_requests);
-	mutex_unlock(&xbar->mutex);
 	if (map->xbar_out == xbar->dma_requests) {
+		mutex_unlock(&xbar->mutex);
 		dev_err(&pdev->dev, "Run out of free DMA requests\n");
 		kfree(map);
+		of_node_put(dma_spec->np);
+		put_device(&pdev->dev);
 		return ERR_PTR(-ENOMEM);
 	}
 	set_bit(map->xbar_out, xbar->dma_inuse);
+	mutex_unlock(&xbar->mutex);
 
 	map->xbar_in = (u16)dma_spec->args[0];
 
@@ -280,18 +296,25 @@ static void *ti_dra7_xbar_route_allocate(struct of_phandle_args *dma_spec,
 	return map;
 }
 
+#define TI_XBAR_EDMA_OFFSET	0
+#define TI_XBAR_SDMA_OFFSET	1
+static const u32 ti_dma_offset[] = {
+	[TI_XBAR_EDMA_OFFSET] = 0,
+	[TI_XBAR_SDMA_OFFSET] = 1,
+};
+
 static const struct of_device_id ti_dra7_master_match[] = {
 	{
 		.compatible = "ti,omap4430-sdma",
-		.data = (void *)TI_XBAR_SDMA_OFFSET,
+		.data = &ti_dma_offset[TI_XBAR_SDMA_OFFSET],
 	},
 	{
 		.compatible = "ti,edma3",
-		.data = (void *)TI_XBAR_EDMA_OFFSET,
+		.data = &ti_dma_offset[TI_XBAR_EDMA_OFFSET],
 	},
 	{
 		.compatible = "ti,edma3-tpcc",
-		.data = (void *)TI_XBAR_EDMA_OFFSET,
+		.data = &ti_dma_offset[TI_XBAR_EDMA_OFFSET],
 	},
 	{},
 };
@@ -311,7 +334,7 @@ static int ti_dra7_xbar_probe(struct platform_device *pdev)
 	struct property *prop;
 	struct resource *res;
 	u32 safe_val;
-	size_t sz;
+	int sz;
 	void __iomem *iomem;
 	int i, ret;
 
@@ -331,6 +354,7 @@ static int ti_dra7_xbar_probe(struct platform_device *pdev)
 	match = of_match_node(ti_dra7_master_match, dma_node);
 	if (!match) {
 		dev_err(&pdev->dev, "DMA master is not supported\n");
+		of_node_put(dma_node);
 		return -EINVAL;
 	}
 
@@ -376,8 +400,10 @@ static int ti_dra7_xbar_probe(struct platform_device *pdev)
 
 		ret = of_property_read_u32_array(node, pname, (u32 *)rsv_events,
 						 nelm * 2);
-		if (ret)
+		if (ret) {
+			kfree(rsv_events);
 			return ret;
+		}
 
 		for (i = 0; i < nelm; i++) {
 			ti_dra7_xbar_reserve(rsv_events[i][0], rsv_events[i][1],
@@ -395,7 +421,7 @@ static int ti_dra7_xbar_probe(struct platform_device *pdev)
 
 	xbar->dmarouter.dev = &pdev->dev;
 	xbar->dmarouter.route_free = ti_dra7_xbar_free;
-	xbar->dma_offset = (u32)match->data;
+	xbar->dma_offset = *(u32 *)match->data;
 
 	mutex_init(&xbar->mutex);
 	platform_set_drvdata(pdev, xbar);
@@ -428,7 +454,7 @@ static int ti_dma_xbar_probe(struct platform_device *pdev)
 	if (unlikely(!match))
 		return -EINVAL;
 
-	switch ((u32)match->data) {
+	switch (*(u32 *)match->data) {
 	case TI_XBAR_DRA7:
 		ret = ti_dra7_xbar_probe(pdev);
 		break;
@@ -452,7 +478,7 @@ static struct platform_driver ti_dma_xbar_driver = {
 	.probe	= ti_dma_xbar_probe,
 };
 
-int omap_dmaxbar_init(void)
+static int omap_dmaxbar_init(void)
 {
 	return platform_driver_register(&ti_dma_xbar_driver);
 }

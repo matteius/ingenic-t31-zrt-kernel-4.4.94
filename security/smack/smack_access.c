@@ -90,23 +90,22 @@ int log_policy = SMACK_AUDIT_DENIED;
 int smk_access_entry(char *subject_label, char *object_label,
 			struct list_head *rule_list)
 {
-	int may = -ENOENT;
 	struct smack_rule *srp;
 
 	list_for_each_entry_rcu(srp, rule_list, list) {
 		if (srp->smk_object->smk_known == object_label &&
 		    srp->smk_subject->smk_known == subject_label) {
-			may = srp->smk_access;
-			break;
+			int may = srp->smk_access;
+			/*
+			 * MAY_WRITE implies MAY_LOCK.
+			 */
+			if ((may & MAY_WRITE) == MAY_WRITE)
+				may |= MAY_LOCK;
+			return may;
 		}
 	}
 
-	/*
-	 * MAY_WRITE implies MAY_LOCK.
-	 */
-	if ((may & MAY_WRITE) == MAY_WRITE)
-		may |= MAY_LOCK;
-	return may;
+	return -ENOENT;
 }
 
 /**
@@ -413,7 +412,7 @@ void smk_insert_entry(struct smack_known *skp)
 	unsigned int hash;
 	struct hlist_head *head;
 
-	hash = full_name_hash(skp->smk_known, strlen(skp->smk_known));
+	hash = full_name_hash(NULL, skp->smk_known, strlen(skp->smk_known));
 	head = &smack_known_hash[hash & (SMACK_HASH_SLOTS - 1)];
 
 	hlist_add_head_rcu(&skp->smk_hashed, head);
@@ -433,7 +432,7 @@ struct smack_known *smk_find_entry(const char *string)
 	struct hlist_head *head;
 	struct smack_known *skp;
 
-	hash = full_name_hash(string, strlen(string));
+	hash = full_name_hash(NULL, string, strlen(string));
 	head = &smack_known_hash[hash & (SMACK_HASH_SLOTS - 1)];
 
 	hlist_for_each_entry_rcu(skp, head, smk_hashed)
@@ -474,7 +473,7 @@ char *smk_parse_smack(const char *string, int len)
 	if (i == 0 || i >= SMK_LONGLABEL)
 		return ERR_PTR(-EINVAL);
 
-	smack = kzalloc(i + 1, GFP_KERNEL);
+	smack = kzalloc(i + 1, GFP_NOFS);
 	if (smack == NULL)
 		return ERR_PTR(-ENOMEM);
 
@@ -545,7 +544,7 @@ struct smack_known *smk_import_entry(const char *string, int len)
 	if (skp != NULL)
 		goto freeout;
 
-	skp = kzalloc(sizeof(*skp), GFP_KERNEL);
+	skp = kzalloc(sizeof(*skp), GFP_NOFS);
 	if (skp == NULL) {
 		skp = ERR_PTR(-ENOMEM);
 		goto freeout;

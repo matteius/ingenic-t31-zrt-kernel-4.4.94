@@ -38,7 +38,7 @@
  */
 struct fbtft_gpio {
 	char name[FBTFT_GPIO_NAME_SIZE];
-	unsigned gpio;
+	unsigned int gpio;
 };
 
 struct fbtft_par;
@@ -79,7 +79,7 @@ struct fbtft_ops {
 	void (*reset)(struct fbtft_par *par);
 	void (*mkdirty)(struct fb_info *info, int from, int to);
 	void (*update_display)(struct fbtft_par *par,
-				unsigned start_line, unsigned end_line);
+				unsigned int start_line, unsigned int end_line);
 	int (*init_display)(struct fbtft_par *par);
 	int (*blank)(struct fbtft_par *par, bool on);
 
@@ -115,14 +115,14 @@ struct fbtft_ops {
  * This structure is not stored by FBTFT except for init_sequence.
  */
 struct fbtft_display {
-	unsigned width;
-	unsigned height;
-	unsigned regwidth;
-	unsigned buswidth;
-	unsigned backlight;
+	unsigned int width;
+	unsigned int height;
+	unsigned int regwidth;
+	unsigned int buswidth;
+	unsigned int backlight;
 	struct fbtft_ops fbtftops;
-	unsigned bpp;
-	unsigned fps;
+	unsigned int bpp;
+	unsigned int fps;
 	int txbuflen;
 	int *init_sequence;
 	char *gamma;
@@ -146,9 +146,9 @@ struct fbtft_display {
 struct fbtft_platform_data {
 	struct fbtft_display display;
 	const struct fbtft_gpio *gpios;
-	unsigned rotate;
+	unsigned int rotate;
 	bool bgr;
-	unsigned fps;
+	unsigned int fps;
 	int txbuflen;
 	u8 startbyte;
 	char *gamma;
@@ -216,8 +216,8 @@ struct fbtft_par {
 	u8 startbyte;
 	struct fbtft_ops fbtftops;
 	spinlock_t dirty_lock;
-	unsigned dirty_lines_start;
-	unsigned dirty_lines_end;
+	unsigned int dirty_lines_start;
+	unsigned int dirty_lines_end;
 	struct {
 		int reset;
 		int dc;
@@ -241,6 +241,7 @@ struct fbtft_par {
 	ktime_t update_time;
 	bool bgr;
 	void *extra;
+	bool polarity;
 };
 
 #define NUMARGS(...)  (sizeof((int[]){__VA_ARGS__})/sizeof(int))
@@ -342,7 +343,10 @@ static int __init fbtft_driver_module_init(void)                           \
 	ret = spi_register_driver(&fbtft_driver_spi_driver);               \
 	if (ret < 0)                                                       \
 		return ret;                                                \
-	return platform_driver_register(&fbtft_driver_platform_driver);    \
+	ret = platform_driver_register(&fbtft_driver_platform_driver);     \
+	if (ret < 0)                                                       \
+		spi_unregister_driver(&fbtft_driver_spi_driver);           \
+	return ret;                                                        \
 }                                                                          \
 									   \
 static void __exit fbtft_driver_module_exit(void)                          \

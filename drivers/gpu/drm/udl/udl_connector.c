@@ -37,7 +37,7 @@ static u8 *udl_get_edid(struct udl_device *udl)
 		ret = usb_control_msg(udl->udev,
 				      usb_rcvctrlpipe(udl->udev, 0), (0x02),
 				      (0x80 | (0x02 << 5)), i << 8, 0xA1, rbuf, 2,
-				      HZ);
+				      1000);
 		if (ret < 1) {
 			DRM_ERROR("Read EDID byte %d failed err %x\n", i, ret);
 			goto error;
@@ -150,8 +150,5 @@ int udl_connector_init(struct drm_device *dev, struct drm_encoder *encoder)
 	drm_connector_register(connector);
 	drm_mode_connector_attach_encoder(connector, encoder);
 
-	drm_object_attach_property(&connector->base,
-				      dev->mode_config.dirty_info_property,
-				      1);
 	return 0;
 }

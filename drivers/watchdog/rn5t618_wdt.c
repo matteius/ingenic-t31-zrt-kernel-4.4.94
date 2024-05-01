@@ -136,7 +136,7 @@ static struct watchdog_info rn5t618_wdt_info = {
 	.identity	= DRIVER_NAME,
 };
 
-static struct watchdog_ops rn5t618_wdt_ops = {
+static const struct watchdog_ops rn5t618_wdt_ops = {
 	.owner          = THIS_MODULE,
 	.start          = rn5t618_wdt_start,
 	.stop           = rn5t618_wdt_stop,
@@ -193,6 +193,7 @@ static struct platform_driver rn5t618_wdt_driver = {
 
 module_platform_driver(rn5t618_wdt_driver);
 
+MODULE_ALIAS("platform:rn5t618-wdt");
 MODULE_AUTHOR("Beniamino Galvani <b.galvani@gmail.com>");
 MODULE_DESCRIPTION("RN5T618 watchdog driver");
 MODULE_LICENSE("GPL v2");

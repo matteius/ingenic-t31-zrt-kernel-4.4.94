@@ -21,6 +21,7 @@
 #include <linux/sizes.h>
 #include <linux/of.h>
 #include <linux/of_fdt.h>
+#include <linux/acpi.h>
 
 #ifdef CONFIG_FIX_EARLYCON_MEM
 #include <asm/fixmap.h>
@@ -38,7 +39,7 @@ static struct earlycon_device early_console_dev = {
 	.con = &early_con,
 };
 
-static void __iomem * __init earlycon_map(unsigned long paddr, size_t size)
+static void __iomem * __init earlycon_map(resource_size_t paddr, size_t size)
 {
 	void __iomem *base;
 #ifdef CONFIG_FIX_EARLYCON_MEM
@@ -49,8 +50,7 @@ static void __iomem * __init earlycon_map(unsigned long paddr, size_t size)
 	base = ioremap(paddr, size);
 #endif
 	if (!base)
-		pr_err("%s: Couldn't map 0x%llx\n", __func__,
-		       (unsigned long long)paddr);
+		pr_err("%s: Couldn't map %pa\n", __func__, &paddr);
 
 	return base;
 }
@@ -92,7 +92,7 @@ static int __init parse_options(struct earlycon_device *device, char *options)
 {
 	struct uart_port *port = &device->port;
 	int length;
-	unsigned long addr;
+	resource_size_t addr;
 
 	if (uart_parse_earlycon(options, &port->iotype, &addr, &options))
 		return -EINVAL;
@@ -172,7 +172,7 @@ static int __init register_earlycon(char *buf, const struct earlycon_id *match)
  */
 int __init setup_earlycon(char *buf)
 {
-	const struct earlycon_id *match;
+	const struct earlycon_id **p_match;
 
 	if (!buf || !buf[0])
 		return -EINVAL;
@@ -180,7 +180,9 @@ int __init setup_earlycon(char *buf)
 	if (early_con.flags & CON_ENABLED)
 		return -EALREADY;
 
-	for (match = __earlycon_table; match < __earlycon_table_end; match++) {
+	for (p_match = __earlycon_table; p_match < __earlycon_table_end;
+	     p_match++) {
+		const struct earlycon_id *match = *p_match;
 		size_t len = strlen(match->name);
 
 		if (strncmp(buf, match->name, len))
@@ -199,6 +201,14 @@ int __init setup_earlycon(char *buf)
 	return -ENOENT;
 }
 
+/*
+ * When CONFIG_ACPI_SPCR_TABLE is defined, "earlycon" without parameters in
+ * command line does not start DT earlycon immediately, instead it defers
+ * starting it until DT/ACPI decision is made.  At that time if ACPI is enabled
+ * call parse_spcr(), else call early_init_dt_scan_chosen_stdout()
+ */
+bool earlycon_init_is_deferred __initdata;
+
 /* early_param wrapper for setup_earlycon() */
 static int __init param_setup_earlycon(char *buf)
 {
@@ -208,8 +218,14 @@ static int __init param_setup_earlycon(char *buf)
 	 * Just 'earlycon' is a valid param for devicetree earlycons;
 	 * don't generate a warning from parse_early_params() in that case
 	 */
-	if (!buf || !buf[0])
-		return 0;
+	if (!buf || !buf[0]) {
+		if (IS_ENABLED(CONFIG_ACPI_SPCR_TABLE)) {
+			earlycon_init_is_deferred = true;
+			return 0;
+		} else {
+			return early_init_dt_scan_chosen_stdout();
+		}
+	}
 
 	err = setup_earlycon(buf);
 	if (err == -ENOENT || err == -EALREADY)
@@ -239,11 +255,12 @@ int __init of_setup_earlycon(const struct earlycon_id *match,
 	}
 	port->mapbase = addr;
 	port->uartclk = BASE_BAUD * 16;
-	port->membase = earlycon_map(port->mapbase, SZ_4K);
 
 	val = of_get_flat_dt_prop(node, "reg-offset", NULL);
 	if (val)
 		port->mapbase += be32_to_cpu(*val);
+	port->membase = earlycon_map(port->mapbase, SZ_4K);
+
 	val = of_get_flat_dt_prop(node, "reg-shift", NULL);
 	if (val)
 		port->regshift = be32_to_cpu(*val);

@@ -85,7 +85,7 @@ static irqreturn_t goldfish_tty_interrupt(int irq, void *dev_id)
 	writel(count, base + GOLDFISH_TTY_DATA_LEN);
 	writel(GOLDFISH_TTY_CMD_READ_BUFFER, base + GOLDFISH_TTY_CMD);
 	spin_unlock_irqrestore(&qtty->lock, irq_flags);
-	tty_schedule_flip(&qtty->port);
+	tty_flip_buffer_push(&qtty->port);
 	return IRQ_HANDLED;
 }
 
@@ -300,7 +300,7 @@ static int goldfish_tty_probe(struct platform_device *pdev)
 	return 0;
 
 err_tty_register_device_failed:
-	free_irq(irq, pdev);
+	free_irq(irq, qtty);
 err_request_irq_failed:
 	goldfish_tty_current_line_count--;
 	if (goldfish_tty_current_line_count == 0)

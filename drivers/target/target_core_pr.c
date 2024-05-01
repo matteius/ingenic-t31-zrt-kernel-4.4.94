@@ -56,8 +56,10 @@ void core_pr_dump_initiator_port(
 	char *buf,
 	u32 size)
 {
-	if (!pr_reg->isid_present_at_reg)
+	if (!pr_reg->isid_present_at_reg) {
 		buf[0] = '\0';
+		return;
+	}
 
 	snprintf(buf, size, ",i,0x%s", pr_reg->pr_reg_isid);
 }
@@ -1985,7 +1987,7 @@ static int __core_scsi3_write_aptpl_to_file(
 		return -EMSGSIZE;
 	}
 
-	snprintf(path, 512, "/var/target/pr/aptpl_%s", &wwn->unit_serial[0]);
+	snprintf(path, 512, "%s/pr/aptpl_%s", db_root, &wwn->unit_serial[0]);
 	file = filp_open(path, flags, 0600);
 	if (IS_ERR(file)) {
 		pr_err("filp_open(%s) for APTPL metadata"

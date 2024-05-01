@@ -351,7 +351,8 @@ ip_set_put_skbinfo(struct sk_buff *skb, struct ip_set_skbinfo *skbinfo)
 	return ((skbinfo->skbmark || skbinfo->skbmarkmask) &&
 		nla_put_net64(skb, IPSET_ATTR_SKBMARK,
 			      cpu_to_be64((u64)skbinfo->skbmark << 32 |
-					  skbinfo->skbmarkmask))) ||
+					  skbinfo->skbmarkmask),
+			      IPSET_ATTR_PAD)) ||
 	       (skbinfo->skbprio &&
 		nla_put_net32(skb, IPSET_ATTR_SKBPRIO,
 			      cpu_to_be32(skbinfo->skbprio))) ||
@@ -374,9 +375,11 @@ static inline bool
 ip_set_put_counter(struct sk_buff *skb, struct ip_set_counter *counter)
 {
 	return nla_put_net64(skb, IPSET_ATTR_BYTES,
-			     cpu_to_be64(ip_set_get_bytes(counter))) ||
+			     cpu_to_be64(ip_set_get_bytes(counter)),
+			     IPSET_ATTR_PAD) ||
 	       nla_put_net64(skb, IPSET_ATTR_PACKETS,
-			     cpu_to_be64(ip_set_get_packets(counter)));
+			     cpu_to_be64(ip_set_get_packets(counter)),
+			     IPSET_ATTR_PAD);
 }
 
 static inline void
@@ -532,13 +535,6 @@ ip6addrptr(const struct sk_buff *skb, bool src, struct in6_addr *addr)
 {
 	memcpy(addr, src ? &ipv6_hdr(skb)->saddr : &ipv6_hdr(skb)->daddr,
 	       sizeof(*addr));
-}
-
-/* Calculate the bytes required to store the inclusive range of a-b */
-static inline int
-bitmap_bytes(u32 a, u32 b)
-{
-	return 4 * ((((b - a + 8) / 8) + 3) / 4);
 }
 
 #include <linux/netfilter/ipset/ip_set_timeout.h>

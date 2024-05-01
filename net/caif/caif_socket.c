@@ -539,7 +539,8 @@ static int caif_seqpkt_sendmsg(struct socket *sock, struct msghdr *msg,
 		goto err;
 
 	ret = -EINVAL;
-	if (unlikely(msg->msg_iter.iov->iov_base == NULL))
+	if (unlikely(msg->msg_iter.nr_segs == 0) ||
+	    unlikely(msg->msg_iter.iov->iov_base == NULL))
 		goto err;
 	noblock = msg->msg_flags & MSG_DONTWAIT;
 
@@ -1107,10 +1108,7 @@ static struct net_proto_family caif_family_ops = {
 
 static int __init caif_sktinit_module(void)
 {
-	int err = sock_register(&caif_family_ops);
-	if (!err)
-		return err;
-	return 0;
+	return sock_register(&caif_family_ops);
 }
 
 static void __exit caif_sktexit_module(void)

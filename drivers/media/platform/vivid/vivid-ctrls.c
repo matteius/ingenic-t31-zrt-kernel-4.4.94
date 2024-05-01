@@ -761,7 +761,7 @@ static const char * const vivid_ctrl_ycbcr_enc_strings[] = {
 	"Rec. 709",
 	"xvYCC 601",
 	"xvYCC 709",
-	"sYCC",
+	"",
 	"BT.2020",
 	"BT.2020 Constant Luminance",
 	"SMPTE 240M",
@@ -773,6 +773,7 @@ static const struct v4l2_ctrl_config vivid_ctrl_ycbcr_enc = {
 	.id = VIVID_CID_YCBCR_ENC,
 	.name = "Y'CbCr Encoding",
 	.type = V4L2_CTRL_TYPE_MENU,
+	.menu_skip_mask = 1 << 5,
 	.max = ARRAY_SIZE(vivid_ctrl_ycbcr_enc_strings) - 2,
 	.qmenu = vivid_ctrl_ycbcr_enc_strings,
 };
@@ -1166,6 +1167,7 @@ static int vivid_radio_rx_s_ctrl(struct v4l2_ctrl *ctrl)
 		v4l2_ctrl_activate(dev->radio_rx_rds_ta, dev->radio_rx_rds_controls);
 		v4l2_ctrl_activate(dev->radio_rx_rds_tp, dev->radio_rx_rds_controls);
 		v4l2_ctrl_activate(dev->radio_rx_rds_ms, dev->radio_rx_rds_controls);
+		dev->radio_rx_dev.device_caps = dev->radio_rx_caps;
 		break;
 	case V4L2_CID_RDS_RECEPTION:
 		dev->radio_rx_rds_enabled = ctrl->val;
@@ -1240,6 +1242,7 @@ static int vivid_radio_tx_s_ctrl(struct v4l2_ctrl *ctrl)
 		dev->radio_tx_caps &= ~V4L2_CAP_READWRITE;
 		if (!dev->radio_tx_rds_controls)
 			dev->radio_tx_caps |= V4L2_CAP_READWRITE;
+		dev->radio_tx_dev.device_caps = dev->radio_tx_caps;
 		break;
 	case V4L2_CID_RDS_TX_PTY:
 		if (dev->radio_rx_rds_controls)
