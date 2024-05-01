@@ -584,7 +584,7 @@ static void init_hw_stopped_status(struct uart_port *uport)
 	struct tty_port tport = uport->state->port;
 	struct tty_struct *tty = tport.tty;
 
-	if (tport.flags & UART_CTS_FLOW) {
+	if (tport.flags & UART_CAP_AFE) {
 		unsigned int mctrl;
 		spin_lock_irq(&uport->lock);
 		if (!((mctrl = uport->ops->get_mctrl(uport)) & TIOCM_CTS))
