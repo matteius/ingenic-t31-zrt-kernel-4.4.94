@@ -558,33 +558,34 @@ static struct dmmu_handle *create_handle(void)
 }
 
 static int dmmu_make_present(unsigned long addr, unsigned long end) {
-	struct vm_area_struct *vma;
-	struct page **pages;
-	int ret, len, write, force = 0;
+    struct vm_area_struct *vma;
+    struct page **pages;
+    int ret, len, write;
 
-	vma = find_vma(current->mm, addr);
-	if (!vma) {
-		printk("dmmu_make_present error. addr=%lx len=%lx\n", addr, end - addr);
-		return -1;
-	}
+    vma = find_vma(current->mm, addr);
+    if (!vma) {
+        printk("dmmu_make_present error. addr=%lx len=%lx\n", addr, end - addr);
+        return -1;
+    }
 
-	if (vma->vm_flags & VM_PFNMAP)
-		return 0;
+    if (vma->vm_flags & VM_PFNMAP)
+        return 0;
 
-	write = (vma->vm_flags & VM_WRITE) != 0;
-	BUG_ON(addr >= end);
-	BUG_ON(end > vma->vm_end);
+    write = (vma->vm_flags & VM_WRITE) != 0;
+    BUG_ON(addr >= end);
+    BUG_ON(end > vma->vm_end);
 
-	len = DIV_ROUND_UP(end - addr, PAGE_SIZE);
-	pages = kmalloc_array(len, sizeof(struct page *), GFP_KERNEL);
-	if (!pages) return -ENOMEM; // Handle memory allocation failure
+    len = DIV_ROUND_UP(end - addr, PAGE_SIZE);
+    pages = kmalloc_array(len, sizeof(struct page *), GFP_KERNEL);
+    if (!pages)
+        return -ENOMEM;
 
-	ret = get_user_pages(addr, len, write, force, pages, NULL); // Adjusted to correct signature
+    ret = get_user_pages(addr, len, write ? FOLL_WRITE : 0, pages, NULL);
 
-	kfree(pages); // Free allocated memory
-	return ret == len ? 0 : -1;
+    kfree(pages);
+
+    return ret == len ? 0 : -1;
 }
-
 
 static void dmmu_cache_wback(struct dmmu_handle *h)
 {
