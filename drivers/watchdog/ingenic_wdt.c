@@ -152,33 +152,29 @@ static const struct watchdog_ops ingenic_wdt_ops = {
 };
 
 static int ingenic_reset_handler(struct notifier_block *this, unsigned long mode,
-		void *cmd)
+                                 void *cmd)
 {
-	struct ingenic_wdt_drvdata *drvdata = container_of(this,
-			struct ingenic_wdt_drvdata, restart_handler);
-	struct watchdog_device *wdd = &drvdata->wdt;
+    struct ingenic_wdt_drvdata *drvdata = container_of(this,
+    struct ingenic_wdt_drvdata, restart_handler);
+    struct watchdog_device *wdd = &drvdata->wdt;
 
-	if (cmd && !strcmp(cmd, REBOOT_CMD_RECOVERY))
-		ingenic_recovery_sign();
-	else
-		ingenic_reboot_sign();
+    if (cmd && !strcmp(cmd, REBOOT_CMD_RECOVERY))
+        ingenic_recovery_sign();
+    else
+        ingenic_reboot_sign();
 
-	if (cmd && !strcmp(cmd, REBOOT_CMD_SOFTBURN))
-		ingenic_softburn_sign();
+    if (cmd && !strcmp(cmd, REBOOT_CMD_SOFTBURN))
+        ingenic_softburn_sign();
 
-	mutex_lock(&wdd->lock);
+    drvdata->cell->enable(drvdata->pdev);
 
-	drvdata->cell->enable(drvdata->pdev);
-
-	ingenic_watchdog_config((3 << 3)|TCU_CLKSRC_RTC, 4);
-	while (1) {
-		mdelay(500);
-		pr_err("wdt reset failed, Never be here\n");
-	}
-	mutex_unlock(&wdd->lock);
-	return NOTIFY_DONE;
+    ingenic_watchdog_config((3 << 3)|TCU_CLKSRC_RTC, 4);
+    while (1) {
+        mdelay(500);
+        pr_err("wdt reset failed, Never be here\n");
+    }
+    return NOTIFY_DONE;
 }
-
 #ifdef CONFIG_OF
 static const struct of_device_id ingenic_wdt_of_matches[] = {
 	{ .compatible = "ingenic,watchdog", },
@@ -289,233 +285,6 @@ static struct platform_driver ingenic_wdt_driver = {
 
 module_platform_driver(ingenic_wdt_driver);
 
-/**********************ingenic utils(deprecated)*****************************************/
-struct wdt_utils {
-	struct watchdog_device *wdt;
-	unsigned msecs;
-
-	unsigned stop;
-	struct task_struct *task;
-	unsigned short count;
-};
-
-static __deprecated int reset_task(void *data) {
-	struct wdt_utils *wdt_utils = data;
-	const struct sched_param param = {
-		.sched_priority = MAX_RT_PRIO-1,
-	};
-	sched_setscheduler(current,SCHED_RR,&param);
-
-	if (test_and_set_bit(WDOG_DEV_OPEN, &wdt_utils->wdt->status)) {
-		pr_warn("watchdog conflict\n");
-		wdt_utils->stop = 1;
-		return 0;
-	}
-
-	mutex_lock(&wdt_utils->wdt->lock);
-
-	ingenic_wdt_set_timeout(wdt_utils->wdt, (wdt_utils->msecs + 1000 - 1)/1000);
-	ingenic_wdt_start(wdt_utils->wdt);
-
-	mutex_unlock(&wdt_utils->wdt->lock);
-
-	while (1) {
-		if(kthread_should_stop()) {
-			clear_bit(WDOG_DEV_OPEN, &wdt_utils->wdt->status);
-			mutex_lock(&wdt_utils->wdt->lock);
-
-			ingenic_wdt_stop(wdt_utils->wdt);
-
-			mutex_unlock(&wdt_utils->wdt->lock);
-			break;
-		}
-
-		mutex_lock(&wdt_utils->wdt->lock);
-
-		ingenic_wdt_ping(wdt_utils->wdt);
-
-		mutex_unlock(&wdt_utils->wdt->lock);
-		msleep(wdt_utils->wdt->timeout / 3);
-	}
-
-	return 0;
-}
-
-static __deprecated ssize_t wdt_time_show(struct device *dev, struct device_attribute *attr,
-		char *buf)
-{
-	struct wdt_utils *wdt = dev_get_drvdata(dev);
-	return sprintf(buf, "%d msecs\n", wdt->msecs);
-}
-static __deprecated ssize_t wdt_time_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct wdt_utils *wdt = dev_get_drvdata(dev);
-	unsigned int msecs;
-
-	if(!wdt->stop)
-		return -EBUSY;
-
-	sscanf(buf,"%d\n",&msecs);
-
-	if(msecs < 1000)
-		msecs = 1000;
-	if(msecs > 30000)
-		msecs = 30000;
-
-	wdt->msecs = msecs;
-	return count;
-}
-static __deprecated DEVICE_ATTR_RW(wdt_time);
-
-static __deprecated ssize_t wdt_control_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct wdt_utils *wdt = dev_get_drvdata(dev);
-	return sprintf(buf, "%s\n", wdt->stop?">off<on\n":"off>on<\n");
-}
-
-static __deprecated ssize_t wdt_control_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct wdt_utils *wdt = dev_get_drvdata(dev);
-
-	if(!strncmp(buf,"on",2) && (wdt->stop == 1)) {
-		wdt->task = kthread_run(reset_task, wdt, "reset_task%d",wdt->count++);
-		wdt->stop = 0;
-	} else if(!strncmp(buf,"off",3) && (wdt->stop == 0)) {
-		kthread_stop(wdt->task);
-		wdt->stop = 1;
-	}
-	return count;
-}
-static __deprecated DEVICE_ATTR_RW(wdt_control);
-
-static __deprecated char *reset_command[] = {"wdt", "hibernate","recovery", "burnerboot"};
-static __deprecated ssize_t reset_show(struct device *dev, struct device_attribute *attr,
-						  char *buf)
-{
-	int len = 0, i;
-
-	for(i = 0; i < ARRAY_SIZE(reset_command); i++)
-		len += sprintf(buf + len, "%s\t", reset_command[i]);
-	len += sprintf(buf + len, "\n");
-
-	return len;
-}
-
-static __deprecated ssize_t reset_store(struct device *dev, struct device_attribute *attr,
-						   const char *buf, size_t count)
-{
-	int command_size = 0;
-	int i;
-	char *cmd = NULL;
-
-	if(count == 0)
-		return -EINVAL;
-
-	command_size = ARRAY_SIZE(reset_command);
-	for(i = 0;i < command_size; i++) {
-		if(!strncmp(buf, reset_command[i], strlen(reset_command[i])))
-			break;
-	}
-
-	switch(i) {
-	case 1:
-		reboot_mode = REBOOT_HARD;
-		break;
-	case 2:
-		cmd = "recovery";
-		break;
-	case 3:
-		cmd = "softburn";
-		break;
-	default:
-	case 0:
-		break;
-	}
-	kernel_restart(cmd);
-	return count;
-}
-static __deprecated DEVICE_ATTR_RW(reset);
-
-static __deprecated struct attribute *reset_attrs[] = {
-	&dev_attr_wdt_time.attr,
-	&dev_attr_wdt_control.attr,
-	&dev_attr_reset.attr,
-	NULL
-};
-
-static __deprecated const struct attribute_group attr_group = {
-	.attrs	= reset_attrs,
-};
-
-static __deprecated int wdt_utils_probe(struct platform_device *pdev)
-{
-	struct wdt_utils *wdt;
-	int ret;
-
-	wdt = devm_kzalloc(&pdev->dev, sizeof(struct wdt_utils),GFP_KERNEL);
-	if(!wdt)
-		return -ENOMEM;
-	wdt->wdt = m_wdt;
-	wdt->count = 0;
-	wdt->stop = 1;
-	wdt->msecs = heartbeat * 1000;
-	dev_set_drvdata(&pdev->dev, wdt);
-	ret = sysfs_create_group(&pdev->dev.kobj, &attr_group);
-	if (ret)
-		printk("watchdog utils regist failed\n");
-	return ret;
-}
-
-static __deprecated void wdt_utils_shutdown(struct platform_device *pdev)
-{
-	struct wdt_utils *wdt_utils = dev_get_drvdata(&pdev->dev);
-	ingenic_wdt_stop(wdt_utils->wdt);
-}
-
-static __deprecated int wdt_utils_suspend(struct platform_device *pdev, pm_message_t state)
-{
-	struct wdt_utils *wdt = dev_get_drvdata(&pdev->dev);
-	if (wdt->stop)
-		return 0;
-	kthread_stop(wdt->task);
-	return 0;
-}
-
-
-static __deprecated int wdt_utils_resume(struct platform_device *pdev)
-{
-	struct wdt_utils *wdt = dev_get_drvdata(&pdev->dev);
-	if(wdt->stop)
-		return 0;
-	wdt->task = kthread_run(reset_task, wdt, "reset_task%d",wdt->count++);
-	return 0;
-}
-
-static __deprecated struct platform_device wdt_utils_pdev = {
-	.name		= "wdt_utils",
-};
-
-static __deprecated struct platform_driver wdt_utils_pdrv = {
-	.probe		= wdt_utils_probe,
-	.shutdown	= wdt_utils_shutdown,
-	.suspend	= wdt_utils_suspend,
-	.resume		= wdt_utils_resume,
-	.driver		= {
-		.name	= "wdt_utils",
-		.owner	= THIS_MODULE,
-	},
-};
-
-static __deprecated int __init init_reset(void)
-{
-	platform_driver_register(&wdt_utils_pdrv);
-	platform_device_register(&wdt_utils_pdev);
-	return 0;
-}
-device_initcall_sync(init_reset);
 MODULE_AUTHOR("bo.liu <bo.liu@ingenic.com>");
 MODULE_DESCRIPTION("ingenic Watchdog Driver");
 MODULE_LICENSE("GPL");
