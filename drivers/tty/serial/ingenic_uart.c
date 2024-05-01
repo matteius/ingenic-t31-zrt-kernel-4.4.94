@@ -51,6 +51,8 @@
 
 #include "ingenic_uart.h"
 
+#define ASYNC_CTS_FLOW		(1U << ASYNCB_CTS_FLOW) // still used here
+
 #define PORT_NR 10
 #define DMA_BUFFER 1024
 #define COUNT_DMA_BUFFER 2048
