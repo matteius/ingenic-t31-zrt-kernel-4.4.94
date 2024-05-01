@@ -1667,6 +1667,8 @@ config SERIAL_MVEBU_CONSOLE
 config SERIAL_INGENIC_UART
 	tristate "ingenic serial port support"
 	select SERIAL_CORE
+	select SERIAL_CORE_CONSOLE
+	select SERIAL_EARLYCON
 	help
 	  If you have a machine based on a xbrust mips soc you can
 	  enable its onboard serial port by enabling this option.
