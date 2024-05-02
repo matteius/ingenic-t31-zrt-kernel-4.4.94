@@ -95,7 +95,7 @@
 	};
 
 	uart0: serial@0x10030000 {
-		compatible = "ingenic,8250-uart";
+		compatible = "ingenic,jz4740-uart";
 		reg = <0x10030000 0x1000>;
 		reg-shift = <2>;
 		interrupt-parent = <&core_intc>;
@@ -105,7 +105,7 @@
 		status = "disabled";
 	};
 	uart1: serial@0x10031000 {
-		compatible = "ingenic,8250-uart";
+		compatible = "ingenic,jz4740-uart";
 		reg = <0x10031000 0x1000>;
 		reg-shift = <2>;
 		interrupt-parent = <&core_intc>;
@@ -115,7 +115,7 @@
 		status = "disabled";
 	};
 	uart2: serial@0x10032000 {
-		compatible = "ingenic,8250-uart";
+		compatible = "ingenic,jz4740-uart";
 		reg = <0x10032000 0x1000>;
 		reg-shift = <2>;
 		interrupt-parent = <&core_intc>;
