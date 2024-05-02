@@ -29,82 +29,82 @@
 
 #include "8250.h"
 
-/*** Super early printk code ***/
-
-#include <linux/serial_reg.h>
-
-#define	UART0_IOBASE	0x10030000
-#define	UART1_IOBASE	0x10031000
-#define	UART2_IOBASE	0x10032000
-#define UART_OFF	(0x1000)
-
-#define OFF_TDR		(0x00)
-#define OFF_LCR		(0x0C)
-#define OFF_LSR		(0x14)
-
-#define LSR_TDRQ	(1 << 5)
-#define LSR_TEMT	(1 << 6)
-
-static void check_uart(char c);
-
-static volatile u8 *uart_base;
-typedef void (*putchar_f_t)(char);
-
-static putchar_f_t putchar_f = check_uart;
-
-static void putchar(char ch)
-{
-    int timeout = 10000;
-    volatile u8 *base = (u8 *)uart_base;
-    /* Wait for fifo to shift out some bytes */
-    while ((base[OFF_LSR] & (LSR_TDRQ | LSR_TEMT))
-           != (LSR_TDRQ | LSR_TEMT) && timeout--)
-        ;
-    base[OFF_TDR] = (u8)ch;
-}
-
-static void putchar_dummy(char ch)
-{
-    return;
-}
-
-static void check_uart(char c)
-{
-    /* We Couldn't use ioremap() here */
-    volatile u8 *base = (volatile u8*)CKSEG1ADDR(UART0_IOBASE);
-    int i = 0;
-    for(i=0; i<10; i++) {
-        if(base[OFF_LCR])
-            break;
-        base += UART_OFF;
-    }
-
-    if(i<10) {
-        uart_base = base;
-        putchar_f = putchar;
-        putchar_f(c);
-    } else {
-        putchar_f = putchar_dummy;
-    }
-}
-
-void very_early_printk(char *str)
-{
-    int i;
-    for(i=0; str[i] != 0; i++)
-    {
-        putchar_f(str[i]);
-    }
-}
-
-void super_early_printk(char *str)
-{
-    very_early_printk("** early-debug-info: ");
-    very_early_printk(str);
-    very_early_printk("\r");
-}
-
-/*** Super early printk code end ***/
+///*** Super early printk code ***/
+//
+//#include <linux/serial_reg.h>
+//
+//#define	UART0_IOBASE	0x10030000
+//#define	UART1_IOBASE	0x10031000
+//#define	UART2_IOBASE	0x10032000
+//#define UART_OFF	(0x1000)
+//
+//#define OFF_TDR		(0x00)
+//#define OFF_LCR		(0x0C)
+//#define OFF_LSR		(0x14)
+//
+//#define LSR_TDRQ	(1 << 5)
+//#define LSR_TEMT	(1 << 6)
+//
+//static void check_uart(char c);
+//
+//static volatile u8 *uart_base;
+//typedef void (*putchar_f_t)(char);
+//
+//static putchar_f_t putchar_f = check_uart;
+//
+//static void putchar(char ch)
+//{
+//    int timeout = 10000;
+//    volatile u8 *base = (u8 *)uart_base;
+//    /* Wait for fifo to shift out some bytes */
+//    while ((base[OFF_LSR] & (LSR_TDRQ | LSR_TEMT))
+//           != (LSR_TDRQ | LSR_TEMT) && timeout--)
+//        ;
+//    base[OFF_TDR] = (u8)ch;
+//}
+//
+//static void putchar_dummy(char ch)
+//{
+//    return;
+//}
+//
+//static void check_uart(char c)
+//{
+//    /* We Couldn't use ioremap() here */
+//    volatile u8 *base = (volatile u8*)CKSEG1ADDR(UART0_IOBASE);
+//    int i = 0;
+//    for(i=0; i<10; i++) {
+//        if(base[OFF_LCR])
+//            break;
+//        base += UART_OFF;
+//    }
+//
+//    if(i<10) {
+//        uart_base = base;
+//        putchar_f = putchar;
+//        putchar_f(c);
+//    } else {
+//        putchar_f = putchar_dummy;
+//    }
+//}
+//
+//void very_early_printk(char *str)
+//{
+//    int i;
+//    for(i=0; str[i] != 0; i++)
+//    {
+//        putchar_f(str[i]);
+//    }
+//}
+//
+//void super_early_printk(char *str)
+//{
+//    very_early_printk("** early-debug-info: ");
+//    very_early_printk(str);
+//    very_early_printk("\r");
+//}
+//
+///*** Super early printk code end ***/
 
 /** ingenic_uart_config: SOC specific config data. */
 struct ingenic_uart_config {
@@ -276,7 +276,7 @@ static unsigned int ingenic_uart_serial_in(struct uart_port *p, int offset)
 
 static int ingenic_uart_probe(struct platform_device *pdev)
 {
-    super_early_printk("ingenic_uart_probe\n");
+    // super_early_printk("ingenic_uart_probe\n");
 
     struct uart_8250_port uart = {};
 	struct resource *regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
