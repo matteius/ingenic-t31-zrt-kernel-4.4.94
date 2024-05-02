@@ -214,14 +214,14 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 
 	match = of_match_device(of_match, &pdev->dev);
 	if (!match) {
-        super_early_printk("Error: No device match found\n")
+        super_early_printk("Error: No device match found\n");
 		dev_err(&pdev->dev, "Error: No device match found\n");
 		return -ENODEV;
 	}
 	cdata = match->data;
 
 	if (!regs || !irq) {
-        super_early_printk("Error: No registers/irq defined\n")
+        super_early_printk("Error: No registers/irq defined\n");
 		dev_err(&pdev->dev, "no registers/irq defined\n");
 		return -EINVAL;
 	}
@@ -255,7 +255,7 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 	if (!uart.port.membase)
 		return -ENOMEM;
 
-    super_early_printk("ingenic_uart_probe: uart.port.membase = %p\n", uart.port.membase);
+    super_early_printk("ingenic_uart_probe: uart.port.membase\n");
 
 	data->clk_module = devm_clk_get(&pdev->dev, "module");
 	if (IS_ERR(data->clk_module)) {
@@ -266,7 +266,7 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 		return err;
 	}
 
-    super_early_printk("ingenic_uart_probe: data->clk_module = %p\n", data->clk_module);
+    super_early_printk("ingenic_uart_probe: data->clk_module\n");
 
 	data->clk_baud = devm_clk_get(&pdev->dev, "baud");
 	if (IS_ERR(data->clk_baud)) {
@@ -277,7 +277,7 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 		return err;
 	}
 
-    super_early_printk("ingenic_uart_probe: data->clk_baud = %p\n", data->clk_baud);
+    super_early_printk("ingenic_uart_probe: data->clk_baud \n");
 
 	err = clk_prepare_enable(data->clk_module);
 	if (err) {
@@ -285,7 +285,7 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 		goto out;
 	}
 
-    super_early_printk("ingenic_uart_probe: clk_prepare_enable(data->clk_module) = %d\n", err);
+    super_early_printk("ingenic_uart_probe: clk_prepare_enable(data->clk_module)\n");
 
 	err = clk_prepare_enable(data->clk_baud);
 	if (err) {
@@ -294,7 +294,7 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 	}
 	uart.port.uartclk = clk_get_rate(data->clk_baud);
 
-    super_early_printk("ingenic_uart_probe: clk_prepare_enable(data->clk_baud) = %d\n", err);
+    super_early_printk("ingenic_uart_probe: clk_prepare_enable(data->clk_baud)\n");
 
 	data->line = serial8250_register_8250_port(&uart);
 	if (data->line < 0) {
