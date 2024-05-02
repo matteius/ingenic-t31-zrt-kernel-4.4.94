@@ -1202,20 +1202,13 @@ int __init serial_ingenic_init(void)
 	return ret;
 }
 
-void __exit serial_ingenic_exit(void)
-{
-	platform_driver_unregister(&serial_ingenic_driver);
-	uart_unregister_driver(&serial_ingenic_reg);
+void __exit serial_ingenic_exit(void) {
+    platform_driver_unregister(&serial_ingenic_driver);
+    uart_unregister_driver(&serial_ingenic_reg);
 }
 
-#ifdef CONFIG_EARLY_INIT_RUN
-rootfs_initcall(serial_ingenic_init);
 
-#else
 module_init(serial_ingenic_init);
-
-#endif
-
 module_exit(serial_ingenic_exit);
 
 MODULE_DESCRIPTION("Ingenic Compatible UART driver");
