@@ -10,6 +10,7 @@
 #include <soc/cpm.h>
 #include <soc/base.h>
 #include <dt-bindings/clock/ingenic-t31.h>
+#include <linux/early_printk.h>
 
 #include <jz_proc.h>
 #include "clk.h"
@@ -259,21 +260,24 @@ static void __init t31_clk_init(struct device_node *np)
 
     struct ingenic_clk_provider *ctx;
 
-
+    super_early_printk("Calling kzalloc\n");
 	printk("Calling kzalloc");
     ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 	printk("kzalloc returned");
     if (!ctx) {
+        super_early_printk("Failed to allocate memory for CGU\n");
         printk("%s: failed to allocate memory for CGU\n", __func__);
-        goto err_out;
+        return;
     }
 
-
+    super_early_printk("t31_clk_init:\n");
     printk("t31_clk_init: ctx = %p\n", ctx);
     ctx->reg_base = of_iomap(np, 0);
     if (!ctx->reg_base) {
+        super_early_printk("Failed to map CGU registers\n");
         printk("%s: failed to map CGU registers\n", __func__);
-        goto err_out_free;
+        kfree(ctx);
+        return;
     }
 
     ctx->np = np;
@@ -320,6 +324,7 @@ static void __init t31_clk_init(struct device_node *np)
 
 
     //ingenic_clk_of_dump(ctx);
+    super_early_printk("t31_clk_init: done\n");
 
 
     pr_info("=========== t31 clocks: =============\n"
@@ -332,11 +337,6 @@ static void __init t31_clk_init(struct device_node *np)
             _get_rate("div_ahb0"), _get_rate("div_ahb2"),
             _get_rate("div_apb"), _get_rate("ext"), _get_rate("div_ddr"));
 
-    return;
-
-    err_out_free:
-    kfree(ctx);
-    err_out:
     return;
 }
 

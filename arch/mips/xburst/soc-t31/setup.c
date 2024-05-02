@@ -21,6 +21,7 @@
 #include <linux/clocksource.h>
 #include <linux/irqchip.h>
 #include <linux/clocksource.h>
+#include <linux/early_printk.h>
 
 #include <asm/prom.h>
 #include <soc/base.h>
@@ -37,6 +38,7 @@ int __init setup_init(void)
 	*(volatile unsigned int *)0xb34f0240 = 0x00010003;
 	*(volatile unsigned int *)0xb34f0244 = 0x00010003;
 #endif
+    super_early_printk("=== setup_init ===\n");
 
 	return 0;
 }
@@ -48,6 +50,7 @@ void __init plat_mem_setup(void)
 	/* use IO_BASE, so that we can use phy addr on hard manual
 	 * directly with in(bwlq)/out(bwlq) in io.h.
 	 */
+    super_early_printk("=== plat_mem_setup ===\n");
 	set_io_port_base(IO_BASE);
 	ioport_resource.start	= 0x00000000;
 	ioport_resource.end	= 0xffffffff;
@@ -55,17 +58,20 @@ void __init plat_mem_setup(void)
 	iomem_resource.end	= 0xffffffff;
 	setup_init();
 
+    super_early_printk("=== init_all_clk ===\n");
 	__dt_setup_arch(get_fdt_addr());
 
 	return;
 }
 void __init device_tree_init(void)
 {
+    super_early_printk("=== device_tree_init ===\n");
 	unflatten_and_copy_device_tree();
 }
 
 static int __init plat_of_populate(void)
 {
+    super_early_printk("=== plat_of_populate ===\n");
 	of_platform_default_populate(NULL, NULL, NULL);
 	return 0;
 }
@@ -81,6 +87,7 @@ void __init plat_time_init(void)
 
 void __init arch_init_irq(void)
 {
+    super_early_printk("=== arch_init_irq ===\n");
 	irqchip_init();
 }
 
@@ -94,6 +101,7 @@ static int __init ispmem_parse(char *str)
 {
 	char *retptr;
 
+    super_early_printk("=== ispmem_parse ===\n");
 	ispmem_size = memparse(str, &retptr);
 	if(ispmem_size < 0) {
 		ispmem_size = 0;
@@ -103,6 +111,7 @@ static int __init ispmem_parse(char *str)
 		ispmem_base = memparse(retptr + 1, NULL);
 
 	if(ispmem_base < 0) {
+        super_early_printk("## no ispmem! ##\n");
 		printk("## no ispmem! ##\n");
 	}
 	return 1;
