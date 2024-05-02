@@ -512,18 +512,30 @@ asmlinkage __visible void __init start_kernel(void)
 	 * enable them.
 	 */
 	boot_cpu_init();
+    super_early_printk("Boot CPU initialized\n");
 	page_address_init();
+    super_early_printk("Page address initialized\n");
 	pr_notice("%s", linux_banner);
+    super_early_printk("Printed banner\n");
 	setup_arch(&command_line);
+    super_early_printk("Arch setup\n");
 	mm_init_cpumask(&init_mm);
+    super_early_printk("MM init\n");
 	setup_command_line(command_line);
+    super_early_printk("Command line setup\n");
 	setup_nr_cpu_ids();
+    super_early_printk("CPU IDs setup\n");
 	setup_per_cpu_areas();
+    super_early_printk("Per-CPU areas setup\n");
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
+    super_early_printk("SMP boot CPU prepared\n");
 	boot_cpu_hotplug_init();
+    super_early_printk("Boot CPU hotplug init\n");
 
 	build_all_zonelists(NULL, NULL, false);
+    super_early_printk("Built all zonelists\n");
 	page_alloc_init();
+    super_early_printk("Page allocation init\n");
 
 	pr_notice("Kernel command line: %s\n", boot_command_line);
 	/* parameters may set static keys */
@@ -534,6 +546,7 @@ asmlinkage __visible void __init start_kernel(void)
 				  __stop___param - __start___param,
 				  -1, -1, NULL, &unknown_bootoption);
 	if (!IS_ERR_OR_NULL(after_dashes))
+        super_early_printk("Parsed kernel boot options\n");
 		parse_args("Setting init args", after_dashes, NULL, 0, -1, -1,
 			   NULL, set_init_arg);
 
@@ -542,11 +555,17 @@ asmlinkage __visible void __init start_kernel(void)
 	 * kmem_cache_init()
 	 */
 	setup_log_buf(0);
+    super_early_printk("Setup log buffer\n");
 	pidhash_init();
+    super_early_printk("PID hash init\n");
 	vfs_caches_init_early();
+    super_early_printk("VFS caches init early\n");
 	sort_main_extable();
+    super_early_printk("Sorted main exception table\n");
 	trap_init();
+    super_early_printk("Trap init\n");
 	mm_init();
+    super_early_printk("MM init\n");
 
 	/*
 	 * Set up the scheduler prior starting any interrupts (such as the
@@ -554,6 +573,7 @@ asmlinkage __visible void __init start_kernel(void)
 	 * time - but meanwhile we still have a functioning scheduler.
 	 */
 	sched_init();
+    super_early_printk("Scheduler init\n");
 	/*
 	 * Disable preemption - early bootup scheduling is extremely
 	 * fragile until we cpu_idle() for the first time.
@@ -563,6 +583,7 @@ asmlinkage __visible void __init start_kernel(void)
 		 "Interrupts were enabled *very* early, fixing it\n"))
 		local_irq_disable();
 	idr_init_cache();
+    super_early_printk("IDR init cache\n");
 
 	/*
 	 * Allow workqueue creation and work item queueing/cancelling
@@ -570,11 +591,14 @@ asmlinkage __visible void __init start_kernel(void)
 	 * workqueue_init().
 	 */
 	workqueue_init_early();
+    super_early_printk("Workqueue init early\n");
 
 	rcu_init();
+    super_early_printk("RCU init\n");
 
 	/* trace_printk() and trace points may be used after this */
 	trace_init();
+    super_early_printk("Trace init\n");
 
 	context_tracking_init();
 	radix_tree_init();
@@ -588,6 +612,7 @@ asmlinkage __visible void __init start_kernel(void)
 	softirq_init();
 	timekeeping_init();
 	time_init();
+    super_early_printk("Time init\n");
 
 	/*
 	 * For best initial stack canary entropy, prepare it after:
