@@ -1,34 +1,33 @@
 config COMMON_CLK_INGENIC
-	bool
-	depends on MACH_XBURST || MACH_XBURST2
-	select MFD_SYSCON
-	select COMMON_CLK
-	select INGENIC_CLK_DEBUG_FS
+    bool "Common clock for Ingenic processors"
+    depends on MACH_XBURST || MACH_XBURST2
+    select MFD_SYSCON
+    select COMMON_CLK
+    select INGENIC_CLK_DEBUG_FS
+    help
+      This enables common clock framework support for Ingenic processors.
 
 config INGENIC_CLK_DEBUG_FS
-	bool
-	depends on DEBUG_FS
-	help
-	  enable ingenic common clock debugfs
-
+    bool "Enable Ingenic common clock debugfs"
+    depends on DEBUG_FS
+    help
+      Enable debugfs for Ingenic common clocks.
 
 config CLK_X2000_V12
-	bool
-	depends on SOC_X2000_V12
-	select COMMON_CLK_INGENIC
-	help
-	  build the ingenic x2000-v12 soc clock driver.
+    bool "Clock for Ingenic X2000 v12 SoC"
+    depends on SOC_X2000_V12 && COMMON_CLK_INGENIC
+    help
+      Build the clock driver for the Ingenic X2000-v12 SoC.
 
 config CLK_T40
-	bool
-	depends on SOC_T40
-	select COMMON_CLK_INGENIC
-	help
-	  build the ingenic t40 soc clock driver.
+    bool "Clock for Ingenic T40 SoC"
+    depends on SOC_T40 && COMMON_CLK_INGENIC
+    help
+      Build the clock driver for the Ingenic T40 SoC.
 
 config CLK_T31
-	bool
-	depends on SOC_T31
-	select COMMON_CLK_INGENIC
-	help
-	  build the ingenic t31 soc clock driver.
+    bool "Clock for Ingenic T31 SoC"
+    depends on SOC_T31 && COMMON_CLK_INGENIC
+    help
+      Build the clock driver for the Ingenic T31 SoC.
+
