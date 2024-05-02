@@ -112,7 +112,7 @@
 		interrupts = <IRQ_UART1>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart1_pb>;
-		status = "disabled";
+		status = "okay";
 	};
 	uart2: serial@0x10032000 {
 		compatible = "ingenic,x1000-uart";

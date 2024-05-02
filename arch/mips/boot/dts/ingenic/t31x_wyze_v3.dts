@@ -11,7 +11,7 @@
 };
 
 &uart0 {
-	status = "okay";
+	status = "disabled";
 };
 
 &uart1 {
@@ -21,7 +21,7 @@
 };
 
 &uart2 {
-	status = "okay";
+	status = "disabled";
 };
 
 &i2c0 {
