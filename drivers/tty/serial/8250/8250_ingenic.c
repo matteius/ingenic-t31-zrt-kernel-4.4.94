@@ -297,35 +297,43 @@ out:
 
 static int ingenic_uart_remove(struct platform_device *pdev)
 {
-	struct ingenic_uart_data *data = platform_get_drvdata(pdev);
+    struct ingenic_uart_data *data = platform_get_drvdata(pdev);
 
-	serial8250_unregister_port(data->line);
-	clk_disable_unprepare(data->clk_module);
-	clk_disable_unprepare(data->clk_baud);
-	return 0;
+    serial8250_unregister_port(data->line);
+    clk_disable_unprepare(data->clk_module);
+    clk_disable_unprepare(data->clk_baud);
+    return 0;
 }
 
 static const struct ingenic_uart_config jz4740_uart_config = {
-	.tx_loadsz = 8,
-	.fifosize = 16,
+        .tx_loadsz = 8,
+        .fifosize = 16,
 };
 
 static const struct ingenic_uart_config jz4760_uart_config = {
-	.tx_loadsz = 16,
-	.fifosize = 32,
+        .tx_loadsz = 16,
+        .fifosize = 32,
 };
 
 static const struct ingenic_uart_config jz4780_uart_config = {
-	.tx_loadsz = 32,
-	.fifosize = 64,
+        .tx_loadsz = 32,
+        .fifosize = 64,
+};
+
+static const struct ingenic_uart_config x1000_uart_config = {
+        .tx_loadsz = 32,
+        .fifosize = 64,
 };
 
 static const struct of_device_id of_match[] = {
-	{ .compatible = "ingenic,jz4740-uart", .data = &jz4740_uart_config },
-	{ .compatible = "ingenic,jz4760-uart", .data = &jz4760_uart_config },
-	{ .compatible = "ingenic,jz4775-uart", .data = &jz4760_uart_config },
-	{ .compatible = "ingenic,jz4780-uart", .data = &jz4780_uart_config },
-	{ /* sentinel */ }
+        { .compatible = "ingenic,jz4740-uart", .data = &jz4740_uart_config },
+        { .compatible = "ingenic,jz4750-uart", .data = &jz4760_uart_config },
+        { .compatible = "ingenic,jz4760-uart", .data = &jz4760_uart_config },
+        { .compatible = "ingenic,jz4770-uart", .data = &jz4760_uart_config },
+        { .compatible = "ingenic,jz4775-uart", .data = &jz4760_uart_config },
+        { .compatible = "ingenic,jz4780-uart", .data = &jz4780_uart_config },
+        { .compatible = "ingenic,x1000-uart", .data = &x1000_uart_config },
+        { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, of_match);
 
