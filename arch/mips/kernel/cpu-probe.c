@@ -1913,20 +1913,20 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
         case PRID_IMP_XBURST_REV2:
             /* Ingenic uses the WA bit to achieve write-combine memory writes */
             c->writecombine = _CACHE_CACHABLE_WA;
-            c->cputype = CPU_XBURST;
+            c->cputype = CPU_JZRISC;
             __cpu_name[cpu] = "Ingenic XBurst";
             super_early_printk("###It's Ingenic XBurst");
             break;
 
             /* XBurst®2 with MXU2.1 SIMD ISA */
         case PRID_IMP_XBURST2:
-            c->cputype = CPU_XBURST;
+            c->cputype = CPU_JZRISC;
             __cpu_name[cpu] = "Ingenic XBurst II";
             super_early_printk("###It's Ingenic XBurst2");
             break;
 
         case PRID_IMP_XBURST2_REV2:
-            c->cputype = CPU_XBURST;
+            c->cputype = CPU_JZRISC;
             __cpu_name[cpu] = "Ingenic XBurst II Rev2 T41";
             super_early_printk("###It's Ingenic XBurst2 T41");
             break;
