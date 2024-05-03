@@ -212,7 +212,7 @@ exit_idle:
 static void cpu_idle_loop(void)
 {
 	int cpu = smp_processor_id();
-    super_early_printk("cpu_idle_loop\n")
+    super_early_printk("cpu_idle_loop\n");
 
 	while (1) {
 		/*
@@ -317,7 +317,7 @@ void cpu_startup_entry(enum cpuhp_state state)
 #endif
     super_early_printk("cpu_startup_entry 2\n");
 	arch_cpu_idle_prepare();
-    super_early_printk("arch_cpu_idle_prepare\n")
+    super_early_printk("arch_cpu_idle_prepare\n");
 	cpuhp_online_idle(state);
     super_early_printk("cpuhp_online_idle\n");
 	cpu_idle_loop();
