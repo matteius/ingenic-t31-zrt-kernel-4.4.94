@@ -1875,9 +1875,9 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 	}
 	case PRID_IMP_XBURST:
 	{
+        unsigned int config7;
         very_early_printk("Ingenic Xburst CPU%d\n");
-		unsigned int config7;
-		c->cputype = CPU_JZRISC;
+        c->cputype = CPU_JZRISC;
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
 		__cpu_name[cpu] = "Xburst";
 		/*
