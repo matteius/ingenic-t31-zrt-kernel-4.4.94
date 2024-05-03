@@ -32,6 +32,7 @@
 #include <linux/nfs_fs.h>
 #include <linux/nfs_fs_sb.h>
 #include <linux/nfs_mount.h>
+#include <linux/early_printk.h>
 
 #include "do_mounts.h"
 
@@ -611,12 +612,20 @@ static struct dentry *rootfs_mount(struct file_system_type *fs_type,
 	static unsigned long once;
 	void *fill = ramfs_fill_super;
 
-	if (test_and_set_bit(0, &once))
-		return ERR_PTR(-ENODEV);
+    super_early_printk("rootfs_mount\n");
 
-	if (IS_ENABLED(CONFIG_TMPFS) && is_tmpfs)
-		fill = shmem_fill_super;
+	if (test_and_set_bit(0, &once)) {
+        super_early_printk("rootfs_mount: test_and_set_bit\n");
+        return ERR_PTR(-ENODEV);
+    }
 
+    super_early_printk("rootfs_mount: is_tmpfs\n");
+	if (IS_ENABLED(CONFIG_TMPFS) && is_tmpfs) {
+        super_early_printk("rootfs_mount: tmpfs\n");
+        fill = shmem_fill_super;
+    }
+
+    super_early_printk("rootfs_mount: mount_nodev\n");
 	return mount_nodev(fs_type, flags, data, fill);
 }
 
