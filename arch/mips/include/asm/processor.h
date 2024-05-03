@@ -170,8 +170,20 @@ struct mips3264_watch_reg_state {
 union mips_watch_reg_state {
 	struct mips3264_watch_reg_state mips3264;
 };
+#if defined(CONFIG_XBURST_MXUV2)
+typedef union {
+	u64 val64[2];
+} vpr_t;
 
-#if defined(CONFIG_CPU_CAVIUM_OCTEON)
+struct xburst_cop2_state {
+	u32 mxu_csr;
+	vpr_t vr[32];
+};
+
+#define COP2_INIT						\
+	.cp2			= {0,},
+
+#elif defined(CONFIG_CPU_CAVIUM_OCTEON)
 
 struct octeon_cop2_state {
 	/* DMFC2 rt, 0x0201 */
