@@ -39,6 +39,7 @@
 #include <asm/setup.h>
 #include <asm/smp-ops.h>
 #include <asm/prom.h>
+#include <linux/early_printk.h>
 
 #ifdef CONFIG_MIPS_ELF_APPENDED_DTB
 const char __section(.appended_dtb) __appended_dtb[0x100000];
@@ -945,33 +946,49 @@ static inline void prefill_possible_map(void) {}
 
 void __init setup_arch(char **cmdline_p)
 {
+    super_early_printk("=== mips kernel setup_arch ===\n");
 	cpu_probe();
+    super_early_printk("=== mips kernel cpu_probe finished ===\n");
 	mips_cm_probe();
+    super_early_printk("=== mips kernel mips_cm_probe finished ===\n");
 	prom_init();
+    super_early_printk("=== mips kernel prom_init finished ===\n");
 
 	setup_early_fdc_console();
+    super_early_printk("=== mips kernel setup_early_fdc_console finished ===\n");
 #ifdef CONFIG_EARLY_PRINTK
 	setup_early_printk();
+    super_early_printk("=== mips kernel setup_early_printk finished ===\n");
 #endif
 	cpu_report();
+    super_early_printk("=== mips kernel cpu_report finished ===\n");
 	check_bugs_early();
+    super_early_printk("=== mips kernel check_bugs_early finished ===\n");
 
 #if defined(CONFIG_VT)
 #if defined(CONFIG_VGA_CONSOLE)
 	conswitchp = &vga_con;
+    super_early_printk("=== mips kernel conswitchp = &vga_con ===\n");
 #elif defined(CONFIG_DUMMY_CONSOLE)
 	conswitchp = &dummy_con;
+    super_early_printk("=== mips kernel conswitchp = &dummy_con ===\n");
 #endif
 #endif
 
 	arch_mem_init(cmdline_p);
+    super_early_printk("=== mips kernel arch_mem_init finished ===\n");
 
 	resource_init();
+    super_early_printk("=== mips kernel resource_init finished ===\n");
 	plat_smp_setup();
+    super_early_printk("=== mips kernel plat_smp_setup finished ===\n");
 	prefill_possible_map();
+    super_early_printk("=== mips kernel prefill_possible_map finished ===\n");
 
 	cpu_cache_init();
+    super_early_printk("=== mips kernel cpu_cache_init finished ===\n");
 	paging_init();
+    super_early_printk("=== mips kernel paging_init finished ===\n");
 }
 
 unsigned long kernelsp[NR_CPUS];
