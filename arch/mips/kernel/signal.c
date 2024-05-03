@@ -39,6 +39,7 @@
 #include <asm/dsp.h>
 #include <asm/inst.h>
 #include <asm/msa.h>
+#include <mxu.h>
 
 #include "signal-common.h"
 
