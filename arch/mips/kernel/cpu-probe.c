@@ -2014,7 +2014,6 @@ void cpu_probe(void)
 	c->fpu_msk31	= FPU_CSR_RSVD | FPU_CSR_ABS2008 | FPU_CSR_NAN2008;
 
 	c->processor_id = read_c0_prid();
-    very_early_printk((char *) c->processor_id & PRID_COMP_MASK);
 	switch (c->processor_id & PRID_COMP_MASK) {
 	case PRID_COMP_LEGACY:
         very_early_printk("PRID_COMP_LEGACY\n");
@@ -2049,7 +2048,7 @@ void cpu_probe(void)
 	case PRID_COMP_INGENIC_D1:
 	case PRID_COMP_INGENIC_E1:
 	case PRID_COMP_INGENIC_13:
-        very_early_printk("PRID_COMP_INGENIC\n")
+        very_early_printk("PRID_COMP_INGENIC\n");
 		cpu_probe_ingenic(c, cpu);
 		break;
 	case PRID_COMP_NETLOGIC:
@@ -2057,7 +2056,7 @@ void cpu_probe(void)
 		break;
 	}
 
-    very_early_printk("BUG ON CONDITION?")
+    very_early_printk("BUG ON CONDITION?");
 	BUG_ON(!__cpu_name[cpu]);
 	BUG_ON(c->cputype == CPU_UNKNOWN);
 
