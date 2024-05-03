@@ -547,16 +547,18 @@ asmlinkage __visible void __init start_kernel(void)
 				  static_command_line, __start___param,
 				  __stop___param - __start___param,
 				  -1, -1, NULL, &unknown_bootoption);
+    super_early_printk("Parsed boot options\n");
 	if (!IS_ERR_OR_NULL(after_dashes))
         super_early_printk("Parsed kernel boot options\n");
 		parse_args("Setting init args", after_dashes, NULL, 0, -1, -1,
 			   NULL, set_init_arg);
 
+    super_early_printk("Parsed init args\n");
 	/*
 	 * These use large bootmem allocations and must precede
 	 * kmem_cache_init()
 	 */
-	// setup_log_buf(0);
+	setup_log_buf(0);
     super_early_printk("Setup log buffer\n");
 	pidhash_init();
     super_early_printk("PID hash init\n");

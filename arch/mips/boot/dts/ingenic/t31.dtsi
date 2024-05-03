@@ -21,11 +21,6 @@
 		spi0 = &spi0;
 	};
 
-	memory {
-		device_type = "memory";
-		reg = <0x00000000 0x08000000>; // 128 MB of memory starting at address 0x00000000
-	};
-
 	cpus: cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
