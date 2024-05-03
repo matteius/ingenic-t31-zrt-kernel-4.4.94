@@ -17,6 +17,7 @@
 #include <linux/smp.h>
 #include <linux/stddef.h>
 #include <linux/export.h>
+#include <linux/kallsyms.h>
 
 #include <asm/bugs.h>
 #include <asm/cpu.h>
