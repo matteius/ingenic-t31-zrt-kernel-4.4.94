@@ -13,6 +13,7 @@
 #include <asm/tlb.h>
 
 #include <trace/events/power.h>
+#include <linux/early_printk.h>
 
 #include "sched.h"
 
@@ -101,6 +102,12 @@ void __cpuidle default_idle_call(void)
 static int call_cpuidle(struct cpuidle_driver *drv, struct cpuidle_device *dev,
 		      int next_state)
 {
+	/* Fall back to the default arch idle method on errors. */
+	if (next_state < 0) {
+		default_idle_call();
+		return next_state;
+	}
+
 	/*
 	 * The idle task must be scheduled, it is pointless to go to idle, just
 	 * update no idle residency and return.
@@ -205,6 +212,7 @@ exit_idle:
 static void cpu_idle_loop(void)
 {
 	int cpu = smp_processor_id();
+    super_early_printk("cpu_idle_loop\n")
 
 	while (1) {
 		/*
@@ -215,12 +223,14 @@ static void cpu_idle_loop(void)
 		 * the polling bit set, then setting need_resched is
 		 * guaranteed to cause the cpu to reschedule.
 		 */
+        super_early_printk("cpu_idle_loop while 1\n");
 
 		__current_set_polling();
 		quiet_vmstat();
 		tick_nohz_idle_enter();
 
 		while (!need_resched()) {
+            super_early_printk("cpu_idle_loop while\n");
 			check_pgt_cache();
 			rmb();
 
@@ -257,9 +267,13 @@ static void cpu_idle_loop(void)
 		 * This is required because for polling idle loops we will
 		 * not have had an IPI to fold the state for us.
 		 */
+        super_early_printk("out of inner while loop\n");
 		preempt_set_need_resched();
+        super_early_printk("preempt_set_need_resched\n");
 		tick_nohz_idle_exit();
+        super_early_printk("tick_nohz_idle_exit\n");
 		__current_clr_polling();
+        super_early_printk("__current_clr_polling\n");
 
 		/*
 		 * We promise to call sched_ttwu_pending and reschedule
@@ -268,9 +282,12 @@ static void cpu_idle_loop(void)
 		 * before doing these things.
 		 */
 		smp_mb__after_atomic();
+        super_early_printk("smp_mb__after_atomic\n");
 
 		sched_ttwu_pending();
+        super_early_printk("sched_ttwu_pending\n");
 		schedule_preempt_disabled();
+        super_early_printk("schedule_preempt_disabled\n");
 	}
 }
 
@@ -287,6 +304,7 @@ void cpu_startup_entry(enum cpuhp_state state)
 	 * make this generic (arm and sh have never invoked the canary
 	 * init for the non boot cpus!). Will be fixed in 3.11
 	 */
+    super_early_printk("cpu_startup_entry\n");
 #ifdef CONFIG_X86
 	/*
 	 * If we're the non-boot CPU, nothing set the stack canary up
@@ -297,7 +315,11 @@ void cpu_startup_entry(enum cpuhp_state state)
 	 */
 	boot_init_stack_canary();
 #endif
+    super_early_printk("cpu_startup_entry 2\n");
 	arch_cpu_idle_prepare();
+    super_early_printk("arch_cpu_idle_prepare\n")
 	cpuhp_online_idle(state);
+    super_early_printk("cpuhp_online_idle\n");
 	cpu_idle_loop();
+    super_early_printk("cpu_idle_loop\n");
 }
