@@ -386,28 +386,41 @@ static noinline void __ref rest_init(void)
 {
 	int pid;
 
+    super_early_printk("Rest init\n");
 	rcu_scheduler_starting();
+    super_early_printk("RCU scheduler starting\n");
 	/*
 	 * We need to spawn init first so that it obtains pid 1, however
 	 * the init task will end up wanting to create kthreads, which, if
 	 * we schedule it before we create kthreadd, will OOPS.
 	 */
 	kernel_thread(kernel_init, NULL, CLONE_FS);
+    super_early_printk("Kernel init\n");
 	numa_default_policy();
+    super_early_printk("NUMA default policy\n");
 	pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);
+    super_early_printk("Kernel thread\n");
 	rcu_read_lock();
+    super_early_printk("RCU read lock\n");
 	kthreadd_task = find_task_by_pid_ns(pid, &init_pid_ns);
+    super_early_printk("Kthreadd task\n");
 	rcu_read_unlock();
+    super_early_printk("RCU read unlock\n");
 	complete(&kthreadd_done);
+    super_early_printk("Kthreadd done\n");
 
 	/*
 	 * The boot idle thread must execute schedule()
 	 * at least once to get things moving:
 	 */
+    super_early_printk("Boot idle thread\n");
 	init_idle_bootup_task(current);
+    super_early_printk("Init idle bootup task\n");
 	schedule_preempt_disabled();
+    super_early_printk("Schedule preempt disabled\n");
 	/* Call into cpu_idle with preempt disabled */
 	cpu_startup_entry(CPUHP_ONLINE);
+    super_early_printk("CPU startup entry\n");
 }
 
 /* Check for early params. */
