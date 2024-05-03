@@ -1841,67 +1841,100 @@ extern int soc_support_mxuv2(void);
 #endif
 static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 {
-	unsigned int config1;
+    decode_configs(c);
 
-	decode_configs(c);
     /*
      * XBurst misses a config2 register, so config3 decode was skipped in
      * decode_configs().
      */
     decode_config3(c);
 
-	/* JZRISC does not implement the CP0 counter. */
-	/* INGENIC RISC does not implement the CP0 counter. */
-	c->options &= ~MIPS_CPU_COUNTER;
-	BUG_ON(!__builtin_constant_p(cpu_has_counter) || cpu_has_counter);
+    super_early_printk("###Decoded cpu id");
+
+
+    /* XBurst does not implement the CP0 counter. */
+    c->options &= ~MIPS_CPU_COUNTER;
+    BUG_ON(__builtin_constant_p(cpu_has_counter) && cpu_has_counter);
 
     /* XBurst has virtually tagged icache */
     c->icache.flags |= MIPS_CACHE_VTAG;
 
-	switch (c->processor_id & PRID_IMP_MASK) {
-	case PRID_IMP_JZRISC:
-	{
-        very_early_printk("Ingenic JZRISC CPU%d\n");
-		c->cputype = CPU_JZRISC;
-		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
-		__cpu_name[cpu] = "Ingenic JZRISC";
-		break;
-	}
-	case PRID_IMP_XBURST:
-	{
-        unsigned int config7;
-        very_early_printk("Ingenic Xburst CPU%d\n");
-        c->cputype = CPU_JZRISC;
-		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
-		__cpu_name[cpu] = "Xburst";
-		/*
-		 * When CPU enters the long cycle, it will reduce the CPU speed to save power.
-		 * Set cp0 config7 bit 4 to disable this feature
-		 * This feature will cause bogoMips and loops_per_jiffy calculate in error
-		 */
-		config7 = read_c0_config7();
-		config7 |= (1 << 4);
-		write_c0_config7(config7);
+    switch (c->processor_id & PRID_IMP_MASK) {
 
-		config1 = read_c0_config1();
-#ifdef CONFIG_XBURST_MXUV2
-		if(soc_support_mxuv2()) {
-			c->ases |= MIPS_ASE_XBURSTMXUV2;
-		}
-#endif
-		//c->ases |= MIPS_ASE_XBURSTMXU;
-		break;
-	}
-	case PRID_IMP_XBURST2:
-	{
-		c->cputype = CPU_JZRISC;
-		__cpu_name[cpu] = "Ingenic XBurst@II";
-		break;
-	}
-	default:
-		panic("Unknown Ingenic Processor ID!");
-		break;
-	}
+        /* XBurst®1 with MXU1.0/MXU1.1 SIMD ISA */
+        case PRID_IMP_XBURST_REV1:
+
+            /*
+             * The XBurst core by default attempts to avoid branch target
+             * buffer lookups by detecting & special casing loops. This
+             * feature will cause BogoMIPS and lpj calculate in error.
+             * Set cp0 config7 bit 4 to disable this feature.
+             */
+            set_c0_config7(MIPS_CONF7_BTB_LOOP_EN);
+
+            switch (c->processor_id & PRID_COMP_MASK) {
+
+                /*
+                 * The config0 register in the XBurst CPUs with a processor ID of
+                 * PRID_COMP_INGENIC_D0 report themselves as MIPS32r2 compatible,
+                 * but they don't actually support this ISA.
+                 */
+                case PRID_COMP_INGENIC_D0:
+                    c->isa_level &= ~MIPS_CPU_ISA_M32R2;
+
+                    /* FPU is not properly detected on JZ4760(B). */
+                    if (c->processor_id == 0x2ed0024f)
+                        c->options |= MIPS_CPU_FPU;
+
+                    fallthrough;
+
+                    /*
+                     * The config0 register in the XBurst CPUs with a processor ID of
+                     * PRID_COMP_INGENIC_D0 or PRID_COMP_INGENIC_D1 has an abandoned
+                     * huge page tlb mode, this mode is not compatible with the MIPS
+                     * standard, it will cause tlbmiss and into an infinite loop
+                     * (line 21 in the tlb-funcs.S) when starting the init process.
+                     * After chip reset, the default is HPTLB mode, Write 0xa9000000
+                     * to cp0 register 5 sel 4 to switch back to VTLB mode to prevent
+                     * getting stuck.
+                     */
+                case PRID_COMP_INGENIC_D1:
+                    write_c0_page_ctrl(XBURST_PAGECTRL_HPTLB_DIS);
+                    break;
+
+                default:
+                    break;
+            }
+            fallthrough;
+
+            /* XBurst®1 with MXU2.0 SIMD ISA */
+        case PRID_IMP_XBURST_REV2:
+            /* Ingenic uses the WA bit to achieve write-combine memory writes */
+            c->writecombine = _CACHE_CACHABLE_WA;
+            c->cputype = CPU_XBURST;
+            __cpu_name[cpu] = "Ingenic XBurst";
+            super_early_printk("###It's Ingenic XBurst");
+            break;
+
+            /* XBurst®2 with MXU2.1 SIMD ISA */
+        case PRID_IMP_XBURST2:
+            c->cputype = CPU_XBURST;
+            __cpu_name[cpu] = "Ingenic XBurst II";
+            super_early_printk("###It's Ingenic XBurst2");
+            break;
+
+        case PRID_IMP_XBURST2_REV2:
+            c->cputype = CPU_XBURST;
+            __cpu_name[cpu] = "Ingenic XBurst II Rev2 T41";
+            super_early_printk("###It's Ingenic XBurst2 T41");
+            break;
+
+
+        default:
+            super_early_printk("###Unknown Ingenic Processor ID!");
+            panic("Unknown Ingenic Processor ID!");
+            break;
+    }
 }
 
 static inline void cpu_probe_netlogic(struct cpuinfo_mips *c, int cpu)
