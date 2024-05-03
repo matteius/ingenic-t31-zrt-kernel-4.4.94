@@ -31,6 +31,8 @@
 #include <asm/elf.h>
 #include <asm/pgtable-bits.h>
 #include <asm/spram.h>
+#include <asm/traps.h>
+#include <linux/uaccess.h>
 #include <asm/uaccess.h>
 #include <linux/early_printk.h>
 
