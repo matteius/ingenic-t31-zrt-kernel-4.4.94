@@ -32,6 +32,7 @@
 #include <asm/pgtable-bits.h>
 #include <asm/spram.h>
 #include <asm/uaccess.h>
+#include <linux/early_printk.h>
 
 /* Hardware capabilities */
 unsigned int elf_hwcap __read_mostly;
@@ -1866,6 +1867,7 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 	switch (c->processor_id & PRID_IMP_MASK) {
 	case PRID_IMP_JZRISC:
 	{
+        very_early_printk("Ingenic JZRISC CPU%d\n");
 		c->cputype = CPU_JZRISC;
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
 		__cpu_name[cpu] = "Ingenic JZRISC";
@@ -1873,6 +1875,7 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 	}
 	case PRID_IMP_XBURST:
 	{
+        very_early_printk("Ingenic Xburst CPU%d\n");
 		unsigned int config7;
 		c->cputype = CPU_JZRISC;
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
@@ -2011,11 +2014,14 @@ void cpu_probe(void)
 	c->fpu_msk31	= FPU_CSR_RSVD | FPU_CSR_ABS2008 | FPU_CSR_NAN2008;
 
 	c->processor_id = read_c0_prid();
+    very_early_printk((char *) c->processor_id & PRID_COMP_MASK);
 	switch (c->processor_id & PRID_COMP_MASK) {
 	case PRID_COMP_LEGACY:
+        very_early_printk("PRID_COMP_LEGACY\n");
 		cpu_probe_legacy(c, cpu);
 		break;
 	case PRID_COMP_MIPS:
+        very_early_printk("PRID_COMP_MIPS\n");
 		cpu_probe_mips(c, cpu);
 		break;
 	case PRID_COMP_ALCHEMY:
@@ -2043,6 +2049,7 @@ void cpu_probe(void)
 	case PRID_COMP_INGENIC_D1:
 	case PRID_COMP_INGENIC_E1:
 	case PRID_COMP_INGENIC_13:
+        very_early_printk("PRID_COMP_INGENIC\n")
 		cpu_probe_ingenic(c, cpu);
 		break;
 	case PRID_COMP_NETLOGIC:
@@ -2050,6 +2057,7 @@ void cpu_probe(void)
 		break;
 	}
 
+    very_early_printk("BUG ON CONDITION?")
 	BUG_ON(!__cpu_name[cpu]);
 	BUG_ON(c->cputype == CPU_UNKNOWN);
 
