@@ -1885,9 +1885,9 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
                     c->isa_level &= ~MIPS_CPU_ISA_M32R2;
 
                     /* FPU is not properly detected on JZ4760(B). */
-                    if (c->processor_id == 0x2ed0024f)
+                    if (c->processor_id == 0x2ed0024f) {
                         c->options |= MIPS_CPU_FPU;
-
+                    }
                     fallthrough;
 
                     /*
