@@ -198,8 +198,11 @@
 #define PRID_CPU_FEATURE_MASK       0xFFFF0000
 #define PRID_CPU_CHIPS_MASK         0x000FF000
 #define PRID_IMP_PROCESSOR_ID_MSK 0x0000E000
-#define PRID_IMP_XBURST                         (0x0 << 13)
-#define PRID_IMP_XBURST2                        (0x1 << 13)
+#define PRID_IMP_XBURST         0x0100
+#define PRID_IMP_XBURST_REV1	0x0200	/* XBurst®1 with MXU1.0/MXU1.1 SIMD ISA	*/
+#define PRID_IMP_XBURST_REV2	0x0100	/* XBurst®1 with MXU2.0 SIMD ISA */
+#define PRID_IMP_XBURST2	0x2000	/* XBurst®2 with MXU2.1 SIMD ISA */
+#define PRID_IMP_XBURST2_REV2	0x2100  /* XBurst®2 on T41 */
 #define PRID_CPU_ISA_MASK           0x00000FFF
 
 #define PRID_IMP_JZRISC             0x00010000
