@@ -540,7 +540,9 @@ asmlinkage __visible void __init start_kernel(void)
 	pr_notice("Kernel command line: %s\n", boot_command_line);
 	/* parameters may set static keys */
 	jump_label_init();
+    super_early_printk("Jump label init\n");
 	parse_early_param();
+    super_early_printk("Parsed early param\n");
 	after_dashes = parse_args("Booting kernel",
 				  static_command_line, __start___param,
 				  __stop___param - __start___param,

@@ -773,8 +773,11 @@ static void __init arch_mem_init(char **cmdline_p)
 	struct memblock_region *reg;
 	extern void plat_mem_setup(void);
 
+    super_early_printk("arch_mem_init\n");
 	/* call board setup routine */
 	plat_mem_setup();
+
+    super_early_printk("plat_mem_setup\n");
 
 	/*
 	 * Make sure all kernel memory is in the maps.  The "UP" and
@@ -789,6 +792,7 @@ static void __init arch_mem_init(char **cmdline_p)
 			 PFN_DOWN(__pa_symbol(&__init_end)) << PAGE_SHIFT,
 			 BOOT_MEM_INIT_RAM);
 
+	super_early_printk("Determined physical RAM map:\n");
 	pr_info("Determined physical RAM map:\n");
 	print_memory_map();
 
@@ -823,7 +827,9 @@ static void __init arch_mem_init(char **cmdline_p)
 
 	*cmdline_p = command_line;
 
+    super_early_printk("about to parse early params (mips):\n");
 	parse_early_param();
+    super_early_printk("parsed early params (mips):\n");
 
 	if (usermem) {
 		pr_info("User-defined physical RAM map:\n");
@@ -855,9 +861,11 @@ static void __init arch_mem_init(char **cmdline_p)
 	 * low memory as small as possible before plat_swiotlb_setup(), so
 	 * make sparse_init() using top-down allocation.
 	 */
+    super_early_printk("memblock_set_bottom_up(false)\n");
 	memblock_set_bottom_up(false);
 	sparse_init();
 	memblock_set_bottom_up(true);
+    super_early_printk("memblock_set_bottom_up(true)\n");
 
 	plat_swiotlb_setup();
 
