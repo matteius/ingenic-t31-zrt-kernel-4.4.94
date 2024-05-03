@@ -1872,7 +1872,7 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
              * feature will cause BogoMIPS and lpj calculate in error.
              * Set cp0 config7 bit 4 to disable this feature.
              */
-            set_c0_config7(MIPS_CONF7_BTB_LOOP_EN);
+            write_c0_config7(MIPS_CONF7_BTB_LOOP_EN);
 
             switch (c->processor_id & PRID_COMP_MASK) {
 
