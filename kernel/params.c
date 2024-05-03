@@ -226,11 +226,9 @@ char *parse_args(const char *doing,
 {
 	char *param, *val, *err = NULL;
 
-    super_early_printk("parse_args start\n");
 	/* Chew leading spaces */
 	args = skip_spaces(args);
 
-    super_early_printk("parse_args skipped spaces\n");
 	if (*args)
 		pr_debug("doing %s, parsing ARGS: '%s'\n", doing, args);
 
@@ -238,11 +236,9 @@ char *parse_args(const char *doing,
 		int ret;
 		int irq_was_disabled;
 
-        super_early_printk("parse_args while loop\n");
 		args = next_arg(args, &param, &val);
 		/* Stop at -- */
 		if (!val && strcmp(param, "--") == 0) {
-            super_early_printk(val);
             return err ?: args;
         }
 		irq_was_disabled = irqs_disabled();
@@ -255,22 +251,18 @@ char *parse_args(const char *doing,
 
 		switch (ret) {
             case 0: {
-                super_early_printk("parse_args success: continue\n");
                 continue;
             }
             case -ENOENT: {
-                super_early_printk("parse_args unknown param\n");
                 pr_err("%s: Unknown parameter `%s'\n", doing, param);
                 break;
             }
             case -ENOSPC: {
-                super_early_printk("parse_args too large\n");
                 pr_err("%s: `%s' too large for parameter `%s'\n",
                        doing, val ?: "", param);
                 break;
             }
             default: {
-                super_early_printk("parse_args invalid for parameter\n");
                 pr_err("%s: `%s' invalid for parameter `%s'\n",
                        doing, val ?: "", param);
                 break;

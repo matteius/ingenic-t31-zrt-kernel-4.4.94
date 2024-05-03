@@ -608,13 +608,21 @@ asmlinkage __visible void __init start_kernel(void) {
 	radix_tree_init();
 	/* init some links before init_ISA_irqs() */
 	early_irq_init();
+    super_early_printk("Early IRQ init\n");
 	init_IRQ();
+    super_early_printk("Init IRQ\n");
 	tick_init();
+    super_early_printk("Tick init\n");
 	rcu_init_nohz();
+    super_early_printk("RCU init nohz\n");
 	init_timers();
+    super_early_printk("Init timers\n");
 	hrtimers_init();
+    super_early_printk("HRTimers init\n");
 	softirq_init();
+    super_early_printk("SoftIRQ init\n");
 	timekeeping_init();
+    super_early_printk("Timekeeping init\n");
 	time_init();
     super_early_printk("Time init\n");
 
@@ -626,18 +634,27 @@ asmlinkage __visible void __init start_kernel(void) {
 	 * - random_init() to initialize the RNG from from early entropy sources
 	 */
 	random_init(command_line);
+    super_early_printk("Random init\n");
 	boot_init_stack_canary();
+    super_early_printk("Boot init stack canary\n");
 
 	sched_clock_postinit();
+    super_early_printk("Sched clock postinit\n");
 	printk_nmi_init();
+    super_early_printk("NMI init\n");
 	perf_event_init();
+    super_early_printk("Perf event init\n");
 	profile_init();
+    super_early_printk("Profile init\n");
 	call_function_init();
+    super_early_printk("Call function init\n");
 	WARN(!irqs_disabled(), "Interrupts were enabled early\n");
 	early_boot_irqs_disabled = false;
 	local_irq_enable();
+    super_early_printk("Local IRQs enabled\n");
 
 	kmem_cache_init_late();
+    super_early_printk("Kmem cache init late\n");
 
 	/*
 	 * HACK ALERT! This is early. We're enabling the console before
@@ -645,11 +662,13 @@ asmlinkage __visible void __init start_kernel(void) {
 	 * this. But we do want output early, in case something goes wrong.
 	 */
 	console_init();
+    super_early_printk("Console init\n");
 	if (panic_later)
 		panic("Too many boot %s vars at `%s'", panic_later,
 		      panic_param);
 
 	lockdep_info();
+    super_early_printk("Lockdep info\n");
 
 	/*
 	 * Need to run this when irqs are enabled, because it wants
@@ -657,10 +676,12 @@ asmlinkage __visible void __init start_kernel(void) {
 	 * too:
 	 */
 	locking_selftest();
+    super_early_printk("Locking selftest\n");
 
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start && !initrd_below_start_ok &&
 	    page_to_pfn(virt_to_page((void *)initrd_start)) < min_low_pfn) {
+        super_early_printk("Initrd overwritten\n");
 		pr_crit("initrd overwritten (0x%08lx < 0x%08lx) - disabling it.\n",
 		    page_to_pfn(virt_to_page((void *)initrd_start)),
 		    min_low_pfn);
@@ -668,17 +689,27 @@ asmlinkage __visible void __init start_kernel(void) {
 	}
 #endif
 	page_ext_init();
+    super_early_printk("Page ext init\n");
 	debug_objects_mem_init();
+    super_early_printk("Debug objects mem init\n");
 	kmemleak_init();
+    super_early_printk("Kmemleak init\n");
 	setup_per_cpu_pageset();
+    super_early_printk("Setup per-CPU pageset\n");
 	numa_policy_init();
+    super_early_printk("NUMA policy init\n");
 	if (late_time_init)
 		late_time_init();
 	sched_clock_init();
+    super_early_printk("Sched clock init\n");
 	calibrate_delay();
+    super_early_printk("Calibrate delay\n");
 	pidmap_init();
+    super_early_printk("PID map init\n");
 	anon_vma_init();
+    super_early_printk("Anon VMA init\n");
 	acpi_early_init();
+    super_early_printk("ACPI early init\n");
 #ifdef CONFIG_X86
 	if (efi_enabled(EFI_RUNTIME_SERVICES))
 		efi_enter_virtual_mode();
@@ -688,38 +719,60 @@ asmlinkage __visible void __init start_kernel(void) {
 	init_espfix_bsp();
 #endif
 	thread_stack_cache_init();
+    super_early_printk("Thread stack cache init\n");
 	cred_init();
+    super_early_printk("Cred init\n");
 	fork_init();
+    super_early_printk("Fork init\n");
 	proc_caches_init();
+    super_early_printk("Proc caches init\n");
 	buffer_init();
+    super_early_printk("Buffer init\n");
 	key_init();
+    super_early_printk("Key init\n");
 	security_init();
+    super_early_printk("Security init\n");
 	dbg_late_init();
+    super_early_printk("Debug late init\n");
 	vfs_caches_init();
+    super_early_printk("VFS caches init\n");
 	signals_init();
+    super_early_printk("Signals init\n");
 	/* rootfs populating might need page-writeback */
 	page_writeback_init();
+    super_early_printk("Page writeback init\n");
 	proc_root_init();
+    super_early_printk("Proc root init\n");
 	nsfs_init();
+    super_early_printk("NSFS init\n");
 	cpuset_init();
+    super_early_printk("CPU set init\n");
 	cgroup_init();
+    super_early_printk("Cgroup init\n");
 	taskstats_init_early();
+    super_early_printk("Taskstats init early\n");
 	delayacct_init();
+    super_early_printk("Delay accounting init\n");
 
 	check_bugs();
 
 	acpi_subsystem_init();
+    super_early_printk("ACPI subsystem init\n");
 	sfi_init_late();
+    super_early_printk("SFI init late\n");
 
 	if (efi_enabled(EFI_RUNTIME_SERVICES)) {
+        super_early_printk("EFI runtime services enabled\n");
 		efi_late_init();
 		efi_free_boot_services();
 	}
 
 	ftrace_init();
+    super_early_printk("Ftrace init\n");
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
+    super_early_printk("Rest init\n");
 
 	prevent_tail_call_optimization();
 }
