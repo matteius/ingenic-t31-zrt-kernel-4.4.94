@@ -1841,8 +1841,6 @@ extern int soc_support_mxuv2(void);
 #endif
 static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 {
-	unsigned int errorpc;
-	static unsigned int showerrorpc[NR_CPUS];
 	unsigned int config1;
 
 	decode_configs(c);
