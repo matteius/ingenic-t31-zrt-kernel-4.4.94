@@ -75,6 +75,7 @@
 #include <linux/compiler.h>
 #include <linux/frame.h>
 #include <linux/prefetch.h>
+#include <linux/early_printk.h>
 
 #include <asm/switch_to.h>
 #include <asm/tlb.h>
@@ -3344,8 +3345,11 @@ static void __sched notrace __schedule(bool preempt)
 	int cpu;
 
 	cpu = smp_processor_id();
+    printk("cpu: %d\n", cpu);
 	rq = cpu_rq(cpu);
+    printk("rq: %p\n", rq);
 	prev = rq->curr;
+    printk("prev: %p\n", prev);
 
 	schedule_debug(prev);
 
@@ -3458,9 +3462,13 @@ asmlinkage __visible void __sched schedule(void)
 
 	sched_submit_work(tsk);
 	do {
+        super_early_printk("schedule loop\n");
 		preempt_disable();
+        super_early_printk("preempt_disable (in loop)\n");
 		__schedule(false);
+        super_early_printk("__schedule(false)\n");
 		sched_preempt_enable_no_resched();
+        super_early_printk("sched_preempt_enable_no_resched\n");
 	} while (need_resched());
 }
 EXPORT_SYMBOL(schedule);
@@ -3491,9 +3499,13 @@ asmlinkage __visible void __sched schedule_user(void)
  */
 void __sched schedule_preempt_disabled(void)
 {
+    super_early_printk("schedule_preempt_disabled\n");
 	sched_preempt_enable_no_resched();
+    super_early_printk("sched_preempt_enable_no_resched\n");
 	schedule();
+    super_early_printk("schedule\n");
 	preempt_disable();
+    super_early_printk("preempt_disable\n");
 }
 
 static void __sched notrace preempt_schedule_common(void)

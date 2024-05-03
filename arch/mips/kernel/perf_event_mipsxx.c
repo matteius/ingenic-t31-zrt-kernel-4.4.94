@@ -555,6 +555,19 @@ static int mipspmu_get_irq(void)
 
 	if (mipspmu.irq >= 0) {
 		/* Request my own irq handler. */
+#ifdef CONFIG_MACH_XBURST2
+		/* on ingenic xburst2 cpu, should request percpu interrupt. */
+		err = request_percpu_irq(mipspmu.irq, mipsxx_pmu_handle_irq,
+				"mips_perf_pmu", &mipspmu);
+
+		if (err) {
+			pr_warning("Unable to request IRQ%d for MIPS "
+			   "performance counters!\n", mipspmu.irq);
+		} else {
+			/* enable all cpus interrtup here. */
+			on_each_cpu(enable_interrupt, NULL, 1);
+		}
+#else
 		err = request_irq(mipspmu.irq, mipsxx_pmu_handle_irq,
 				  IRQF_PERCPU | IRQF_NOBALANCING |
 				  IRQF_NO_THREAD | IRQF_NO_SUSPEND |
@@ -564,6 +577,8 @@ static int mipspmu_get_irq(void)
 			pr_warn("Unable to request IRQ%d for MIPS performance counters!\n",
 				mipspmu.irq);
 		}
+
+#endif
 	} else if (cp0_perfcount_irq < 0) {
 		/*
 		 * We are sharing the irq number with the timer interrupt.
@@ -581,9 +596,15 @@ static int mipspmu_get_irq(void)
 
 static void mipspmu_free_irq(void)
 {
-	if (mipspmu.irq >= 0)
-		free_irq(mipspmu.irq, &mipspmu);
-	else if (cp0_perfcount_irq < 0)
+	if (mipspmu.irq >= 0) {
+#ifdef CONFIG_MACH_XBURST2
+		/* disable interrupt on all cpus */
+		on_each_cpu(disable_interrupt, NULL, 1);
+		free_percpu_irq(mipspmu.irq, &mipspmu);
+#else
+		free_irq(mipspmu.irq, NULL);
+#endif
+	} else if (cp0_perfcount_irq < 0)
 		perf_irq = save_perf_irq;
 }
 

@@ -89,7 +89,11 @@ extern asmlinkage void handle_ov(void);
 extern asmlinkage void handle_tr(void);
 extern asmlinkage void handle_msa_fpe(void);
 extern asmlinkage void handle_fpe(void);
+#ifdef CONFIG_XBURST_MXUV2
+extern asmlinkage void handle_mfpe(void);
+#else
 extern asmlinkage void handle_ftlb(void);
+#endif
 extern asmlinkage void handle_msa(void);
 extern asmlinkage void handle_mdmx(void);
 extern asmlinkage void handle_watch(void);
@@ -888,6 +892,13 @@ out:
 	exception_exit(prev_state);
 }
 
+#ifdef CONFIG_MACH_XBURST
+asmlinkage void do_mfpe(struct pt_regs * regs)
+{
+	die_if_kernel("Kernel bug detected", regs);
+	force_sig(SIGILL, current);
+}
+#endif
 void do_trap_or_bp(struct pt_regs *regs, unsigned int code, int si_code,
 	const char *str)
 {
@@ -1452,7 +1463,14 @@ asmlinkage void do_cpu(struct pt_regs *regs)
 		break;
 
 	case 2:
+#ifdef CONFIG_MACH_XBURST2
+	        /* Processing of MXA instructions needs setting MSA enable. */
+		err = enable_restore_fp_context(1);
+		if (err)
+			force_sig(SIGILL, current);
+#else
 		raw_notifier_call_chain(&cu2_chain, CU2_EXCEPTION, regs);
+#endif
 		break;
 	}
 
@@ -2451,8 +2469,12 @@ void __init trap_init(void)
 	if (cpu_has_fpu && !cpu_has_nofpuex)
 		set_except_vector(EXCCODE_FPE, handle_fpe);
 
+#ifdef CONFIG_XBURST_MXUV2
+	if(cpu_has_mxu_v2)
+		set_except_vector(MIPS_EXCCODE_TLBPAR, handle_mfpe);
+#else
 	set_except_vector(MIPS_EXCCODE_TLBPAR, handle_ftlb);
-
+#endif
 	if (cpu_has_rixiex) {
 		set_except_vector(EXCCODE_TLBRI, tlb_do_page_fault_0);
 		set_except_vector(EXCCODE_TLBXI, tlb_do_page_fault_0);
