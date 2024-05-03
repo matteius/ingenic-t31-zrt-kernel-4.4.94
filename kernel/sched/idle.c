@@ -212,7 +212,6 @@ exit_idle:
 static void cpu_idle_loop(void)
 {
 	int cpu = smp_processor_id();
-    super_early_printk("cpu_idle_loop\n");
 
 	while (1) {
 		/*
@@ -223,14 +222,12 @@ static void cpu_idle_loop(void)
 		 * the polling bit set, then setting need_resched is
 		 * guaranteed to cause the cpu to reschedule.
 		 */
-        super_early_printk("cpu_idle_loop while 1\n");
 
 		__current_set_polling();
 		quiet_vmstat();
 		tick_nohz_idle_enter();
 
 		while (!need_resched()) {
-            super_early_printk("cpu_idle_loop while\n");
 			check_pgt_cache();
 			rmb();
 
@@ -267,13 +264,9 @@ static void cpu_idle_loop(void)
 		 * This is required because for polling idle loops we will
 		 * not have had an IPI to fold the state for us.
 		 */
-        super_early_printk("out of inner while loop\n");
 		preempt_set_need_resched();
-        super_early_printk("preempt_set_need_resched\n");
 		tick_nohz_idle_exit();
-        super_early_printk("tick_nohz_idle_exit\n");
 		__current_clr_polling();
-        super_early_printk("__current_clr_polling\n");
 
 		/*
 		 * We promise to call sched_ttwu_pending and reschedule
@@ -282,12 +275,9 @@ static void cpu_idle_loop(void)
 		 * before doing these things.
 		 */
 		smp_mb__after_atomic();
-        super_early_printk("smp_mb__after_atomic\n");
 
 		sched_ttwu_pending();
-        super_early_printk("sched_ttwu_pending\n");
 		schedule_preempt_disabled();
-        super_early_printk("schedule_preempt_disabled\n");
 	}
 }
 
