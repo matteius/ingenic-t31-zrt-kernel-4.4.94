@@ -1881,7 +1881,7 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
                  * PRID_COMP_INGENIC_D0 report themselves as MIPS32r2 compatible,
                  * but they don't actually support this ISA.
                  */
-                case PRID_COMP_INGENIC_D0:
+                case PRID_COMP_INGENIC_D0:{
                     c->isa_level &= ~MIPS_CPU_ISA_M32R2;
 
                     /* FPU is not properly detected on JZ4760(B). */
@@ -1900,6 +1900,7 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
                      * to cp0 register 5 sel 4 to switch back to VTLB mode to prevent
                      * getting stuck.
                      */
+                }
                 case PRID_COMP_INGENIC_D1:
                     write_c0_page_ctrl(XBURST_PAGECTRL_HPTLB_DIS);
                     break;
