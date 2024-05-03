@@ -556,7 +556,7 @@ asmlinkage __visible void __init start_kernel(void)
 	 * These use large bootmem allocations and must precede
 	 * kmem_cache_init()
 	 */
-	setup_log_buf(0);
+	// setup_log_buf(0);
     super_early_printk("Setup log buffer\n");
 	pidhash_init();
     super_early_printk("PID hash init\n");
