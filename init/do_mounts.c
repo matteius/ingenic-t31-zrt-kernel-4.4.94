@@ -638,20 +638,27 @@ static struct file_system_type rootfs_fs_type = {
 int __init init_rootfs(void)
 {
 	int err = register_filesystem(&rootfs_fs_type);
+    super_early_printk("init_rootfs\n");
 
-	if (err)
-		return err;
+	if (err) {
+        super_early_printk("init_rootfs: return err\n");
+        return err
+    }
 
 	if (IS_ENABLED(CONFIG_TMPFS) && !saved_root_name[0] &&
 		(!root_fs_names || strstr(root_fs_names, "tmpfs"))) {
+        super_early_printk("init_rootfs: shmem_init\n");
 		err = shmem_init();
 		is_tmpfs = true;
 	} else {
+        super_early_printk("init_rootfs: init_ramfs_fs\n");
 		err = init_ramfs_fs();
 	}
 
-	if (err)
-		unregister_filesystem(&rootfs_fs_type);
+	if (err) {
+        super_early_printk("init_rootfs: unregister_filesystem\n");
+        unregister_filesystem(&rootfs_fs_type);
+    }
 
 	return err;
 }
