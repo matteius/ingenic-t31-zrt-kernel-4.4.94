@@ -642,7 +642,7 @@ int __init init_rootfs(void)
 
 	if (err) {
         super_early_printk("init_rootfs: return err\n");
-        return err
+        return err;
     }
 
 	if (IS_ENABLED(CONFIG_TMPFS) && !saved_root_name[0] &&
