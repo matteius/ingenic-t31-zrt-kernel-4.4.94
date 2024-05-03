@@ -1893,11 +1893,11 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 #ifdef CONFIG_XBURST_MXUV2
 		if(soc_support_mxuv2()) {
 			c->ases |= MIPS_ASE_XBURSTMXUV2;
-		} else
+		}
 #endif
 		//c->ases |= MIPS_ASE_XBURSTMXU;
-	}
 		break;
+	}
 	case PRID_IMP_XBURST2:
 	{
 		c->cputype = CPU_JZRISC;
@@ -2016,13 +2016,17 @@ void cpu_probe(void)
 	c->processor_id = read_c0_prid();
 	switch (c->processor_id & PRID_COMP_MASK) {
 	case PRID_COMP_LEGACY:
+    {
         very_early_printk("PRID_COMP_LEGACY\n");
-		cpu_probe_legacy(c, cpu);
-		break;
+        cpu_probe_legacy(c, cpu);
+        break;
+    }
 	case PRID_COMP_MIPS:
+    {
         very_early_printk("PRID_COMP_MIPS\n");
-		cpu_probe_mips(c, cpu);
-		break;
+        cpu_probe_mips(c, cpu);
+        break;
+    }
 	case PRID_COMP_ALCHEMY:
 		cpu_probe_alchemy(c, cpu);
 		break;
@@ -2048,9 +2052,11 @@ void cpu_probe(void)
 	case PRID_COMP_INGENIC_D1:
 	case PRID_COMP_INGENIC_E1:
 	case PRID_COMP_INGENIC_13:
+    {
         very_early_printk("PRID_COMP_INGENIC\n");
-		cpu_probe_ingenic(c, cpu);
-		break;
+        cpu_probe_ingenic(c, cpu);
+        break;
+    }
 	case PRID_COMP_NETLOGIC:
 		cpu_probe_netlogic(c, cpu);
 		break;
