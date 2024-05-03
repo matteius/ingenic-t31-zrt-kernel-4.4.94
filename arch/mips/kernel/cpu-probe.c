@@ -1888,7 +1888,6 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
                     if (c->processor_id == 0x2ed0024f) {
                         c->options |= MIPS_CPU_FPU;
                     }
-                    fallthrough;
 
                     /*
                      * The config0 register in the XBurst CPUs with a processor ID of
@@ -1900,6 +1899,7 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
                      * to cp0 register 5 sel 4 to switch back to VTLB mode to prevent
                      * getting stuck.
                      */
+                    __attribute__((fallthrough));
                 }
                 case PRID_COMP_INGENIC_D1:
                     write_c0_page_ctrl(XBURST_PAGECTRL_HPTLB_DIS);
@@ -1908,7 +1908,7 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
                 default:
                     break;
             }
-            fallthrough;
+            __attribute__((fallthrough));
 
             /* XBurst®1 with MXU2.0 SIMD ISA */
         case PRID_IMP_XBURST_REV2:
