@@ -479,79 +479,79 @@ static void __init mm_init(void)
 	kaiser_init();
 }
 
-asmlinkage __visible void __init start_kernel(void)
-{
-	char *command_line;
-	char *after_dashes;
+asmlinkage __visible void __init start_kernel(void) {
+    char *command_line;
+    char *after_dashes;
 
     /* Super early printk */
     super_early_printk("Hello, world!\n");
 
-	set_task_stack_end_magic(&init_task);
+    set_task_stack_end_magic(&init_task);
 
     /* Super early printk */
     super_early_printk("Task stack end magic set\n");
-	smp_setup_processor_id();
+    smp_setup_processor_id();
 
     /* Super early printk */
     super_early_printk("SMP processor ID set\n");
-	debug_objects_early_init();
+    debug_objects_early_init();
 
     /* Super early printk */
     super_early_printk("Debug objects early init\n");
 
-	cgroup_init_early();
+    cgroup_init_early();
 
-	local_irq_disable();
-	early_boot_irqs_disabled = true;
+    local_irq_disable();
+    early_boot_irqs_disabled = true;
 
     /* Super early printk */
     super_early_printk("Local IRQs disabled\n");
-	/*
-	 * Interrupts are still disabled. Do necessary setups, then
-	 * enable them.
-	 */
-	boot_cpu_init();
+    /*
+     * Interrupts are still disabled. Do necessary setups, then
+     * enable them.
+     */
+    boot_cpu_init();
     super_early_printk("Boot CPU initialized\n");
-	page_address_init();
+    page_address_init();
     super_early_printk("Page address initialized\n");
-	pr_notice("%s", linux_banner);
+    pr_notice("%s", linux_banner);
     super_early_printk("Printed banner\n");
-	setup_arch(&command_line);
+    setup_arch(&command_line);
     super_early_printk("Arch setup\n");
-	mm_init_cpumask(&init_mm);
+    mm_init_cpumask(&init_mm);
     super_early_printk("MM init\n");
-	setup_command_line(command_line);
+    setup_command_line(command_line);
     super_early_printk("Command line setup\n");
-	setup_nr_cpu_ids();
+    setup_nr_cpu_ids();
     super_early_printk("CPU IDs setup\n");
-	setup_per_cpu_areas();
+    setup_per_cpu_areas();
     super_early_printk("Per-CPU areas setup\n");
-	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
+    smp_prepare_boot_cpu();    /* arch-specific boot-cpu hooks */
     super_early_printk("SMP boot CPU prepared\n");
-	boot_cpu_hotplug_init();
+    boot_cpu_hotplug_init();
     super_early_printk("Boot CPU hotplug init\n");
 
-	build_all_zonelists(NULL, NULL, false);
+    build_all_zonelists(NULL, NULL, false);
     super_early_printk("Built all zonelists\n");
-	page_alloc_init();
+    page_alloc_init();
     super_early_printk("Page allocation init\n");
 
-	pr_notice("Kernel command line: %s\n", boot_command_line);
-	/* parameters may set static keys */
-	jump_label_init();
+    pr_notice("Kernel command line: %s\n", boot_command_line);
+    /* parameters may set static keys */
+    jump_label_init();
     super_early_printk("Jump label init\n");
-	parse_early_param();
+    parse_early_param();
     super_early_printk("Parsed early param\n");
-	after_dashes = parse_args("Booting kernel",
-				  static_command_line, __start___param,
-				  __stop___param - __start___param,
-				  -1, -1, NULL, &unknown_bootoption);
+    after_dashes = parse_args("Booting kernel",
+                              static_command_line, __start___param,
+                              __stop___param - __start___param,
+                              -1, -1, NULL, &unknown_bootoption);
     super_early_printk("Parsed boot options\n");
-	if (!IS_ERR_OR_NULL(after_dashes))
+    if (!IS_ERR_OR_NULL(after_dashes)) {
         super_early_printk("Parsed kernel boot options\n");
-		parse_args("Setting init args", after_dashes, NULL, 0, -1, -1,
-			   NULL, set_init_arg);
+        parse_args("Setting init args", after_dashes, NULL, 0, -1, -1,
+                   NULL, set_init_arg);
+}
 
     super_early_printk("Parsed init args\n");
 	/*
