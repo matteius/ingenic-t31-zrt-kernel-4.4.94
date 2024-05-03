@@ -1845,24 +1845,20 @@ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 	static unsigned int showerrorpc[NR_CPUS];
 	unsigned int config1;
 
-	if(showerrorpc[cpu] == 0) {
-		__asm__ __volatile__ (
-				"mfc0  %0, $30,  0   \n\t"
-				"nop                  \n\t"
-				:"=r"(errorpc)
-				:);
-
-		printk("CPU%d RESET ERROR PC:%08X\n", cpu,errorpc);
-		if(kernel_text_address(errorpc))
-			print_ip_sym(errorpc);
-		showerrorpc[cpu] = 1;
-	}
-
 	decode_configs(c);
+    /*
+     * XBurst misses a config2 register, so config3 decode was skipped in
+     * decode_configs().
+     */
+    decode_config3(c);
+
 	/* JZRISC does not implement the CP0 counter. */
 	/* INGENIC RISC does not implement the CP0 counter. */
 	c->options &= ~MIPS_CPU_COUNTER;
 	BUG_ON(!__builtin_constant_p(cpu_has_counter) || cpu_has_counter);
+
+    /* XBurst has virtually tagged icache */
+    c->icache.flags |= MIPS_CACHE_VTAG;
 
 	switch (c->processor_id & PRID_IMP_MASK) {
 	case PRID_IMP_JZRISC:
