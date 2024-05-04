@@ -619,31 +619,6 @@ static void ingenic_dma_issue_pending(struct dma_chan *chan)
 	spin_unlock_irqrestore(&dmac->vc.lock, flags);
 }
 
-/*
- *	get dma current transfer address
- */
-static enum dma_status ingenic_dma_tx_status(struct dma_chan *chan,
-                                             dma_cookie_t cookie,
-                                             struct dma_tx_state *txstate)
-{
-    struct ingenic_dma_chan *dmac = to_ingenic_dma_chan(chan);
-    enum dma_status status;
-
-    // Get the current transfer status
-    status = dma_cookie_status(chan, cookie, txstate);
-
-    if (dmac->sdesc && dmac->sdesc->status != STAT_STOPPED) {
-        // Update the residue count in the dma_tx_state structure
-        dma_set_residue(txstate, readl(dmac->iomem + CH_DTC));
-
-        // Update the current source and destination addresses
-        txstate->src_addr = readl(dmac->iomem + CH_DSA);
-        txstate->dst_addr = readl(dmac->iomem + CH_DTA);
-    }
-
-    return status;
-}
-
 static int ingenic_dma_terminate_all(struct dma_chan *chan)
 {
 	struct ingenic_dma_chan *dmac = to_ingenic_dma_chan(chan);
@@ -1030,7 +1005,6 @@ static int __init ingenic_dma_probe(struct platform_device *pdev)
 	dma->dma_device.device_prep_dma_cyclic = ingenic_dma_prep_dma_cyclic;
 	dma->dma_device.device_prep_dma_memcpy = ingenic_dma_prep_dma_memcpy;
 	dma->dma_device.device_config = ingenic_dma_config;
-    dma->dma_device.device_tx_status = ingenic_dma_tx_status;
     dma->dma_device.device_terminate_all = ingenic_dma_terminate_all;
 	dma->dma_device.device_issue_pending = ingenic_dma_issue_pending;
 	dma->dma_device.copy_align = DMAENGINE_ALIGN_4_BYTES;
