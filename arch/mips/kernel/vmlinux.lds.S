@@ -138,8 +138,11 @@ SECTIONS
 #ifdef CONFIG_SMP
 	PERCPU_SECTION(1 << CONFIG_MIPS_L1_CACHE_SHIFT)
 #endif
-
-#ifdef CONFIG_MIPS_ELF_APPENDED_DTB
+#ifdef CONFIG_MIPS_RAW_APPENDED_DTB
+	__appended_dtb = .;
+	/* leave space for appended DTB */
+	. += 0x100000;
+#elif defined(CONFIG_MIPS_ELF_APPENDED_DTB)
 	.appended_dtb : AT(ADDR(.appended_dtb) - LOAD_OFFSET) {
 		*(.appended_dtb)
 		KEEP(*(.appended_dtb))
@@ -166,11 +169,6 @@ SECTIONS
 	}
 #endif
 
-#ifdef CONFIG_MIPS_RAW_APPENDED_DTB
-	__appended_dtb = .;
-	/* leave space for appended DTB */
-	. += 0x100000;
-#endif
 	/*
 	 * Align to 64K in attempt to eliminate holes before the
 	 * .bss..swapper_pg_dir section at the start of .bss.  This
