@@ -20,6 +20,7 @@
 #include <linux/mmc/card.h>
 #include <linux/mmc/mmc.h>
 #include <linux/mmc/sd.h>
+#include <linux/early_printk.h>
 
 #include "core.h"
 #include "bus.h"
@@ -952,6 +953,7 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	BUG_ON(!host);
 	WARN_ON(!host->claimed);
 
+    super_early_printk("mmc_sd_init_card\n");
 	err = mmc_sd_get_cid(host, ocr, cid, &rocr);
 	if (err)
 		return err;
@@ -1245,6 +1247,8 @@ int mmc_attach_sd(struct mmc_host *host)
 
 	BUG_ON(!host);
 	WARN_ON(!host->claimed);
+
+    super_early_printk("mmc_attach_sd\n");
 
 	err = mmc_send_app_op_cond(host, 0, &ocr);
 	if (err)
