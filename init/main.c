@@ -1182,7 +1182,9 @@ static noinline void __init kernel_init_freeable(void)
 
 	/* Open the /dev/console on the rootfs, this should never fail */
 	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
-		pr_err("Warning: unable to open an initial console.\n");
+    {
+        pr_err("Warning: unable to open an initial console.\n");
+    }
 
 	(void) sys_dup(0);
 	(void) sys_dup(0);
@@ -1191,12 +1193,14 @@ static noinline void __init kernel_init_freeable(void)
 	 * the work
 	 */
 
+    super_early_printk("ramdisk_execute_command\n");
 	if (!ramdisk_execute_command)
 		ramdisk_execute_command = "/init";
 
 	if (sys_access((const char __user *) ramdisk_execute_command, 0) != 0) {
 		ramdisk_execute_command = NULL;
-		prepare_namespace();
+        super_early_printk("before prepare_namespace\n");
+        prepare_namespace();
 	}
 
 	/*
@@ -1208,6 +1212,9 @@ static noinline void __init kernel_init_freeable(void)
 	 * and default modules
 	 */
 
-	integrity_load_keys();
+    super_early_printk("About to integrity_load_keys\n");
+    integrity_load_keys();
+    super_early_printk("Integrity load keys\n");
 	load_default_modules();
+    super_early_printk("Load default modules\n");
 }
