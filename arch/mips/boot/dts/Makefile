@@ -7,7 +7,6 @@ dts-dirs	+= netlogic
 dts-dirs	+= pic32
 dts-dirs	+= qca
 dts-dirs	+= ralink
-dts-dirs	+= xilfpga
 
 obj-y		:= $(addsuffix /, $(dts-dirs))
 
