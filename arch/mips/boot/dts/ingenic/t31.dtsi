@@ -16,7 +16,7 @@
 		uart1 = &uart1;
 		uart2 = &uart2;
 		msc0 = &msc0;
-		msc1 = &msc1;
+		// msc1 = &msc1;
 		// mac0 = &mac0;
 		spi0 = &spi0;
 	};
