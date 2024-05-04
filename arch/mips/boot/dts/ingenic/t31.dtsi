@@ -375,10 +375,10 @@
 			status = "okay";
 		};
 
-//		otg_phy: otg_phy {
-//			compatible = "ingenic,innophy";
-//			reg = <0x10000000 0x1000 0x10060000 0x1000>;
-//		};
+		otg_phy: otg_phy {
+			compatible = "ingenic,innophy";
+			reg = <0x10000000 0x1000 0x10060000 0x1000>;
+		};
 	};
 
 	ahb2 {
@@ -485,21 +485,21 @@
 			pinctrl-0 = <&msc1_4bit>;
 		};
 
-//		ipu: ipu@0x13080000 {
-//			compatible = "ingenic,t31-ipu";
-//			reg = <0x13080000 0x10000>;
-//			interrupt-parent = <&core_intc>;
-//			interrupts = <IRQ_IPU>;
-//			status = "okay";
-//		};
-//
-//		isp: isp@0x13300000 {
-//			compatible = "ingenic,t31-isp";
-//			reg = <0x13300000 0x100000>;
-//			interrupt-parent = <&core_intc>;
-//			interrupts = <IRQ_ISP>;
-//			status = "disabled";
-//		};
+		ipu: ipu@0x13080000 {
+			compatible = "ingenic,t31-ipu";
+			reg = <0x13080000 0x10000>;
+			interrupt-parent = <&core_intc>;
+			interrupts = <IRQ_IPU>;
+			status = "okay";
+		};
+
+		isp: isp@0x13300000 {
+			compatible = "ingenic,t31-isp";
+			reg = <0x13300000 0x100000>;
+			interrupt-parent = <&core_intc>;
+			interrupts = <IRQ_ISP>;
+			status = "disabled";
+		};
 	};
 
 };

@@ -130,6 +130,18 @@
 	ingenic,has_dma_support = <1>;
 };
 
+&otg {
+	g-use-dma;
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&otg_phy {
+	dr_mode = "otg";
+	compatible = "ingenic,innophy", "syscon";
+	ingenic,drvvbus-gpio = <&gpb 16 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+	status = "okay";
+};
 
 / {
 	mmc0_gpio_enable: mmc0-dummy-fixed-reg {
