@@ -551,6 +551,7 @@ void __init prepare_namespace(void)
 {
 	int is_floppy;
 
+    super_early_printk("prepare_namespace\n");
 	if (root_delay) {
 		printk(KERN_INFO "Waiting %d sec before mounting root device...\n",
 		       root_delay);
@@ -564,8 +565,10 @@ void __init prepare_namespace(void)
 	 * For example, it is not atypical to wait 5 seconds here
 	 * for the touchpad of a laptop to initialize.
 	 */
+    super_early_printk("wait_for_device_probe\n");
 	wait_for_device_probe();
 
+    super_early_printk("md run setup\n");
 	md_run_setup();
 
 	if (saved_root_name[0]) {
