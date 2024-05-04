@@ -903,10 +903,10 @@ int __init_or_module do_one_initcall(initcall_t fn)
 	if (initcall_blacklisted(fn))
 		return -EPERM;
 
-	if (initcall_debug)
-		ret = do_one_initcall_debug(fn);
-	else
-		ret = fn();
+	//if (initcall_debug)
+    ret = do_one_initcall_debug(fn);
+	//else
+	//	ret = fn();
 
 	msgbuf[0] = 0;
 
@@ -978,7 +978,6 @@ static void __init do_initcall_level(int level)
     printk("initcall_level_names[level]: %s\n", initcall_level_names[level]);
 
 	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) {
-        printk("fn: %p\n", fn);
         do_one_initcall(*fn);
     }
 
