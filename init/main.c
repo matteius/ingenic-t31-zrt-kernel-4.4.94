@@ -881,10 +881,12 @@ static int __init_or_module do_one_initcall_debug(initcall_t fn)
 	int ret;
 
 	printk(KERN_DEBUG "calling  %pF @ %i\n", fn, task_pid_nr(current));
+    super_early_printk("Calling initcall\n");
 	calltime = ktime_get();
 	ret = fn();
 	rettime = ktime_get();
 	delta = ktime_sub(rettime, calltime);
+    super_early_printk("Ktime sub fn() returned\n");
 	duration = (unsigned long long) ktime_to_ns(delta) >> 10;
 	printk(KERN_DEBUG "initcall %pF returned %d after %lld usecs\n",
 		 fn, ret, duration);
@@ -962,15 +964,24 @@ static void __init do_initcall_level(int level)
 {
 	initcall_t *fn;
 
+    super_early_printk("Do initcall level\n");
+    printk("do_initcall_level %d\n", level);
 	strcpy(initcall_command_line, saved_command_line);
+    super_early_printk("Copy initcall command line\n");
 	parse_args(initcall_level_names[level],
 		   initcall_command_line, __start___param,
 		   __stop___param - __start___param,
 		   level, level,
 		   NULL, &repair_env_string);
+    super_early_printk("Parse args\n");
+    printk("initcall_command_line: %s\n", initcall_command_line);
+    printk("initcall_level_names[level]: %s\n", initcall_level_names[level]);
 
-	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++)
-		do_one_initcall(*fn);
+	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++) {
+        printk("fn: %p\n", fn);
+        do_one_initcall(*fn);
+    }
+
 }
 
 static void __init do_initcalls(void)
