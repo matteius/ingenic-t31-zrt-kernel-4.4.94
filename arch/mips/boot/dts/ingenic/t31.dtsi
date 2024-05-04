@@ -83,7 +83,7 @@
     };
 
 	clock: clock-controller@0x10000000 {
-		compatible = "ingenic,x1000-cgu", "simple-mfd";
+		compatible = "ingenic,xburst-cgu", "simple-mfd";
 		reg = <0x10000000 0x100>;
 		clocks = <&ext>, <&rtc_ext>;
 		clock-names = "ext", "rtc_ext";
@@ -105,7 +105,7 @@
 		reg = <0x10030000 0x100>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART0>;
-		clocks = <&ext>, <&clock 29>;
+		clocks = <&ext>, <&clock CLK_GATE_UART0>;
 		clock-names = "baud", "module";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart0_pc>;
@@ -117,7 +117,7 @@
 		reg = <0x10031000 0x100>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART1>;
-		clocks = <&ext>, <&clock 30>;
+		clocks = <&ext>, <&clock CLK_GATE_UART1>;
 		clock-names = "baud", "module";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart1_pb>;
@@ -129,7 +129,7 @@
 		reg = <0x10032000 0x100>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART2>;
-		clocks = <&ext>, <&clock 31>;
+		clocks = <&ext>, <&clock CLK_GATE_UART2>;
 		clock-names = "baud", "module";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart2_pc>;
