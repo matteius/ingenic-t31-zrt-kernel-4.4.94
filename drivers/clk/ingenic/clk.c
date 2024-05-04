@@ -448,7 +448,7 @@ void __init ingenic_clk_of_register_fixed_ext(struct ingenic_clk_provider *ctx,
 
         fixed_rate_clk[idx].name = np->name;
         fixed_rate_clk[idx].parent_name = of_clk_get_parent_name(np, 0);
-        fixed_rate_clk[idx].flags = CLK_IS_ROOT;
+        fixed_rate_clk[idx].flags = NULL;
         fixed_rate_clk[idx].fixed_rate = rate;
 
         idx++;
