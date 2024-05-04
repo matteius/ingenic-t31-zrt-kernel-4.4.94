@@ -2179,7 +2179,7 @@ static int ingenic_mac_probe(struct platform_device *pdev)
 		miibus->parent = &pdev->dev;
 		miibus->name = "ingenic_mii_bus";
 		snprintf(miibus->id, MII_BUS_ID_SIZE, "%d", lp->id);
-        miibus->irq = devm_kcalloc(&pdev->dev, PHY_MAX_ADDR, sizeof(struct mii_bus_irq_map), GFP_KERNEL);
+        miibus->irq = devm_kcalloc(&pdev->dev, PHY_MAX_ADDR, sizeof(int), GFP_KERNEL);
         for (i = 0; i < PHY_MAX_ADDR; ++i)
             miibus->irq[i] = PHY_POLL;
 
