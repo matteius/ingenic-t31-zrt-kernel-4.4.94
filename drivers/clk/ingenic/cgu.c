@@ -694,6 +694,7 @@ int ingenic_cgu_register_clocks(struct ingenic_cgu *cgu)
 	}
 
 	for (i = 0; i < cgu->clocks.clk_num; i++) {
+        printk("clock_num i: %d\n", i);
 		err = ingenic_register_clock(cgu, i);
 		if (err)
 			goto err_out_unregister;
