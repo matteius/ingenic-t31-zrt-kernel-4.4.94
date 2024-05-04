@@ -94,6 +94,7 @@
 #include <linux/mm_inline.h>
 #include <linux/mmu_notifier.h>
 #include <linux/printk.h>
+#include <linux/early_printk.h>
 
 #include <asm/tlbflush.h>
 #include <asm/uaccess.h>
@@ -793,11 +794,14 @@ static long do_set_mempolicy(unsigned short mode, unsigned short flags,
 	NODEMASK_SCRATCH(scratch);
 	int ret;
 
-	if (!scratch)
-		return -ENOMEM;
+	if (!scratch) {
+        super_early_printk("do_set_mempolicy: NODEMASK_SCRATCH failed\n");
+        return -ENOMEM;
+    }
 
 	new = mpol_new(mode, flags, nodes);
 	if (IS_ERR(new)) {
+        super_early_printk("do_set_mempolicy: mpol_new failed\n");
 		ret = PTR_ERR(new);
 		goto out;
 	}
@@ -805,6 +809,7 @@ static long do_set_mempolicy(unsigned short mode, unsigned short flags,
 	task_lock(current);
 	ret = mpol_set_nodemask(new, nodes, scratch);
 	if (ret) {
+        super_early_printk("do_set_mempolicy: mpol_set_nodemask failed\n");
 		task_unlock(current);
 		mpol_put(new);
 		goto out;
@@ -814,8 +819,11 @@ static long do_set_mempolicy(unsigned short mode, unsigned short flags,
 	if (new && new->mode == MPOL_INTERLEAVE &&
 	    nodes_weight(new->v.nodes))
 		current->il_next = first_node(new->v.nodes);
+    super_early_printk("do_set_mempolicy: mpol_rebind_task\n");
 	task_unlock(current);
+    super_early_printk("do_set_mempolicy: task_unlock\n");
 	mpol_put(old);
+    super_early_printk("do_set_mempolicy: mpol_put\n");
 	ret = 0;
 out:
 	NODEMASK_SCRATCH_FREE(scratch);
@@ -2698,7 +2706,9 @@ void __init numa_policy_init(void)
 /* Reset policy of current process to default */
 void numa_default_policy(void)
 {
+    super_early_printk("numa_default_policy\n");
 	do_set_mempolicy(MPOL_DEFAULT, 0, NULL);
+    super_early_printk("numa_default_policy end\n");
 }
 
 /*
