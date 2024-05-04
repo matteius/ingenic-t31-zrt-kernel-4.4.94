@@ -93,7 +93,7 @@
 	cap-mmc-highspeed;
 	max-frequency = <24000000>;
 	bus-width = <4>;
-	voltage-ranges = <1300 3100>;
+	voltage-ranges = <1800 3100>;
 	cd-inverted;
 
 	ingenic,sdio_clk = <24000000>;
