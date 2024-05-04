@@ -118,7 +118,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_SCLKA] = {
                 "sclk_a", CGU_CLK_MUX,
-                .parents = {-1,  CLK_PLL_APLL, CLK_EXT, CLK_RTC_EXT, -1 },
+                .parents = {CLK_PLL_APLL, CLK_EXT, CLK_RTC_EXT, -1 },
                 .mux = {
                         .reg = CPM_CPCCR,
                         .shift = 30,
