@@ -432,7 +432,7 @@
 		};
 
 		pdma: dma@13420000 {
-			compatible = "ingenic,t31-pdma";
+			compatible = "jz4740-dma";
 			reg = <0x13420000 0x10000>;
 			interrupt-parent = <&core_intc>;
 			interrupt-names = "pdma", "pdmam";
