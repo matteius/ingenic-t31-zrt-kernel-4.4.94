@@ -1029,6 +1029,7 @@ static int try_to_run_init_process(const char *init_filename)
 {
 	int ret;
 
+    super_early_printk("Try to run init process\n");
 	ret = run_init_process(init_filename);
 
 	if (ret && ret != -ENOENT) {
@@ -1071,20 +1072,30 @@ static int __ref kernel_init(void *unused)
 {
 	int ret;
 
+    super_early_printk("Kernel init\n");
 	kernel_init_freeable();
+    super_early_printk("Kernel init freeable\n");
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
+    super_early_printk("Async synchronize full\n");
 	free_initmem();
+    super_early_printk("Free initmem\n");
 	mark_readonly();
+    super_early_printk("Mark readonly\n");
 	system_state = SYSTEM_RUNNING;
 	numa_default_policy();
+    super_early_printk("NUMA default policy\n");
 
 	rcu_end_inkernel_boot();
+    super_early_printk("RCU end in-kernel boot\n");
 
 	if (ramdisk_execute_command) {
+        super_early_printk("Ramdisk execute command\n");
 		ret = run_init_process(ramdisk_execute_command);
-		if (!ret)
-			return 0;
+		if (!ret) {
+            super_early_printk("Ramdisk execute command success\n");
+            return 0;
+        }
 		pr_err("Failed to execute %s (error %d)\n",
 		       ramdisk_execute_command, ret);
 	}
@@ -1096,9 +1107,12 @@ static int __ref kernel_init(void *unused)
 	 * trying to recover a really broken machine.
 	 */
 	if (execute_command) {
+        super_early_printk("Execute command\n");
 		ret = run_init_process(execute_command);
-		if (!ret)
-			return 0;
+        if (!ret) {
+            super_early_printk("Execute command success\n");
+            return 0;
+        }
 		panic("Requested init %s failed (error %d).",
 		      execute_command, ret);
 	}
