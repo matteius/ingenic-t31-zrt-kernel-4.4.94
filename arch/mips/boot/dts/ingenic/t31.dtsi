@@ -105,26 +105,34 @@
 		reg-shift = <2>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART0>;
+		clocks = <&clock 0>;
+		clock-names = "ext";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart0_pc>;
 		status = "disabled";
 	};
+
 	uart1: serial@0x10031000 {
 		compatible = "ingenic,x1000-uart";
 		reg = <0x10031000 0x1000>;
 		reg-shift = <2>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART1>;
+		clocks = <&clock 0>;
+		clock-names = "ext";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart1_pb>;
 		status = "okay";
 	};
+
 	uart2: serial@0x10032000 {
 		compatible = "ingenic,x1000-uart";
 		reg = <0x10032000 0x1000>;
 		reg-shift = <2>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART2>;
+		clocks = <&clock 0>;
+		clock-names = "ext";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart2_pc>;
 		status = "disabled";
