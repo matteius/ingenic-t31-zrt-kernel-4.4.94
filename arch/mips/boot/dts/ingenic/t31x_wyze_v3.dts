@@ -176,36 +176,6 @@
 		startup-delay-us = <100000>;
 	};
 
-
-	leds-gpios {
-		compatible = "gpio-leds";
-		status = "okay";
-
-		yellow {
-			label = "led:yellow";
-			gpios = <&gpb 6 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
-			linux,default-trigger = "heartbeat";
-		};
-
-		blue {
-			label = "led:blue";
-			gpios = <&gpb 7 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
-			default-state = "on";
-		};
-
-		ir {
-			label = "led:ir";
-			gpios = <&gpb 15 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
-			default-state = "off";
-		};
-
-		ir2 {
-			label = "led:ir2";
-			gpios = <&gpb 17 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
-			default-state = "off";
-		};
-	};
-
 	extclk: extclk {
 		clock-frequency = <24000000>;
 	};
