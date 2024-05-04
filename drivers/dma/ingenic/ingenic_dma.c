@@ -622,40 +622,26 @@ static void ingenic_dma_issue_pending(struct dma_chan *chan)
 /*
  *	get dma current transfer address
  */
-static dma_addr_t jzdma_get_current_trans_addr(struct dma_chan *chan,
-					       dma_addr_t * dst_addr,
-					       dma_addr_t * src_addr,
-					       enum dma_transfer_direction
-					       direction)
+static enum dma_status ingenic_dma_tx_status(struct dma_chan *chan,
+                                             dma_cookie_t cookie,
+                                             struct dma_tx_state *txstate)
 {
-	struct ingenic_dma_chan *dmac = to_ingenic_dma_chan(chan);
-	dma_addr_t ret_val = 0;
+    struct ingenic_dma_chan *dmac = to_ingenic_dma_chan(chan);
+    enum dma_status status;
 
-	if(!dmac->sdesc)
-		return 0;
-	if (dmac->sdesc->status == STAT_STOPPED)
-		return 0;
+    // Get the current transfer status
+    status = dma_cookie_status(chan, cookie, txstate);
 
-	if (direction ==  DMA_MEM_TO_DEV) {
-		ret_val	= readl(dmac->iomem + CH_DSA);
-		if (src_addr)
-			*src_addr = ret_val;
-		if (dst_addr)
-			*dst_addr = readl(dmac->iomem + CH_DTA);
-	} else if (direction == DMA_DEV_TO_MEM) {
-		ret_val = readl(dmac->iomem + CH_DTA);
-		if (dst_addr)
-			*dst_addr = ret_val;
-		if (src_addr)
-			*src_addr = readl(dmac->iomem + CH_DSA);
-	} else if (direction == DMA_MEM_TO_MEM) {
-		if (dst_addr)
-			*dst_addr = readl(dmac->iomem + CH_DTA);
-		if (src_addr)
-			*src_addr = readl(dmac->iomem + CH_DSA);
-	}
+    if (dmac->sdesc && dmac->sdesc->status != STAT_STOPPED) {
+        // Update the residue count in the dma_tx_state structure
+        dma_set_residue(txstate, readl(dmac->iomem + CH_DTC));
 
-	return ret_val;
+        // Update the current source and destination addresses
+        txstate->src_addr = readl(dmac->iomem + CH_DSA);
+        txstate->dst_addr = readl(dmac->iomem + CH_DTA);
+    }
+
+    return status;
 }
 
 static int ingenic_dma_terminate_all(struct dma_chan *chan)
@@ -1044,8 +1030,8 @@ static int __init ingenic_dma_probe(struct platform_device *pdev)
 	dma->dma_device.device_prep_dma_cyclic = ingenic_dma_prep_dma_cyclic;
 	dma->dma_device.device_prep_dma_memcpy = ingenic_dma_prep_dma_memcpy;
 	dma->dma_device.device_config = ingenic_dma_config;
-	dma->dma_device.get_current_trans_addr = jzdma_get_current_trans_addr;
-	dma->dma_device.device_terminate_all = ingenic_dma_terminate_all;
+    dma->dma_device.device_tx_status = ingenic_dma_tx_status;
+    dma->dma_device.device_terminate_all = ingenic_dma_terminate_all;
 	dma->dma_device.device_issue_pending = ingenic_dma_issue_pending;
 	dma->dma_device.copy_align = DMAENGINE_ALIGN_4_BYTES;
 	dma->dma_device.src_addr_widths = BIT(DMA_SLAVE_BUSWIDTH_1_BYTE) | BIT(DMA_SLAVE_BUSWIDTH_2_BYTES)
