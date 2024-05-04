@@ -16,7 +16,7 @@
 		uart1 = &uart1;
 		uart2 = &uart2;
 		msc0 = &msc0;
-		// msc1 = &msc1;
+		msc1 = &msc1;
 		// mac0 = &mac0;
 		spi0 = &spi0;
 	};
@@ -481,7 +481,7 @@
 		ranges = <>;
 
         msc0: msc@0x13450000 {
-			compatible = "jz4740-mmc";
+			compatible = "ingenic,mmc";
 			reg = <0x13450000 0x10000>;
 			status = "okay";
 			interrupt-parent = <&core_intc>;
@@ -490,32 +490,31 @@
 			pinctrl-0 = <&msc0_4bit>;
 		};
 
+		msc1: msc@0x13460000 {
+			compatible = "ingenic,mmc";
+			reg = <0x13460000 0x10000>;
+			status = "disabled";
+			interrupt-parent = <&core_intc>;
+			interrupts = <IRQ_MSC1>;
+			pinctrl-names ="default";
+			pinctrl-0 = <&msc1_4bit>;
+		};
 
-//		msc1: msc@0x13460000 {
-//			compatible = "jz4740-mmc";
-//			reg = <0x13460000 0x10000>;
-//			status = "disabled";
+//		ipu: ipu@0x13080000 {
+//			compatible = "ingenic,t31-ipu";
+//			reg = <0x13080000 0x10000>;
 //			interrupt-parent = <&core_intc>;
-//			interrupts = <IRQ_MSC1>;
-//			pinctrl-names ="default";
-//			pinctrl-0 = <&msc1_4bit>;
+//			interrupts = <IRQ_IPU>;
+//			status = "okay";
 //		};
-
-		ipu: ipu@0x13080000 {
-			compatible = "ingenic,t31-ipu";
-			reg = <0x13080000 0x10000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_IPU>;
-			status = "disabled";
-		};
-
-		isp: isp@0x13300000 {
-			compatible = "ingenic,t31-isp";
-			reg = <0x13300000 0x100000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_ISP>;
-			status = "disabled";
-		};
+//
+//		isp: isp@0x13300000 {
+//			compatible = "ingenic,t31-isp";
+//			reg = <0x13300000 0x100000>;
+//			interrupt-parent = <&core_intc>;
+//			interrupts = <IRQ_ISP>;
+//			status = "disabled";
+//		};
 	};
 
 };
