@@ -1180,11 +1180,6 @@ static noinline void __init kernel_init_freeable(void)
 
 	do_basic_setup();
 
-	/* Open the /dev/console on the rootfs, this should never fail */
-	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
-    {
-        pr_err("Warning: unable to open an initial console.\n");
-    }
 
 	(void) sys_dup(0);
 	(void) sys_dup(0);
@@ -1217,4 +1212,10 @@ static noinline void __init kernel_init_freeable(void)
     super_early_printk("Integrity load keys\n");
 	load_default_modules();
     super_early_printk("Load default modules\n");
+
+    /* Open the /dev/console on the rootfs, this should never fail */
+    if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
+    {
+        pr_err("Warning: unable to open an initial console.\n");
+    }
 }
