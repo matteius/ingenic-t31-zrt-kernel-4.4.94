@@ -436,21 +436,42 @@ void __init ingenic_clk_of_register_fixed_ext(struct ingenic_clk_provider *ctx,
                                               unsigned int nr_fixed_rate_clk,
                                               const struct of_device_id *clk_matches)
 {
-    struct clk *clk;
-    unsigned int idx;
+    struct device_node *np;
+    const struct of_device_id *match;
+    int idx = 0;
+
+    for_each_matching_node_and_match(np, clk_matches, &match) {
+        u32 rate;
+
+        if (of_property_read_u32(np, "clock-frequency", &rate))
+            continue;
+
+        fixed_rate_clk[idx].name = np->name;
+        fixed_rate_clk[idx].parent_name = of_clk_get_parent_name(np, 0);
+        fixed_rate_clk[idx].flags = CLK_IS_ROOT;
+        fixed_rate_clk[idx].fixed_rate = rate;
+
+        idx++;
+
+        if (idx >= nr_fixed_rate_clk)
+            break;
+    }
+
+    if (idx < nr_fixed_rate_clk)
+        pr_warn("%s: found only %d of %d fixed rate clocks\n",
+                __func__, idx, nr_fixed_rate_clk);
 
     for (idx = 0; idx < nr_fixed_rate_clk; idx++) {
-        printk("fixed_rate_clk[idx].name: %s\n", fixed_rate_clk[idx].name);
-        printk("fixed_rate_clk[idx].parent_name: %s\n", fixed_rate_clk[idx].parent_name);
-        printk("fixed_rate_clk[idx].flags: %d\n", fixed_rate_clk[idx].flags);
-        printk("fixed_rate_clk[idx].fixed_rate: %d\n", fixed_rate_clk[idx].fixed_rate);
+        struct clk *clk;
+
         clk = clk_register_fixed_rate(NULL, fixed_rate_clk[idx].name,
-                                      fixed_rate_clk[idx].parent_name, fixed_rate_clk[idx].flags,
+                                      fixed_rate_clk[idx].parent_name,
+                                      fixed_rate_clk[idx].flags,
                                       fixed_rate_clk[idx].fixed_rate);
 
         if (IS_ERR(clk)) {
-            pr_err("%s: failed to register clock %s\n", __func__,
-                   fixed_rate_clk[idx].name);
+            pr_err("%s: failed to register clock %s: %ld\n",
+                   __func__, fixed_rate_clk[idx].name, PTR_ERR(clk));
             continue;
         }
 
