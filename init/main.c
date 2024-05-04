@@ -1147,40 +1147,35 @@ static int __ref kernel_init(void *unused)
 	      "See Linux Documentation/init.txt for guidance.");
 }
 
-void print_dev_contents(void)
+static int print_dev_contents_cb(struct dir_context *ctx, const char *name, int namlen, loff_t offset, u64 ino, unsigned int d_type)
+{
+    if (name[0] != '.') {
+        printk(KERN_INFO "  %s\n", name);
+    }
+    return 0;
+}
+
+static void print_dev_contents(void)
 {
     struct file *file;
-    struct dir_context ctx;
+    struct dir_context ctx = {
+            .actor = print_dev_contents_cb,
+            .pos = 0,
+    };
 
     printk(KERN_INFO "Contents of /dev directory:\n");
 
-    file = filp_open("/dev", O_RDONLY, 0);
+    file = filp_open("/dev", O_RDONLY | O_DIRECTORY, 0);
     if (IS_ERR(file)) {
         printk(KERN_ERR "Failed to open /dev directory\n");
         return;
     }
 
-    ctx.pos = 0;
-    while (true) {
-        struct dentry *dentry;
-        char *name;
-
-        dentry = file_dentry(file);
-        if (!dentry)
-            break;
-
-        name = dentry->d_iname;
-        if (name[0] != '.') {
-            printk(KERN_INFO "  %s\n", name);
-        }
-
-        ctx.pos++;
-        if (iterate_dir(file, &ctx) != 0)
-            break;
-    }
+    iterate_dir(file, &ctx);
 
     filp_close(file, NULL);
 }
+
 
 static noinline void __init kernel_init_freeable(void)
 {
