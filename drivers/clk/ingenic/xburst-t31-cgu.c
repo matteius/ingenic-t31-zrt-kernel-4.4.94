@@ -957,138 +957,17 @@ static void __init xburst_cgu_init(struct device_node *np)
 {
     int retval;
 
-    cgu = ingenic_cgu_new(t31_cgu_clocks, ARRAY_SIZE(t31_cgu_clocks), np);
+    cgu = ingenic_cgu_new(jz4780_cgu_clocks,
+                          ARRAY_SIZE(jz4780_cgu_clocks), np);
     if (!cgu) {
         pr_err("%s: failed to initialise CGU\n", __func__);
         return;
     }
 
     retval = ingenic_cgu_register_clocks(cgu);
-    if (retval)
+    if (retval) {
         pr_err("%s: failed to register CGU Clocks\n", __func__);
-}
-CLK_OF_DECLARE(xburst_cgu, "ingenic,xburst-cgu", xburst_cgu_init);
-
-void xburst_clock_set_wait_mode(enum xburst_wait_mode mode)
-{
-    uint32_t lcr = readl(cgu->base + CPM_LCR);
-
-    switch (mode) {
-        case XBURST_WAIT_MODE_IDLE:
-            lcr &= ~LCR_SLEEP;
-            break;
-
-        case XBURST_WAIT_MODE_SLEEP:
-            lcr |= LCR_SLEEP;
-            break;
+        return;
     }
-
-    writel(lcr, cgu->base + CPM_LCR);
 }
-
-void xburst_clock_udc_disable_auto_suspend(void)
-{
-    uint32_t clkgr = readl(cgu->base + CPM_CLKGR);
-
-    clkgr &= ~CLKGR_UDC;
-    writel(clkgr, cgu->base + CPM_CLKGR);
-}
-EXPORT_SYMBOL_GPL(xburst_clock_udc_disable_auto_suspend);
-
-void xburst_clock_udc_enable_auto_suspend(void)
-{
-    uint32_t clkgr = readl(cgu->base + CPM_CLKGR);
-
-    clkgr |= CLKGR_UDC;
-    writel(clkgr, cgu->base + CPM_CLKGR);
-}
-EXPORT_SYMBOL_GPL(xburst_clock_udc_enable_auto_suspend);
-
-#define XBURST_CLOCK_GATE_UART0    BIT(14)
-#define XBURST_CLOCK_GATE_TCU      BIT(30)
-#define XBURST_CLOCK_GATE_DMAC     BIT(21)
-
-void xburst_clock_suspend(void)
-{
-    uint32_t clkgr, cppcr;
-
-    clkgr = readl(cgu->base + CPM_CLKGR);
-    clkgr |= XBURST_CLOCK_GATE_TCU | XBURST_CLOCK_GATE_DMAC | XBURST_CLOCK_GATE_UART0;
-    writel(clkgr, cgu->base + CPM_CLKGR);
-
-    cppcr = readl(cgu->base + CPM_CPAPCR);
-    cppcr &= ~BIT(t31_cgu_clocks[CLK_PLL_APLL].pll.enable_bit);
-    writel(cppcr, cgu->base + CPM_CPAPCR);
-}
-
-void xburst_clock_resume(void)
-{
-    uint32_t clkgr, cppcr, stable;
-
-    cppcr = readl(cgu->base + CPM_CPAPCR);
-    cppcr |= BIT(t31_cgu_clocks[CLK_PLL_APLL].pll.enable_bit);
-    writel(cppcr, cgu->base + CPM_CPAPCR);
-
-    stable = BIT(t31_cgu_clocks[CLK_PLL_APLL].pll.stable_bit);
-    do {
-        cppcr = readl(cgu->base + CPM_CPAPCR);
-    } while (!(cppcr & stable));
-
-    clkgr = readl(cgu->base + CPM_CLKGR);
-    clkgr &= ~XBURST_CLOCK_GATE_TCU;
-    clkgr &= ~XBURST_CLOCK_GATE_DMAC;
-    clkgr &= ~XBURST_CLOCK_GATE_UART0;
-    writel(clkgr, cgu->base + CPM_CLKGR);
-}
-
-/* Power management operations */
-static const struct dev_pm_ops xburst_cgu_pm_ops = {
-        .suspend = xburst_clock_suspend,
-        .resume = xburst_clock_resume,
-};
-
-/* Probe function */
-static int xburst_cgu_probe(struct platform_device *pdev)
-{
-    struct device_node *np = pdev->dev.of_node;
-    int retval;
-
-    cgu = ingenic_cgu_new(t31_cgu_clocks, ARRAY_SIZE(t31_cgu_clocks), np);
-    if (!cgu) {
-        dev_err(&pdev->dev, "%s: failed to initialise CGU\n", __func__);
-        return -ENOMEM;
-    }
-
-    retval = ingenic_cgu_register_clocks(cgu);
-    if (retval)
-        dev_err(&pdev->dev, "%s: failed to register CGU Clocks\n", __func__);
-
-    return retval;
-}
-
-/* Remove function */
-static int xburst_cgu_remove(struct platform_device *pdev)
-{
-    ingenic_cgu_unregister_clocks(cgu);
-    ingenic_cgu_free(cgu);
-    return 0;
-}
-
-
-/* Match table for device tree binding */
-static const struct of_device_id xburst_cgu_match_table[] = {
-        { .compatible = "ingenic,xburst-cgu", },
-        { /* sentinel */ }
-};
-MODULE_DEVICE_TABLE(of, xburst_cgu_match_table);
-
-static struct platform_driver xburst_cgu_driver = {
-        .driver = {
-                .name = "xburst-cgu",
-                .of_match_table = xburst_cgu_match_table,
-                .pm = &xburst_cgu_pm_ops,
-        },
-        .probe = xburst_cgu_probe,
-        .remove = xburst_cgu_remove,
-};
-
+CLK_OF_DECLARE(jz4780_cgu, "ingenic,xburst-t31-cgu", xburst_cgu_init);
