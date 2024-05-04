@@ -102,12 +102,11 @@
 
 	uart0: serial@0x10030000 {
 		compatible = "ingenic,x1000-uart";
-		reg = <0x10030000 0x1000>;
-		reg-shift = <2>;
+		reg = <0x10030000 0x100>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART0>;
-		clocks = <&clock CLK_GATE_UART0>, <&clock CLK_DIV_APB>;
-		clock-names = "module", "baud";
+		clocks = <&ext>, <&cgu CLK_GATE_UART0>;
+		clock-names = "baud", "module";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart0_pc>;
 		status = "disabled";
@@ -115,12 +114,11 @@
 
 	uart1: serial@0x10031000 {
 		compatible = "ingenic,x1000-uart";
-		reg = <0x10031000 0x1000>;
-		reg-shift = <2>;
+		reg = <0x10031000 0x100>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART1>;
-		clocks = <&clock CLK_GATE_UART1>, <&clock CLK_DIV_APB>;
-		clock-names = "module", "baud";
+		clocks = <&ext>, <&cgu CLK_GATE_UART1>;
+		clock-names = "baud", "module";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart1_pb>;
 		status = "okay";
@@ -128,12 +126,11 @@
 
 	uart2: serial@0x10032000 {
 		compatible = "ingenic,x1000-uart";
-		reg = <0x10032000 0x1000>;
-		reg-shift = <2>;
+		reg = <0x10032000 0x100>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART2>;
-		clocks = <&clock CLK_GATE_UART2>, <&clock CLK_DIV_APB>;
-		clock-names = "module", "baud";
+		clocks = <&ext>, <&cgu CLK_GATE_UART2>;
+		clock-names = "baud", "module";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart2_pc>;
 		status = "disabled";
