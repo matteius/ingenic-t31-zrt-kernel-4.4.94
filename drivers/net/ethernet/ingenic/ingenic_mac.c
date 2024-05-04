@@ -367,7 +367,7 @@ __attribute__((__unused__)) static void ingenic_mac_phy_dump(struct ingenic_mac_
 
 	printk("\n-------->PHY dump: %08X\n", lp->phydev->phy_id);
 	for (i = 0; i < sizeof(phy) / sizeof(u16); i++)
-		data[i] = lp->mii_bus->read(lp->mii_bus, lp->phydev->addr, phy[i]);
+		data[i] = lp->mii_bus->read(lp->mii_bus, lp->phydev->mdio.addr, phy[i]);
 
 	for (i = 0; i < sizeof(phy) / sizeof(u16); i++)
 		printk("PHY reg%d, value %04X\n", phy[i], data[i]);
@@ -831,7 +831,7 @@ static int mii_probe(struct net_device *dev)
 
 	/* search for connect PHY device */
 	for (i = 0; i < PHY_MAX_ADDR; i++) {
-		struct phy_device *const tmp_phydev = lp->mii_bus->phy_map[i];
+		struct phy_device *const tmp_phydev = lp->mii_bus->phy_map.map[i];
 
 		if (!tmp_phydev)
 			continue; /* no PHY here... */
@@ -856,7 +856,7 @@ static int mii_probe(struct net_device *dev)
 	else
 		phy_interface = PHY_INTERFACE_MODE_MII;
 
-	phydev = phy_connect(dev, dev_name(&phydev->dev), &ingenic_mac_adjust_link,
+	phydev = phy_connect(dev, dev_name(&phydev->mdio.dev), &ingenic_mac_adjust_link,
 			phy_interface);
 	if (IS_ERR(phydev)) {
 		printk(KERN_ERR "%s: Could not attach to PHY\n", dev->name);
@@ -1134,7 +1134,6 @@ static int ingenic_mac_hard_start_xmit(struct sk_buff *skb,
 		struct net_device *netdev)
 {
 	struct ingenic_mac_local *lp = netdev_priv(netdev);
-	synopGMACdevice *gmacdev = lp->gmacdev;
 	struct ingenic_mac_tx_ring *tx_ring;
 	unsigned int first;
 	int count = 1;
@@ -1655,7 +1654,7 @@ static void ingenic_mac_enable(struct ingenic_mac_local *lp) {
 	/* we only enable rx here */
 	synopGMAC_enable_dma_rx(gmacdev);
 	/* We can accept TX packets again */
-	lp->netdev->trans_start = jiffies;
+    netif_trans_update(lp->netdev);
 	netif_wake_queue(lp->netdev);
 }
 
@@ -1763,7 +1762,7 @@ static int ingenic_mac_open(struct net_device *dev)
 	synopGMAC_enable_dma_rx(gmacdev);
 
 	/* We can accept TX packets again */
-	lp->netdev->trans_start = jiffies;
+    netif_trans_update(lp->netdev);
 	netif_start_queue(dev);
 
 	return 0;
@@ -1857,9 +1856,9 @@ static void ingenic_mac_multicast_hash(struct net_device *dev)
            shouldn't this be a given if we have it here ? */
         if (!(*ha->addr & 1))
             continue;
-            crc = ether_crc(ETH_ALEN, ha->addr);
-            /* Take upper 6bits HASH value after bitwise reversal Ether CRC */
-            set_bit(~crc >> 26, (unsigned long *)mc_filter);
+        crc = ether_crc(ETH_ALEN, ha->addr);
+        /* Take upper 6bits HASH value after bitwise reversal Ether CRC */
+        set_bit(~crc >> 26, (unsigned long *)mc_filter);
     }
     /* TODO: set multicast hash filter here */
     synopGMAC_write_hash_table_high(g_gmacdev, mc_filter[1]);
@@ -2180,7 +2179,7 @@ static int ingenic_mac_probe(struct platform_device *pdev)
 		miibus->parent = &pdev->dev;
 		miibus->name = "ingenic_mii_bus";
 		snprintf(miibus->id, MII_BUS_ID_SIZE, "%d", lp->id);
-		miibus->irq = devm_kzalloc(&pdev->dev, sizeof(int) * PHY_MAX_ADDR, GFP_ATOMIC);
+        miibus->irq = devm_kcalloc(&pdev->dev, PHY_MAX_ADDR, sizeof(int), GFP_KERNEL);
 		for (i = 0; i < PHY_MAX_ADDR; ++i)
 			miibus->irq[i] = PHY_POLL;
 
@@ -2220,7 +2219,7 @@ static int ingenic_mac_probe(struct platform_device *pdev)
 	ndev->netdev_ops = &ingenic_mac_netdev_ops;
 	ndev->watchdog_timeo = 2 * HZ;
 
-	lp->mii.phy_id	= lp->phydev->addr;
+    lp->mii.phy_id = lp->phydev->mdio.addr;
 	lp->mii.phy_id_mask  = 0x1f;
 	lp->mii.reg_num_mask = 0x1f;
 	lp->mii.dev	= ndev;
