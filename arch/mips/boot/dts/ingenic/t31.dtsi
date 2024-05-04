@@ -412,14 +412,14 @@
 		};
 */
 
-//		mac0: mac@0x134b0000 {
-//			compatible = "ingenic,t31-mac";
-//			reg = <0x134b0000 0x2000>;
-//			interrupt-parent = <&core_intc>;
-//			interrupts = <IRQ_GMAC0>;
-//			status = "disabled";
-//			ingenic,rst-ms = <10>;
-//		};
+		mac0: mac@0x134b0000 {
+			compatible = "ingenic,t31-mac";
+			reg = <0x134b0000 0x2000>;
+			interrupt-parent = <&core_intc>;
+			interrupts = <IRQ_GMAC0>;
+			status = "disabled";
+			ingenic,rst-ms = <10>;
+		};
 
 		sfc: sfc@0x13440000 {
 			compatible = "ingenic,sfc";
