@@ -227,9 +227,10 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 	}
 
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
-	if (!data)
+	if (!data) {
         super_early_printk("Error: No data\n");
-		return -ENOMEM;
+        return -ENOMEM;
+    }
 
 	spin_lock_init(&uart.port.lock);
 	uart.port.type = PORT_16550A;
