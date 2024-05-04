@@ -82,6 +82,8 @@
 #include <linux/io.h>
 #include <linux/kaiser.h>
 #include <linux/cache.h>
+#include <linux/fs.h>
+#include <linux/dcache.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -1145,6 +1147,41 @@ static int __ref kernel_init(void *unused)
 	      "See Linux Documentation/init.txt for guidance.");
 }
 
+void print_dev_contents(void)
+{
+    struct file *file;
+    struct dir_context ctx;
+
+    printk(KERN_INFO "Contents of /dev directory:\n");
+
+    file = filp_open("/dev", O_RDONLY, 0);
+    if (IS_ERR(file)) {
+        printk(KERN_ERR "Failed to open /dev directory\n");
+        return;
+    }
+
+    ctx.pos = 0;
+    while (true) {
+        struct dentry *dentry;
+        char *name;
+
+        dentry = file_dentry(file);
+        if (!dentry)
+            break;
+
+        name = dentry->d_iname;
+        if (name[0] != '.') {
+            printk(KERN_INFO "  %s\n", name);
+        }
+
+        ctx.pos++;
+        if (iterate_dir(file, &ctx) != 0)
+            break;
+    }
+
+    filp_close(file, NULL);
+}
+
 static noinline void __init kernel_init_freeable(void)
 {
 	/*
@@ -1212,6 +1249,9 @@ static noinline void __init kernel_init_freeable(void)
     super_early_printk("Integrity load keys\n");
 	load_default_modules();
     super_early_printk("Load default modules\n");
+
+    // After the devtmpfs is mounted
+    print_dev_contents();
 
     /* Open the /dev/console on the rootfs, this should never fail */
     if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
