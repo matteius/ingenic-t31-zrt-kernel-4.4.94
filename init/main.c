@@ -788,6 +788,7 @@ asmlinkage __visible void __init start_kernel(void) {
     super_early_printk("Rest init\n");
 
 	prevent_tail_call_optimization();
+    super_early_printk("Prevent tail call optimization\n");
 }
 
 /* Call all constructor functions linked into the kernel. */
@@ -976,8 +977,10 @@ static void __init do_initcalls(void)
 {
 	int level;
 
-	for (level = 0; level < ARRAY_SIZE(initcall_levels) - 1; level++)
-		do_initcall_level(level);
+	for (level = 0; level < ARRAY_SIZE(initcall_levels) - 1; level++) {
+        super_early_printk("Do initcall level\n");
+        do_initcall_level(level);
+    }
 }
 
 /*
@@ -989,13 +992,21 @@ static void __init do_initcalls(void)
  */
 static void __init do_basic_setup(void)
 {
+    super_early_printk("Do basic setup\n");
 	cpuset_init_smp();
+    super_early_printk("CPU set init SMP\n");
 	shmem_init();
+    super_early_printk("Shmem init\n");
 	driver_init();
+    super_early_printk("Driver init\n");
 	init_irq_proc();
+    super_early_printk("Init IRQ proc\n");
 	do_ctors();
+    super_early_printk("Do constructors\n");
 	usermodehelper_enable();
+    super_early_printk("Usermode helper enable\n");
 	do_initcalls();
+    super_early_printk("Do initcalls\n");
 }
 
 static void __init do_pre_smp_initcalls(void)
