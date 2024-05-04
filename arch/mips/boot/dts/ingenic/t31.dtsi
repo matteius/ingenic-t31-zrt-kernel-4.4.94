@@ -3,6 +3,7 @@
 #include <dt-bindings/sound/ingenic-baic.h>
 #include <dt-bindings/net/ingenic_gmac.h>
 #include <dt-bindings/dma/ingenic-pdma.h>
+#include <dt-bindings/clock/ingenic-t31.h>
 
 / {
 	#address-cells = <1>;
@@ -105,8 +106,8 @@
 		reg-shift = <2>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART0>;
-		clocks = <&clock 0>;
-		clock-names = "ext";
+		clocks = <&clock CLK_GATE_UART0>, <&clock CLK_DIV_APB>;
+		clock-names = "module", "baud";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart0_pc>;
 		status = "disabled";
@@ -118,8 +119,8 @@
 		reg-shift = <2>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART1>;
-		clocks = <&clock 0>;
-		clock-names = "ext";
+		clocks = <&clock CLK_GATE_UART1>, <&clock CLK_DIV_APB>;
+		clock-names = "module", "baud";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart1_pb>;
 		status = "okay";
@@ -131,8 +132,8 @@
 		reg-shift = <2>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART2>;
-		clocks = <&clock 0>;
-		clock-names = "ext";
+		clocks = <&clock CLK_GATE_UART2>, <&clock CLK_DIV_APB>;
+		clock-names = "module", "baud";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart2_pc>;
 		status = "disabled";
