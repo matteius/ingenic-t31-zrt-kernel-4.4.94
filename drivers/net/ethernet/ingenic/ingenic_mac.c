@@ -831,7 +831,7 @@ static int mii_probe(struct net_device *dev)
 
 	/* search for connect PHY device */
 	for (i = 0; i < PHY_MAX_ADDR; i++) {
-		struct phy_device *const tmp_phydev = lp->mii_bus->phy_map.map[i];
+        struct phy_device *const tmp_phydev = mdiobus_get_phy(lp->mii_bus, i);
 
 		if (!tmp_phydev)
 			continue; /* no PHY here... */
@@ -2180,15 +2180,8 @@ static int ingenic_mac_probe(struct platform_device *pdev)
 		miibus->name = "ingenic_mii_bus";
 		snprintf(miibus->id, MII_BUS_ID_SIZE, "%d", lp->id);
         miibus->irq = devm_kcalloc(&pdev->dev, PHY_MAX_ADDR, sizeof(struct mii_bus_irq_map), GFP_KERNEL);
-        if (!miibus->irq) {
-            rc = -ENOMEM;
-            goto err_out_clk_cgu_disable;
-        }
-
-        for (i = 0; i < PHY_MAX_ADDR; ++i) {
-            miibus->irq[i].irq = PHY_POLL;
-            miibus->irq[i].gpiod = NULL;
-        }
+        for (i = 0; i < PHY_MAX_ADDR; ++i)
+            miibus->irq[i] = PHY_POLL;
 
 		/* init MDC CLK */
 		synopGMAC_set_mdc_clk_div(gmacdev, GmiiCsrClk4);
