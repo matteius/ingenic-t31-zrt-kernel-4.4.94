@@ -79,74 +79,46 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         /* PLL Clocks */
 
+#define DEF_PLL(name) { \
+	.reg = CPM_ ## name, \
+    .m_shift = 20, \
+    .m_bits = 12, \
+    .m_offset = 0, \
+    .n_shift = 14, \
+    .n_bits = 6, \
+    .n_offset = 0, \
+    .od_shift = 11, \
+    .od_bits = 3, \
+    .od_max = 8, \
+    .od_encoding = t31_pll_od_encoding, \
+    .stable_bit = 3, \
+    .bypass_bit = 0, \
+    .enable_bit = 2, \
+}
+
         [CLK_PLL_APLL] = {
                 "apll", CGU_CLK_PLL,
                 .parents = { CLK_EXT, -1, -1, -1 },
-                .pll = {
-                        .reg = CPM_CPAPCR,
-                        .m_shift = 20,
-                        .m_bits = 12,
-                        .m_offset = 0,
-                        .n_shift = 14,
-                        .n_bits = 6,
-                        .n_offset = 0,
-                        .od_shift = 11,
-                        .od_bits = 3,
-                        .od_max = 8,
-                        .od_encoding = t31_pll_od_encoding,
-                        .stable_bit = 3,
-                        .bypass_bit = 0,
-                        .enable_bit = 2,
-                },
+                .pll = DEF_PLL(CPAPCR),
         },
 
         [CLK_PLL_MPLL] = {
                 "mpll", CGU_CLK_PLL,
                 .parents = { CLK_EXT, -1, -1, -1 },
-                .pll = {
-                        .reg = CPM_CPMPCR,
-                        .m_shift = 20,
-                        .m_bits = 12,
-                        .m_offset = 0,
-                        .n_shift = 14,
-                        .n_bits = 6,
-                        .n_offset = 0,
-                        .od_shift = 11,
-                        .od_bits = 3,
-                        .od_max = 8,
-                        .od_encoding = t31_pll_od_encoding,
-                        .stable_bit = 3,
-                        .bypass_bit = 0,
-                        .enable_bit = 2,
-                },
+                .pll = DEF_PLL(CPMPCR),
         },
 
         [CLK_PLL_VPLL] = {
                 "vpll", CGU_CLK_PLL,
                 .parents = { CLK_EXT, -1, -1, -1 },
-                .pll = {
-                        .reg = CPM_CPVPCR,
-                        .m_shift = 20,
-                        .m_bits = 12,
-                        .m_offset = 0,
-                        .n_shift = 14,
-                        .n_bits = 6,
-                        .n_offset = 0,
-                        .od_shift = 11,
-                        .od_bits = 3,
-                        .od_max = 8,
-                        .od_encoding = t31_pll_od_encoding,
-                        .stable_bit = 3,
-                        .bypass_bit = 0,
-                        .enable_bit = 2,
-                },
+                .pll = DEF_PLL(CPVPCR),
         },
-
+#undef DEF_PLL
         /* Mux Clocks */
 
         [CLK_MUX_SCLKA] = {
-                "sclka", CGU_CLK_MUX,
-                .parents = { CLK_STOP, CLK_EXT, CLK_PLL_APLL, -1 },
+                "sclk_a", CGU_CLK_MUX,
+                .parents = {-1,  CLK_PLL_APLL, CLK_EXT, CLK_RTC_EXT, -1 },
                 .mux = {
                         .reg = CPM_CPCCR,
                         .shift = 30,
@@ -154,9 +126,10 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
                 },
         },
 
+
         [CLK_MUX_CPU_L2C] = {
                 "mux_cpu_l2c", CGU_CLK_MUX,
-                .parents = { CLK_STOP, CLK_SCLKA, CLK_PLL_MPLL, -1 },
+                .parents = { CPM_CPCCR, CLK_MUX_SCLKA, CLK_PLL_MPLL, -1 },
                 .mux = {
                         .reg = CPM_CPCCR,
                         .shift = 28,
@@ -166,7 +139,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_AHB0] = {
                 "mux_ahb0", CGU_CLK_MUX,
-                .parents = { CLK_STOP, CLK_SCLKA, CLK_PLL_MPLL, -1 },
+                .parents = { CPM_CPCCR, CLK_MUX_SCLKA, CLK_PLL_MPLL, -1 },
                 .mux = {
                         .reg = CPM_CPCCR,
                         .shift = 26,
@@ -176,7 +149,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_AHB2] = {
                 "mux_ahb2", CGU_CLK_MUX,
-                .parents = { CLK_STOP, CLK_SCLKA, CLK_PLL_MPLL, -1 },
+                .parents = { CPM_CPCCR, CLK_MUX_SCLKA, CLK_PLL_MPLL, -1 },
                 .mux = {
                         .reg = CPM_CPCCR,
                         .shift = 24,
@@ -186,7 +159,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_DDR] = {
                 "mux_ddr", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_DDRCDR,
                         .shift = 30,
@@ -196,7 +169,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_EL150] = {
                 "mux_el150", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_EL150CDR,
                         .shift = 30,
@@ -206,7 +179,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_RSA] = {
                 "mux_rsa", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_RSACDR,
                         .shift = 30,
@@ -216,7 +189,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_MACPHY] = {
                 "mux_macphy", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_MACCDR,
                         .shift = 30,
@@ -226,7 +199,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_LCD] = {
                 "mux_lcd", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_LPCDR,
                         .shift = 30,
@@ -236,7 +209,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_MSC0] = {
                 "mux_msc0", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_MSC0CDR,
                         .shift = 30,
@@ -246,7 +219,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_MSC1] = {
                 "mux_msc1", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_MSC1CDR,
                         .shift = 30,
@@ -256,7 +229,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_SSI] = {
                 "mux_ssi", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_SSICDR,
                         .shift = 30,
@@ -266,7 +239,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_I2ST] = {
                 "mux_i2st", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_I2STCDR,
                         .shift = 30,
@@ -276,7 +249,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_ISP] = {
                 "mux_isp", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_ISPCDR,
                         .shift = 30,
@@ -286,7 +259,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_I2SR] = {
                 "mux_i2sr", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_I2SRCDR,
                         .shift = 30,
@@ -296,7 +269,7 @@ static const struct ingenic_cgu_clk_info t31_cgu_clocks[] = {
 
         [CLK_MUX_CIM] = {
                 "mux_cim", CGU_CLK_MUX,
-                .parents = { CLK_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
+                .parents = { CLK_MUX_SCLKA, CLK_PLL_MPLL, CLK_PLL_VPLL, -1 },
                 .mux = {
                         .reg = CPM_CIMCDR,
                         .shift = 30,
@@ -957,8 +930,8 @@ static void __init xburst_cgu_init(struct device_node *np)
 {
     int retval;
 
-    cgu = ingenic_cgu_new(jz4780_cgu_clocks,
-                          ARRAY_SIZE(jz4780_cgu_clocks), np);
+    cgu = ingenic_cgu_new(t31_cgu_clocks,
+                          ARRAY_SIZE(t31_cgu_clocks), np);
     if (!cgu) {
         pr_err("%s: failed to initialise CGU\n", __func__);
         return;
