@@ -375,10 +375,10 @@
 			status = "okay";
 		};
 
-		otg_phy: otg_phy {
-			compatible = "ingenic,innophy";
-			reg = <0x10000000 0x1000 0x10060000 0x1000>;
-		};
+//		otg_phy: otg_phy {
+//			compatible = "ingenic,innophy";
+//			reg = <0x10000000 0x1000 0x10060000 0x1000>;
+//		};
 	};
 
 	ahb2 {
