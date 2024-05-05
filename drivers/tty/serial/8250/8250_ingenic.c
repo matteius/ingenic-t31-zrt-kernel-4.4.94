@@ -283,7 +283,7 @@ static int ingenic_uart_probe(struct platform_device *pdev)
     uart.port.fifosize = cdata->fifosize;
     uart.tx_loadsz = cdata->tx_loadsz;
     uart.capabilities = UART_CAP_FIFO | UART_CAP_RTOIE;
-    uart.port.uartclk = uartclk;
+    uart.port.uartclk = 24000000;
 
     /* Check for a fixed line number */
     line = of_alias_get_id(pdev->dev.of_node, "serial");
@@ -296,10 +296,6 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 
     if (data->clk_module)
         clk_prepare_enable(data->clk_module);
-
-    /* Set baud rate divisor for 115200 baud */
-    writel(uart.port.custom_divisor & 0xff, uart.port.membase + (UART_DLL << uart.port.regshift));
-    writel((uart.port.custom_divisor >> 8) & 0xff, uart.port.membase + (UART_DLM << uart.port.regshift));
 
     data->line = serial8250_register_8250_port(&uart);
     if (data->line < 0) {
