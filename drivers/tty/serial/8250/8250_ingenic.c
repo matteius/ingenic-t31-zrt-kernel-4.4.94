@@ -285,6 +285,9 @@ static int ingenic_uart_probe(struct platform_device *pdev)
     uart.capabilities = UART_CAP_FIFO | UART_CAP_RTOIE;
     uart.port.uartclk = uartclk;
 
+    /* Set the baud rate to 115200 */
+    uart.port.custom_divisor = uart.port.uartclk / (16 * 115200);
+
     /* Check for a fixed line number */
     line = of_alias_get_id(pdev->dev.of_node, "serial");
     if (line >= 0)
