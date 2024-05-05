@@ -132,6 +132,25 @@ static int __init ingenic_early_console_setup(struct earlycon_device *dev,
 	return 0;
 }
 
+static void print_available_clocks(struct platform_device *pdev)
+{
+    struct clk *clk;
+    int i = 0;
+
+    while (true) {
+        clk = of_clk_get(pdev->dev.of_node, i);
+        if (IS_ERR(clk))
+            break;
+        printk("Clock %d: %s\n", i, pdev->dev.of_node->name);
+        clk_put(clk);
+        i++;
+    }
+
+    printk("Total number of clocks: %d\n", i);
+}
+
+
+
 EARLYCON_DECLARE(jz4740_uart, ingenic_early_console_setup);
 OF_EARLYCON_DECLARE(jz4740_uart, "ingenic,jz4740-uart",
 		    ingenic_early_console_setup);
@@ -143,6 +162,10 @@ OF_EARLYCON_DECLARE(jz4775_uart, "ingenic,jz4775-uart",
 EARLYCON_DECLARE(jz4780_uart, ingenic_early_console_setup);
 OF_EARLYCON_DECLARE(jz4780_uart, "ingenic,jz4780-uart",
 		    ingenic_early_console_setup);
+
+EARLYCON_DECLARE(x1000_uart, ingenic_early_console_setup);
+OF_EARLYCON_DECLARE(x1000_uart, "ingenic,x1000-uart\"",
+            ingenic_early_console_setup);
 
 static void ingenic_uart_serial_out(struct uart_port *p, int offset, int value)
 {
@@ -226,6 +249,8 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+    print_available_clocks(pdev);
+
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data) {
         super_early_printk("Error: No data\n");
@@ -257,6 +282,7 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
     super_early_printk("ingenic_uart_probe: uart.port.membase\n");
+
 
 	data->clk_module = devm_clk_get(&pdev->dev, "module");
 	if (IS_ERR(data->clk_module)) {
