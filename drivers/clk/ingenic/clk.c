@@ -103,7 +103,7 @@ void ingenic_clk_of_dump(struct ingenic_clk_provider *ctx)
 void ingenic_clk_add_lookup(struct ingenic_clk_provider *ctx, struct clk *clk,
 				unsigned int id)
 {
-	if (ctx->clk_data.clks && id) {
+	if (ctx->clk_data.clks) {
         printk("Adding __clk_get_name(clk) to lookup: %s\n", __clk_get_name(clk));
 		ctx->clk_data.clks[id] = clk;
 	} else {
