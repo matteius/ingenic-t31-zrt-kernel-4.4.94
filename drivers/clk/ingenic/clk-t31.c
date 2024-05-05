@@ -259,6 +259,7 @@ static void __init t31_clk_init(struct device_node *np)
     printk("t31 Clock Power Management Unit init!\n");
 
     struct ingenic_clk_provider *ctx;
+    struct clk **clk_table;
 
     super_early_printk("Calling kzalloc\n");
 	printk("Calling kzalloc");
@@ -269,6 +270,10 @@ static void __init t31_clk_init(struct device_node *np)
         printk("%s: failed to allocate memory for CGU\n", __func__);
         return;
     }
+
+    clk_table = kcalloc(NR_CLKS, sizeof(struct clk *), GFP_KERNEL);
+    if (!clk_table)
+        panic("could not allocate clock lookup table\n");
 
     super_early_printk("t31_clk_init:\n");
     printk("t31_clk_init: ctx = %p\n", ctx);
@@ -281,6 +286,8 @@ static void __init t31_clk_init(struct device_node *np)
     }
 
     ctx->np = np;
+    ctx->clk_data.clks = clk_table;
+    ctx->clk_data.clk_num = NR_CLKS;
 
     printk("spin_lock_init\n");
     spin_lock_init(&ctx->lock);
