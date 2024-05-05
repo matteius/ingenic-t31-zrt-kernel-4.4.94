@@ -95,7 +95,7 @@
     };
 
 	cgu: x1000-cgu@0x10000000 {
-		compatible = "ingenic,x1000-cgu", "simple-mfd";
+		compatible = "ingenic,t31-clocks", "simple-mfd";
 		reg = <0x10000000 0x100>;
 		#address-cells = <1>;
 		#size-cells = <1>;
