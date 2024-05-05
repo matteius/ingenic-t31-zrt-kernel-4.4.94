@@ -107,7 +107,7 @@
 	};
 
 	core_ost: core-ost@0x12000000 {
-		compatible = "ingenic,core-ost";
+		compatible = "ingenic,t31-ost";
 		reg = <0x12000000 0x30>;
 		interrupt-parent = <&cpuintc>;
 		interrupt-names = "sys_ost";
