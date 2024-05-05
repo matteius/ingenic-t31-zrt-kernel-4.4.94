@@ -104,6 +104,25 @@
 
 		clocks = <&ext>, <&rtc_ext>;
 		clock-names = "ext", "rtc_ext";
+
+		// Define the UART clocks
+		gate_uart0: clk-gate-uart0 {
+			compatible = "ingenic,cgu-gate";
+			clocks = <&cgu 14>;
+			clock-output-names = "gate_uart0";
+		};
+
+		gate_uart1: clk-gate-uart1 {
+			compatible = "ingenic,cgu-gate";
+			clocks = <&cgu 15>;
+			clock-output-names = "gate_uart1";
+		};
+
+		gate_uart2: clk-gate-uart2 {
+			compatible = "ingenic,cgu-gate";
+			clocks = <&cgu 16>;
+			clock-output-names = "gate_uart2";
+		};
 	};
 
 	core_ost: core-ost@0x12000000 {
@@ -119,7 +138,7 @@
 		reg = <0x10030000 0x100>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART0>;
-		clocks = <&ext>, <&cgu CLK_GATE_UART0>;
+		clocks = <&ext>, <&cgu 14>;
 		clock-names = "baud", "module";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart0_pc>;
@@ -131,7 +150,7 @@
 		reg = <0x10031000 0x100>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART1>;
-		clocks = <&ext>, <&cgu CLK_GATE_UART1>;
+		clocks = <&ext>, <&cgu 15>;
 		clock-names = "baud", "module";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart1_pb>;
@@ -143,7 +162,7 @@
 		reg = <0x10032000 0x100>;
 		interrupt-parent = <&core_intc>;
 		interrupts = <IRQ_UART2>;
-		clocks = <&ext>, <&cgu CLK_GATE_UART2>;
+		clocks = <&ext>, <&cgu 16>;
 		clock-names = "baud", "module";
 		pinctrl-names = "default";
 		pinctrl-0 = <&uart2_pc>;
