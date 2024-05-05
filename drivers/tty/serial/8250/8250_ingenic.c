@@ -297,6 +297,9 @@ static int ingenic_uart_probe(struct platform_device *pdev)
     if (data->clk_module)
         clk_prepare_enable(data->clk_module);
 
+    // Ensure baud rate divisor is set for 115200 baud rate.
+    uart.port.custom_divisor = uartclk / 115200;
+
     data->line = serial8250_register_8250_port(&uart);
     if (data->line < 0) {
         err = data->line;
