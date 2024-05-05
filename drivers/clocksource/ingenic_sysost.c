@@ -438,12 +438,16 @@ static int __init ingenic_ost_probe(struct device_node *np)
 		goto err_free_ost;
 	}
 
-	ost->clk = of_clk_get_by_name(np, "ext");
-	if (IS_ERR(ost->clk)) {
-		ret = PTR_ERR(ost->clk);
-		pr_crit("%s: Cannot get OST clock\n", __func__);
-		goto err_free_ost;
-	}
+    ost->clk = of_clk_get_by_name(np, "ext");
+    if (IS_ERR(ost->clk)) {
+        pr_warn("%s: Cannot get 'ext' clock, trying 'np, 0'\n", __func__);
+        ost->clk = of_clk_get(np, 0);
+        if (IS_ERR(ost->clk)) {
+            ret = PTR_ERR(ost->clk);
+            pr_crit("%s: Cannot get clock\n", __func__);
+            goto err_free_ost;
+        }
+    }
 
 	ret = clk_prepare_enable(ost->clk);
 	if (ret) {
