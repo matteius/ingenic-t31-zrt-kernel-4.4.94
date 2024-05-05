@@ -123,43 +123,6 @@
 			clocks = <&cgu 16>;
 			clock-output-names = "gate_uart2";
 		};
-
-
-		uart0: serial@0x10030000 {
-			compatible = "ingenic,x1000-uart";
-			reg = <0x10030000 0x100>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_UART0>;
-			clocks = <&ext>, <&gate_uart0>;
-			clock-names = "baud", "module";
-			pinctrl-names = "default";
-			pinctrl-0 = <&uart0_pc>;
-			status = "disabled";
-		};
-
-		uart1: serial@0x10031000 {
-			compatible = "ingenic,x1000-uart";
-			reg = <0x10031000 0x100>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_UART1>;
-			clocks = <&ext>, <&gate_uart1>;
-			clock-names = "baud", "module";
-			pinctrl-names = "default";
-			pinctrl-0 = <&uart1_pb>;
-			status = "okay";
-		};
-
-		uart2: serial@0x10032000 {
-			compatible = "ingenic,x1000-uart";
-			reg = <0x10032000 0x100>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_UART2>;
-			clocks = <&ext>, <&gate_uart2>;
-			clock-names = "baud", "module";
-			pinctrl-names = "default";
-			pinctrl-0 = <&uart2_pc>;
-			status = "disabled";
-		};
 	};
 
 	core_ost: core-ost@0x12000000 {
@@ -168,6 +131,42 @@
 		interrupt-parent = <&cpuintc>;
 		interrupt-names = "sys_ost";
 		interrupts = <CORE_SYS_OST_IRQ>;
+	};
+
+	uart0: serial@0x10030000 {
+		compatible = "ingenic,x1000-uart";
+		reg = <0x10030000 0x100>;
+		interrupt-parent = <&core_intc>;
+		interrupts = <IRQ_UART0>;
+		clocks = <&ext>, <&gate_uart0>;
+		clock-names = "baud", "module";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart0_pc>;
+		status = "disabled";
+	};
+
+	uart1: serial@0x10031000 {
+		compatible = "ingenic,x1000-uart";
+		reg = <0x10031000 0x100>;
+		interrupt-parent = <&core_intc>;
+		interrupts = <IRQ_UART1>;
+		clocks = <&ext>, <&gate_uart1>;
+		clock-names = "baud", "module";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart1_pb>;
+		status = "okay";
+	};
+
+	uart2: serial@0x10032000 {
+		compatible = "ingenic,x1000-uart";
+		reg = <0x10032000 0x100>;
+		interrupt-parent = <&core_intc>;
+		interrupts = <IRQ_UART2>;
+		clocks = <&ext>, <&gate_uart2>;
+		clock-names = "baud", "module";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart2_pc>;
+		status = "disabled";
 	};
 
 
