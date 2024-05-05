@@ -170,7 +170,6 @@ void __init ingenic_clk_register_fixed_rate(struct ingenic_clk_provider *ctx,
         printk("__clk_get_name(clk): %s\n", __clk_get_name(clk));
 		ingenic_clk_add_lookup(ctx, clk, list->id);
         printk("clk lookup added\n");
-        /* register a clock lookup only if a clock alias is specified */
 		ret = clk_register_clkdev(clk, list->name, NULL);
 		if (ret) {
             printk("failed to register lookup %s\n", list->name);
