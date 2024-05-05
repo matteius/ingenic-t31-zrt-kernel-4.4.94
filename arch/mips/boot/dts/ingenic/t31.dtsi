@@ -54,11 +54,6 @@
 		interrupts = <2>;
 	};
 
-	memory {
-		device_type = "memory";
-		reg = <0x0 0x8000000>;
-	};
-
 	cpufreq: cpufreq-dt {
 		 compatible = "ingenic,t31-cpufreq";
 		 status = "okay";
