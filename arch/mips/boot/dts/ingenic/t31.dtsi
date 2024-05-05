@@ -110,18 +110,21 @@
 			compatible = "ingenic,cgu-gate";
 			clocks = <&cgu 14>;
 			clock-output-names = "gate_uart0";
+			#clock-cells = <1>;
 		};
 
 		gate_uart1: clk-gate-uart1 {
 			compatible = "ingenic,cgu-gate";
 			clocks = <&cgu 15>;
 			clock-output-names = "gate_uart1";
+			#clock-cells = <1>;
 		};
 
 		gate_uart2: clk-gate-uart2 {
 			compatible = "ingenic,cgu-gate";
 			clocks = <&cgu 16>;
 			clock-output-names = "gate_uart2";
+			#clock-cells = <1>;
 		};
 	};
 
