@@ -903,10 +903,10 @@ int __init_or_module do_one_initcall(initcall_t fn)
 	if (initcall_blacklisted(fn))
 		return -EPERM;
 
-	//if (initcall_debug)
-    ret = do_one_initcall_debug(fn);
-	//else
-	//	ret = fn();
+	if (initcall_debug)
+		ret = do_one_initcall_debug(fn);
+	else
+		ret = fn();
 
 	msgbuf[0] = 0;
 
@@ -1212,6 +1212,9 @@ static noinline void __init kernel_init_freeable(void)
 
 	do_basic_setup();
 
+	/* Open the /dev/console on the rootfs, this should never fail */
+	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
+		pr_err("Warning: unable to open an initial console.\n");
 
 	(void) sys_dup(0);
 	(void) sys_dup(0);
@@ -1243,14 +1246,4 @@ static noinline void __init kernel_init_freeable(void)
     integrity_load_keys();
     super_early_printk("Integrity load keys\n");
 	load_default_modules();
-    super_early_printk("Load default modules\n");
-
-    // After the devtmpfs is mounted
-    print_dev_contents();
-
-    /* Open the /dev/console on the rootfs, this should never fail */
-    if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
-    {
-        pr_err("Warning: unable to open an initial console.\n");
-    }
 }
