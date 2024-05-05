@@ -83,7 +83,7 @@
     };
 
 	clock: clock-controller@0x10000000 {
-		compatible = "ingenic,xburst-t31-cgu", "simple-mfd";
+		compatible = "ingenic,x1000-cgu", "simple-mfd";
 		reg = <0x10000000 0x100>;
 		clocks = <&ext>, <&rtc_ext>;
 		clock-names = "ext", "rtc_ext";
