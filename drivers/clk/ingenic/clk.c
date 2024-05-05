@@ -91,7 +91,7 @@ void ingenic_clk_of_dump(struct ingenic_clk_provider *ctx)
 
 		clk = clk_data->clks[i];
 		if(clk != ERR_PTR(-ENOENT)) {
-			printk("clk->id: %d clk->name: %s \n", i,  __clk_get_name(clk));
+			printk("clk->id: %d __clk_get_name(clk): %s \n", i,  __clk_get_name(clk));
 		} else {
 			printk("clk->id: %d , clk: %p\n", i, clk);
 		}
@@ -104,8 +104,11 @@ void ingenic_clk_add_lookup(struct ingenic_clk_provider *ctx, struct clk *clk,
 				unsigned int id)
 {
 	if (ctx->clk_data.clks && id) {
+        printk("Adding __clk_get_name(clk) to lookup: %s\n", __clk_get_name(clk));
 		ctx->clk_data.clks[id] = clk;
-	}
+	} else {
+        printk("Failed to add __clk_get_name(clk) to lookup: %s\n", __clk_get_name(clk));
+    }
 }
 
 /* register a list of aliases */
@@ -158,15 +161,19 @@ void __init ingenic_clk_register_fixed_rate(struct ingenic_clk_provider *ctx,
 		clk = clk_register_fixed_rate(NULL, list->name,
                                       list->parent_name, list->flags, list->fixed_rate);
 		if (IS_ERR(clk)) {
+            printk("failed to register clock %s\n", list->name);
 			pr_err("%s: failed to register clock %s\n", __func__,
 				list->name);
 			continue;
 		}
 
+        printk("__clk_get_name(clk): %s\n", __clk_get_name(clk));
 		ingenic_clk_add_lookup(ctx, clk, list->id);
-
+        printk("clk lookup added\n");
+        /* register a clock lookup only if a clock alias is specified */
 		ret = clk_register_clkdev(clk, list->name, NULL);
 		if (ret) {
+            printk("failed to register lookup %s\n", list->name);
             pr_err("%s: failed to register clock lookup for %s",
                    __func__, list->name);
         }
@@ -439,8 +446,10 @@ void __init ingenic_clk_of_register_fixed_ext(struct ingenic_clk_provider *ctx,
 	u32 index = 0;
 
 	for_each_matching_node_and_match(clk_np, clk_matches, &match) {
-		if (of_property_read_u32(clk_np, "clock-frequency", &freq))
-			continue;
+		if (of_property_read_u32(clk_np, "clock-frequency", &freq)) {
+            printk("clock-frequency not found\n");
+            continue;
+        }
 		fixed_rate_clk[index].fixed_rate = freq;
 		index++;
 	}
