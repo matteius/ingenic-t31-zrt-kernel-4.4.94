@@ -255,47 +255,24 @@ static const struct file_operations clocks_proc_fops ={
 };
 
 /* Register t31 clocks. */
-static void __init t31_clk_init(struct device_node *np)
+static void __init t31_clk_init(struct device_node *np, void __iomem *base)
 {
-    printk("t31 Clock Power Management Unit init!\n");
+	void __iomem *reg_base;
 
-    struct ingenic_clk_provider *ctx;
-    struct clk **clk_table;
-	int i;
-	
-    super_early_printk("Calling kzalloc\n");
-	printk("Calling kzalloc");
-    ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
-	printk("kzalloc returned");
-    if (!ctx) {
-        super_early_printk("Failed to allocate memory for CGU\n");
-        printk("%s: failed to allocate memory for CGU\n", __func__);
-        return;
-    }
+	printk("t31 Clock Power Management Unit init!\n");
 
-    clk_table = kcalloc(NR_CLKS, sizeof(struct clk *), GFP_KERNEL);
-    if (!clk_table)
-        panic("could not allocate clock lookup table\n");
+	reg_base = base;
 
-    super_early_printk("t31_clk_init:\n");
-    printk("t31_clk_init: ctx = %p\n", ctx);
-    ctx->reg_base = of_iomap(np, 0);
-    if (!ctx->reg_base) {
-        super_early_printk("Failed to map CGU registers\n");
-        printk("%s: failed to map CGU registers\n", __func__);
-        kfree(ctx);
-        return;
-    }
-	
-	for (i = 0; i < NR_CLKS; ++i)
-		clk_table[i] = ERR_PTR(-ENOENT);
+	if (np) {
+		reg_base = of_iomap(np, 0);
+		if (!reg_base)
+			panic("%s: failed to map registers\n", __func__);
+	}
 
-    ctx->np = np;
-    ctx->clk_data.clks = clk_table;
-    ctx->clk_data.clk_num = NR_CLKS;
 
-    printk("spin_lock_init\n");
-    spin_lock_init(&ctx->lock);
+	ctx = ingenic_clk_init(np, reg_base, NR_CLKS);
+	if (!ctx)
+		panic("%s: unable to allocate context.\n", __func__);
 
     /* Register Ext Clocks From DT */
     printk("ingenic_clk_of_register_fixed_ext\n");
