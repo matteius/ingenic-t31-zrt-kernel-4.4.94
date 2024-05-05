@@ -438,7 +438,7 @@ static int __init ingenic_ost_probe(struct device_node *np)
 		goto err_free_ost;
 	}
 
-	ost->clk = of_clk_get_by_name(np, "ost");
+	ost->clk = of_clk_get_by_name(np, "gate_ost");
 	if (IS_ERR(ost->clk)) {
 		ret = PTR_ERR(ost->clk);
 		pr_crit("%s: Cannot get OST clock\n", __func__);
@@ -538,5 +538,8 @@ err_free_ingenic_ost:
 	return ret;
 }
 
-CLOCKSOURCE_OF_DECLARE(x1000_ost,  "ingenic,t31-ost",  ingenic_ost_init);
+CLOCKSOURCE_OF_DECLARE(x1000_ost_cs, "ingenic,x1000-ost", ingenic_ost_clocksource_init);
+CLOCKSOURCE_OF_DECLARE(x1800_ost_cs, "ingenic,x1800-ost", ingenic_ost_clocksource_init);
+CLOCKSOURCE_OF_DECLARE(t31_ost_cs, "ingenic,t31-ost", ingenic_ost_clocksource_init);
+CLOCKSOURCE_OF_DECLARE(t40_ost_cs, "ingenic,t40-ost", ingenic_ost_clocksource_init);
 
