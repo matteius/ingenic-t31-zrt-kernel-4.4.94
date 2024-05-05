@@ -232,121 +232,85 @@ static unsigned int ingenic_uart_serial_in(struct uart_port *p, int offset)
 
 static int ingenic_uart_probe(struct platform_device *pdev)
 {
-    super_early_printk("ingenic_uart_probe\n");
-
     struct uart_8250_port uart = {};
-	struct resource *regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	struct resource *irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
-	struct ingenic_uart_data *data;
-	const struct ingenic_uart_config *cdata;
-	const struct of_device_id *match;
-	int err, line;
+    struct resource *regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+    struct resource *irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
+    struct ingenic_uart_data *data;
+    const struct ingenic_uart_config *cdata;
+    const struct of_device_id *match;
+    int err, line;
+    char clk_name[20];
+    unsigned long uartclk;
 
-	match = of_match_device(of_match, &pdev->dev);
-	if (!match) {
-        super_early_printk("Error: No device match found\n");
-		dev_err(&pdev->dev, "Error: No device match found\n");
-		return -ENODEV;
-	}
-	cdata = match->data;
+    match = of_match_device(of_match, &pdev->dev);
+    if (!match) {
+        dev_err(&pdev->dev, "Error: No device match found\n");
+        return -ENODEV;
+    }
+    cdata = match->data;
 
-	if (!regs || !irq) {
-        super_early_printk("Error: No registers/irq defined\n");
-		dev_err(&pdev->dev, "no registers/irq defined\n");
-		return -EINVAL;
-	}
-
-    struct device_node *np = pdev->dev.of_node;
-
-    print_available_clocks(np);
-
-	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
-	if (!data) {
-        super_early_printk("Error: No data\n");
-        return -ENOMEM;
+    if (!regs || !irq) {
+        dev_err(&pdev->dev, "no registers/irq defined\n");
+        return -EINVAL;
     }
 
-	spin_lock_init(&uart.port.lock);
-	uart.port.type = PORT_16550A;
-	uart.port.flags = UPF_SKIP_TEST | UPF_IOREMAP | UPF_FIXED_TYPE;
-	uart.port.iotype = UPIO_MEM;
-	uart.port.mapbase = regs->start;
-	uart.port.regshift = 2;
-	uart.port.serial_out = ingenic_uart_serial_out;
-	uart.port.serial_in = ingenic_uart_serial_in;
-	uart.port.irq = irq->start;
-	uart.port.dev = &pdev->dev;
-	uart.port.fifosize = cdata->fifosize;
-	uart.tx_loadsz = cdata->tx_loadsz;
-	uart.capabilities = UART_CAP_FIFO | UART_CAP_RTOIE;
+    data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
+    if (!data)
+        return -ENOMEM;
 
-	/* Check for a fixed line number */
-	line = of_alias_get_id(pdev->dev.of_node, "serial");
-	if (line >= 0)
-		uart.port.line = line;
+    pdev->id = of_alias_get_id(pdev->dev.of_node, "uart");
 
-	uart.port.membase = devm_ioremap(&pdev->dev, regs->start,
-					 resource_size(regs));
-	if (!uart.port.membase)
-		return -ENOMEM;
+    sprintf(clk_name, "gate_uart%d", pdev->id);
+    data->clk_module = devm_clk_get(&pdev->dev, clk_name);
+    if (IS_ERR_OR_NULL(data->clk_module)) {
+        dev_warn(&pdev->dev, "Failed to get uart clk. Using default clk rate (24MHz)\n");
+        uartclk = 24000000;
+        data->clk_module = NULL;
+    } else {
+        uartclk = clk_get_rate(data->clk_module);
+    }
 
-    super_early_printk("ingenic_uart_probe: uart.port.membase\n");
+    spin_lock_init(&uart.port.lock);
+    uart.port.type = PORT_16550A;
+    uart.port.flags = UPF_SKIP_TEST | UPF_IOREMAP | UPF_FIXED_TYPE;
+    uart.port.iotype = UPIO_MEM;
+    uart.port.mapbase = regs->start;
+    uart.port.regshift = 2;
+    uart.port.serial_out = ingenic_uart_serial_out;
+    uart.port.serial_in = ingenic_uart_serial_in;
+    uart.port.irq = irq->start;
+    uart.port.dev = &pdev->dev;
+    uart.port.fifosize = cdata->fifosize;
+    uart.tx_loadsz = cdata->tx_loadsz;
+    uart.capabilities = UART_CAP_FIFO | UART_CAP_RTOIE;
+    uart.port.uartclk = uartclk;
 
+    /* Check for a fixed line number */
+    line = of_alias_get_id(pdev->dev.of_node, "serial");
+    if (line >= 0)
+        uart.port.line = line;
 
-	data->clk_module = devm_clk_get(&pdev->dev, "module");
-	if (IS_ERR(data->clk_module)) {
-		err = PTR_ERR(data->clk_module);
-		if (err != -EPROBE_DEFER)
-			dev_err(&pdev->dev,
-				"unable to get module clock: %d\n", err);
-		return err;
-	}
+    uart.port.membase = devm_ioremap(&pdev->dev, regs->start, resource_size(regs));
+    if (!uart.port.membase)
+        return -ENOMEM;
 
-    super_early_printk("ingenic_uart_probe: data->clk_module\n");
+    if (data->clk_module)
+        clk_prepare_enable(data->clk_module);
 
-	data->clk_baud = devm_clk_get(&pdev->dev, "baud");
-	if (IS_ERR(data->clk_baud)) {
-		err = PTR_ERR(data->clk_baud);
-		if (err != -EPROBE_DEFER)
-			dev_err(&pdev->dev,
-				"unable to get baud clock: %d\n", err);
-		return err;
-	}
+    data->line = serial8250_register_8250_port(&uart);
+    if (data->line < 0) {
+        err = data->line;
+        goto out;
+    }
 
-    super_early_printk("ingenic_uart_probe: data->clk_baud \n");
+    platform_set_drvdata(pdev, data);
+    return 0;
 
-	err = clk_prepare_enable(data->clk_module);
-	if (err) {
-		dev_err(&pdev->dev, "could not enable module clock: %d\n", err);
-		goto out;
-	}
+    out:
+    if (data->clk_module)
+        clk_disable_unprepare(data->clk_module);
 
-    super_early_printk("ingenic_uart_probe: clk_prepare_enable(data->clk_module)\n");
-
-	err = clk_prepare_enable(data->clk_baud);
-	if (err) {
-		dev_err(&pdev->dev, "could not enable baud clock: %d\n", err);
-		goto out_disable_moduleclk;
-	}
-	uart.port.uartclk = clk_get_rate(data->clk_baud);
-
-    super_early_printk("ingenic_uart_probe: clk_prepare_enable(data->clk_baud)\n");
-
-	data->line = serial8250_register_8250_port(&uart);
-	if (data->line < 0) {
-		err = data->line;
-		goto out_disable_baudclk;
-	}
-
-	platform_set_drvdata(pdev, data);
-	return 0;
-
-out_disable_baudclk:
-	clk_disable_unprepare(data->clk_baud);
-out_disable_moduleclk:
-	clk_disable_unprepare(data->clk_module);
-out:
-	return err;
+    return err;
 }
 
 static int ingenic_uart_remove(struct platform_device *pdev)
@@ -354,8 +318,10 @@ static int ingenic_uart_remove(struct platform_device *pdev)
     struct ingenic_uart_data *data = platform_get_drvdata(pdev);
 
     serial8250_unregister_port(data->line);
-    clk_disable_unprepare(data->clk_module);
-    clk_disable_unprepare(data->clk_baud);
+
+    if (data->clk_module)
+        clk_disable_unprepare(data->clk_module);
+
     return 0;
 }
 
