@@ -132,22 +132,29 @@ static int __init ingenic_early_console_setup(struct earlycon_device *dev,
 	return 0;
 }
 
-static void print_available_clocks(struct platform_device *pdev)
+void print_available_clocks(struct device_node *np)
 {
-    struct clk *clk;
-    int i = 0;
+    struct device_node *clk_np;
+    int index = 0;
+
+    pr_info("Available clocks for %s:\n", np->full_name);
 
     while (true) {
-        clk = of_clk_get(pdev->dev.of_node, i);
-        if (IS_ERR(clk))
+        clk_np = of_parse_phandle(np, "clocks", index);
+        if (!clk_np)
             break;
-        printk("Clock %d: %s\n", i, pdev->dev.of_node->name);
-        clk_put(clk);
-        i++;
-    }
 
-    printk("Total number of clocks: %d\n", i);
+        const char *clk_name = of_get_property(clk_np, "clock-output-names", NULL);
+        if (!clk_name)
+            clk_name = "(unknown)";
+
+        pr_info("  Clock index %d: %s\n", index, clk_name);
+
+        of_node_put(clk_np);
+        index++;
+    }
 }
+
 
 
 
@@ -249,7 +256,9 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-    print_available_clocks(pdev);
+    struct device_node *np = pdev->dev.of_node;
+
+    print_available_clocks(np);
 
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data) {
