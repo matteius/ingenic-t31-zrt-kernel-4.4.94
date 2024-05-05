@@ -210,37 +210,33 @@ static const struct of_device_id ext_clk_match[] __initconst = {
 
 static int clocks_show(struct seq_file *m, void *v)
 {
-    int i = 0;
-    struct clk_onecell_data *clk_data = NULL;
-    struct clk *clk = NULL;
+	int i = 0;
+	struct clk_onecell_data * clk_data = NULL;
+	struct clk *clk = NULL;
 
-    if (m->private != NULL) {
-        seq_printf(m, "CLKGR\t: %08x\n", cpm_inl(CPM_CLKGR));
-        seq_printf(m, "CLKGR1\t: %08x\n", cpm_inl(CPM_CLKGR1));
-        seq_printf(m, "LCR1\t: %08x\n", cpm_inl(CPM_LCR));
-    } else {
-        seq_printf(m, " ID  NAME              FRE          sta     count   parent\n");
-
-        if (ctx != NULL && ctx->clk_data.clks != NULL) {
-            clk_data = &ctx->clk_data;
-            for (i = 0; i < clk_data->clk_num && i < ARRAY_SIZE(clk_data->clks); i++) {
-                clk = clk_data->clks[i];
-                if (clk != ERR_PTR(-ENOENT)) {
-                    const char *clk_name = __clk_get_name(clk);
-                    if (clk_name == NULL) {
-                        seq_printf(m, "--------------------------------------------------------\n");
-                    } else {
-                        unsigned int mhz = _get_rate(clk_name) / 1000;
-                        seq_printf(m, "%3d %-15s %4d.%03dMHz %7sable   %d %10s\n", i, clk_name
-                                , mhz / 1000, mhz % 1000
-                                , __clk_get_flags(clk) & CLK_FLG_ENABLE ? "en" : "dis"
-                                , __clk_get_enable_count(clk)
-                                , clk_get_parent(clk) ? __clk_get_name(clk_get_parent(clk)) : "root");
-                    }
-                }
-            }
-        }
-    }
+	if(m->private != NULL) {
+		seq_printf(m, "CLKGR\t: %08x\n", cpm_inl(CPM_CLKGR));
+		seq_printf(m, "CLKGR1\t: %08x\n", cpm_inl(CPM_CLKGR1));
+		seq_printf(m, "LCR1\t: %08x\n", cpm_inl(CPM_LCR));
+	} else {
+		seq_printf(m, " ID  NAME              FRE          sta     count   parent\n");
+		clk_data = &ctx->clk_data;
+		for(i = 0; i < clk_data->clk_num; i++) {
+			clk = clk_data->clks[i];
+			if (clk != ERR_PTR(-ENOENT)) {
+				if (__clk_get_name(clk) == NULL) {
+					seq_printf(m, "--------------------------------------------------------\n");
+				} else {
+					unsigned int mhz = _get_rate(__clk_get_name(clk)) / 1000;
+					seq_printf(m, "%3d %-15s %4d.%03dMHz %7sable   %d %10s\n", i, __clk_get_name(clk)
+								, mhz/1000, mhz%1000
+								, __clk_get_flags(clk) & CLK_FLG_ENABLE? "en": "dis"
+								, __clk_get_enable_count(clk)
+								, clk_get_parent(clk)? __clk_get_name(clk_get_parent(clk)): "root");
+				}
+			}
+		}
+	}
 
     return 0;
 }
@@ -265,7 +261,8 @@ static void __init t31_clk_init(struct device_node *np)
 
     struct ingenic_clk_provider *ctx;
     struct clk **clk_table;
-
+	int i;
+	
     super_early_printk("Calling kzalloc\n");
 	printk("Calling kzalloc");
     ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
@@ -289,6 +286,9 @@ static void __init t31_clk_init(struct device_node *np)
         kfree(ctx);
         return;
     }
+	
+	for (i = 0; i < NR_CLKS; ++i)
+		clk_table[i] = ERR_PTR(-ENOENT);
 
     ctx->np = np;
     ctx->clk_data.clks = clk_table;
