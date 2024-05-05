@@ -109,7 +109,7 @@ static int __init ingenic_early_console_setup(struct earlycon_device *dev,
 
 	ingenic_early_console_setup_clock(dev);
 
-	baud = dev->baud ?: 115200;
+	baud = 115200;
 	divisor = DIV_ROUND_CLOSEST(port->uartclk, 16 * baud);
 
 	early_out(port, UART_IER, 0);
@@ -284,9 +284,6 @@ static int ingenic_uart_probe(struct platform_device *pdev)
     uart.tx_loadsz = cdata->tx_loadsz;
     uart.capabilities = UART_CAP_FIFO | UART_CAP_RTOIE;
     uart.port.uartclk = uartclk;
-
-    /* Set the baud rate to 115200 */
-    uart.port.custom_divisor = uart.port.uartclk / (16 * 115200);
 
     /* Check for a fixed line number */
     line = of_alias_get_id(pdev->dev.of_node, "serial");
