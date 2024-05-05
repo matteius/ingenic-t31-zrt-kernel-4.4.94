@@ -359,39 +359,31 @@ void __init ingenic_clk_register_fra_div(struct ingenic_clk_provider *ctx,
 }
 
 
-/* register a list of gate clocks */
 void __init ingenic_clk_register_gate(struct ingenic_clk_provider *ctx,
-				const struct ingenic_gate_clock *list,
-				unsigned int nr_clk)
+                                      const struct ingenic_gate_clock *list,
+                                      unsigned int nr_clk)
 {
-	struct clk *clk;
-	unsigned int idx, ret;
+    struct clk *clk;
+    unsigned int idx, ret;
 
+    for (idx = 0; idx < nr_clk; idx++, list++) {
+        clk = clk_register_gate(NULL, list->name, list->parent_name, list->flags,
+                                ctx->reg_base + list->offset, list->bit_idx,
+                                list->gate_flags, &ctx->lock);
 
-	for (idx = 0; idx < nr_clk; idx++, list++) {
+        if (IS_ERR(clk)) {
+            pr_err("%s: failed to register clock %s\n", __func__,
+                   list->name);
+            continue;
+        }
 
-		clk = clk_register_gate(NULL, list->name, list->parent_name, list->flags,
-				        ctx->reg_base + list->offset, list->bit_idx,
-					list->gate_flags, &ctx->lock);
+        ingenic_clk_add_lookup(ctx, clk, list->id);
 
-		if (IS_ERR(clk)) {
-			pr_err("%s: failed to register clock %s\n", __func__,
-				list->name);
-			continue;
-		}
-
-		/* register a clock lookup only if a clock alias is specified */
-		if (list->alias) {
-			ret = clk_register_clkdev(clk, list->alias,
-							list->dev_name);
-			if (ret)
-				pr_err("%s: failed to register lookup %s\n",
-					__func__, list->alias);
-		}
-
-		ingenic_clk_add_lookup(ctx, clk, list->id);
-
-	}
+        ret = clk_register_clkdev(clk, list->name, NULL);
+        if (ret)
+            pr_err("%s: failed to register clock lookup for %s: %d\n",
+                   __func__, list->name, ret);
+    }
 }
 
 void __init ingenic_power_register_gate(struct ingenic_clk_provider *ctx,
