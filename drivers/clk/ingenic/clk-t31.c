@@ -281,8 +281,8 @@ static void __init t31_clk_init(struct device_node *np, void __iomem *base)
 
     /* Register PLLs. */
     printk("ingenic_clk_register_pll\n");
-    ingenic_clk_register_pll(ctx, t31_pll_clks,
-                             ARRAY_SIZE(t31_pll_clks), ctx->reg_base);
+	ingenic_clk_register_pll(ctx, t31_pll_clks,
+				ARRAY_SIZE(t31_pll_clks), reg_base);
 
 
     /* Register Muxs */
