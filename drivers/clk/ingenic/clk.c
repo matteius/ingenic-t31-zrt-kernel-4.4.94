@@ -225,14 +225,10 @@ void __init ingenic_clk_register_mux(struct ingenic_clk_provider *ctx,
 
 		ingenic_clk_add_lookup(ctx, clk, list->id);
 
-		/* register a clock lookup only if a clock alias is specified */
-		if (list->alias) {
-			ret = clk_register_clkdev(clk, list->alias,
-						list->dev_name);
-			if (ret)
-				pr_err("%s: failed to register lookup %s\n",
-						__func__, list->alias);
-		}
+        ret = clk_register_clkdev(clk, list->name, NULL);
+        if (ret)
+            pr_err("%s: failed to register clock lookup for %s: %d\n",
+                   __func__, list->name, ret);
 	}
 }
 
@@ -315,14 +311,10 @@ void __init ingenic_clk_register_bus_div(struct ingenic_clk_provider *ctx,
 
 		ingenic_clk_add_lookup(ctx, clk, list->id);
 
-		/* register a clock lookup only if a clock alias is specified */
-		if (list->alias) {
-			ret = clk_register_clkdev(clk, list->alias,
-						list->dev_name);
-			if (ret)
-				pr_err("%s: failed to register lookup %s\n",
-						__func__, list->alias);
-		}
+        ret = clk_register_clkdev(clk, list->name, NULL);
+        if (ret)
+            pr_err("%s: failed to register clock lookup for %s: %d\n",
+                   __func__, list->name, ret);
 	}
 }
 
