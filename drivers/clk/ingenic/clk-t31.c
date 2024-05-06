@@ -203,22 +203,22 @@ static void clk_div_table_generate(void)
 		t31_clk_div_table[i].div = (i + 1) * 4;
 	}
 
-    // Generate divider table for div_cim
+// Generate divider table for div_cim
     for (i = 0; i < ARRAY_SIZE(t31_clk_div_table_cim); i++) {
         t31_clk_div_table_cim[i].val = i;
-        t31_clk_div_table_cim[i].div = i + 1;
+        t31_clk_div_table_cim[i].div = 50; // Set all entries to the divider value for 24 MHz
     }
 
-    // Generate divider table for div_isp
+// Generate divider table for div_isp
     for (i = 0; i < ARRAY_SIZE(t31_clk_div_table_isp); i++) {
         t31_clk_div_table_isp[i].val = i;
-        t31_clk_div_table_isp[i].div = (i + 1) * 10;
+        t31_clk_div_table_isp[i].div = 10; // Set all entries to the divider value for 120 MHz
     }
 
-    // Generate divider table for div_el150
+// Generate divider table for div_el150
     for (i = 0; i < ARRAY_SIZE(t31_clk_div_table_el150); i++) {
         t31_clk_div_table_el150[i].val = i;
-        t31_clk_div_table_el150[i].div = (i + 1) * 3;
+        t31_clk_div_table_el150[i].div = 3; // Set all entries to the divider value for 400 MHz
     }
 
 }
