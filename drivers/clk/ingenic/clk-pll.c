@@ -127,7 +127,7 @@ static void __init _ingenic_clk_register_pll(struct ingenic_clk_provider *ctx,
 	}
 
 	init.name = pll_clk->dev_name;
-	init.flags = pll_clk->flags;
+	// init.flags = pll_clk->flags;
 	init.parent_names = &pll_clk->parent_name;
 	init.num_parents = 1;
 	init.ops = &ingenic_tx_pll_clk_ops;
@@ -160,6 +160,14 @@ static void __init _ingenic_clk_register_pll(struct ingenic_clk_provider *ctx,
 		return;
 	}
 
+    ret = clk_prepare_enable(clk);
+    if (ret) {
+        pr_err("%s: failed to enable pll clock %s : %d\n",
+        __func__, pll_clk->dev_name, ret);
+        clk_unregister(clk);
+        kfree(pll);
+        return;
+    }
     __clk_set_flags(clk, 1);
 	ingenic_clk_add_lookup(ctx, clk, pll_clk->id);
 
