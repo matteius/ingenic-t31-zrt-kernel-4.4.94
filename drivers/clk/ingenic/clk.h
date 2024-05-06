@@ -53,8 +53,8 @@ struct ingenic_clock_alias {
  */
 struct ingenic_fixed_rate_clock {
 	unsigned int		id;
-	char			    *name;
-	const char		    *parent_name;
+	char			*name;
+	const char		*parent_name;
 	unsigned long		flags;
 	unsigned long		fixed_rate;
 };
