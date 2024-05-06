@@ -107,7 +107,7 @@
 		interrupt-parent = <&cpuintc>;
 		interrupt-names = "sys_ost";
 		interrupts = <CORE_SYS_OST_IRQ>;
-		clocks = <&cgu CLK_EXT>; // Use the clock ID for "ext"
+		clocks = <&ext>;
 		clock-names = "ext";
 	};
 
