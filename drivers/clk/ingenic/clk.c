@@ -239,8 +239,7 @@ void __init ingenic_clk_register_mux(struct ingenic_clk_provider *ctx,
 
         ret = clk_prepare_enable(clk);
         if (ret) {
-            pr_err("%s: failed to enable mux clock %s : %d\n",
-                   __func__, pll_clk->dev_name, ret);
+            pr_err("%s: failed to enable mux clock\n");
             clk_unregister(clk);
             return;
         }
@@ -289,8 +288,7 @@ void __init ingenic_clk_register_cgu_div(struct ingenic_clk_provider *ctx,
 
         ret = clk_prepare_enable(clk);
         if (ret) {
-            pr_err("%s: failed to enable cgu clock %s : %d\n",
-                   __func__, pll_clk->dev_name, ret);
+            pr_err("%s: failed to enable cgu clock\n");
             clk_unregister(clk);
             return;
         }
@@ -345,8 +343,7 @@ void __init ingenic_clk_register_bus_div(struct ingenic_clk_provider *ctx,
 
         ret = clk_prepare_enable(clk);
         if (ret) {
-            pr_err("%s: failed to enable bus div clock %s : %d\n",
-                   __func__, pll_clk->dev_name, ret);
+            pr_err("%s: failed to enable bus div clock\n");
             clk_unregister(clk);
             return;
         }
@@ -385,8 +382,7 @@ void __init ingenic_clk_register_fra_div(struct ingenic_clk_provider *ctx,
 
         ret = clk_prepare_enable(clk);
         if (ret) {
-            pr_err("%s: failed to enable fra div clock %s : %d\n",
-                   __func__, pll_clk->dev_name, ret);
+            pr_err("%s: failed to enable fra div clock\n");
             clk_unregister(clk);
             return;
         }
@@ -428,8 +424,7 @@ void __init ingenic_clk_register_gate(struct ingenic_clk_provider *ctx,
 
         ret = clk_prepare_enable(clk);
         if (ret) {
-            pr_err("%s: failed to enable register gate clock %s : %d\n",
-                   __func__, pll_clk->dev_name, ret);
+            pr_err("%s: failed to enable register gate clock \n");
             clk_unregister(clk);
             return;
         }
