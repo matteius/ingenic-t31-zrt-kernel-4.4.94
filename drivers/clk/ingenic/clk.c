@@ -236,14 +236,6 @@ void __init ingenic_clk_register_mux(struct ingenic_clk_provider *ctx,
 				pr_err("%s: failed to register lookup %s\n",
 						__func__, list->alias);
 		}
-
-        ret = clk_prepare_enable(clk);
-        if (ret) {
-            pr_err("%s: failed to enable mux clock\n");
-            clk_unregister(clk);
-            return;
-        }
-	}
 }
 
 /* register a list of div clocks */
@@ -421,14 +413,6 @@ void __init ingenic_clk_register_gate(struct ingenic_clk_provider *ctx,
 				pr_err("%s: failed to register lookup %s\n",
 					__func__, list->alias);
 		}
-
-        ret = clk_prepare_enable(clk);
-        if (ret) {
-            pr_err("%s: failed to enable register gate clock \n");
-            clk_unregister(clk);
-            return;
-        }
-
 	}
 }
 
