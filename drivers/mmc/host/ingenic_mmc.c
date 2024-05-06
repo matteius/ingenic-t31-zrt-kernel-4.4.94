@@ -513,32 +513,31 @@ static inline void sg_to_desc(struct scatterlist *sgentry, struct desc_hd *dhd)
 
 static void ingenic_mmc_submit_dma(struct ingenic_mmc_host *host, struct mmc_data *data)
 {
-	int i = 0;
-	struct scatterlist *sgentry;
-	struct desc_hd *dhd = &(host->decshds[0]);
+    int i = 0;
+    struct scatterlist *sgentry;
+    struct desc_hd *dhd = &(host->decshds[0]);
+    enum dma_data_direction direction;
 
-	dma_map_sg(host->dev, data->sg, data->sg_len,
-			   data->flags & MMC_DATA_WRITE
-			   ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
+    direction = data->flags & MMC_DATA_WRITE ? DMA_TO_DEVICE : DMA_FROM_DEVICE;
 
-	for_each_sg(data->sg, sgentry, data->sg_len, i) {
-		sg_to_desc(sgentry, dhd);
-		if ((data->sg_len - i) > 1) {
-			if (unlikely(dhd->next == NULL))
-				dev_err(host->dev, "dhd->next == NULL\n");
-			else {
-				dhd->dma_desc->nda = dhd->next->dma_desc_phys_addr;
-				dhd = dhd->next;
-			}
-		}
-	}
+    dma_map_sg_attrs(host->dev, data->sg, data->sg_len, direction, DMA_ATTR_SKIP_CPU_SYNC);
 
-	dma_unmap_sg(host->dev, data->sg, data->sg_len,
-				 data->flags & MMC_DATA_WRITE
-				 ? DMA_TO_DEVICE : DMA_FROM_DEVICE);
+    for_each_sg(data->sg, sgentry, data->sg_len, i) {
+        sg_to_desc(sgentry, dhd);
+        if ((data->sg_len - i) > 1) {
+            if (unlikely(dhd->next == NULL))
+                dev_err(host->dev, "dhd->next == NULL\n");
+            else {
+                dhd->dma_desc->nda = dhd->next->dma_desc_phys_addr;
+                dhd = dhd->next;
+            }
+        }
+    }
 
-	dhd->dma_desc->dcmd |= DMACMD_ENDI;
-	dhd->dma_desc->dcmd &= ~DMACMD_LINK;
+    dma_unmap_sg_attrs(host->dev, data->sg, data->sg_len, direction, DMA_ATTR_SKIP_CPU_SYNC);
+
+    dhd->dma_desc->dcmd |= DMACMD_ENDI;
+    dhd->dma_desc->dcmd &= ~DMACMD_LINK;
 }
 
 static inline unsigned int get_incr(unsigned int dma_len)
