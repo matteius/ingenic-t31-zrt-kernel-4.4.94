@@ -179,6 +179,8 @@ struct clk *_register_bus_divider(struct device *dev, const char *name,
 	clk = clk_register(dev, &bus_div->div.hw);
 	if (IS_ERR(clk)) {
 		kfree(bus_div);
+    } else {
+        __clk_set_flags(clk, 1);
     }
 
 	return clk;
