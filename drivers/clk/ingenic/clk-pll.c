@@ -127,7 +127,7 @@ static void __init _ingenic_clk_register_pll(struct ingenic_clk_provider *ctx,
 	}
 
 	init.name = pll_clk->dev_name;
-//	init.flags = pll_clk->flags;
+	init.flags = pll_clk->flags;
 	init.parent_names = &pll_clk->parent_name;
 	init.num_parents = 1;
 	init.ops = &ingenic_tx_pll_clk_ops;
