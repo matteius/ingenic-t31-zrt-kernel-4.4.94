@@ -129,7 +129,7 @@ static struct ingenic_div_clock t31_div_clks[] __initdata = {
 	DIV(CLK_DIV_MSC1,		"div_msc1",		"mux_msc1",		CPM_MSC1CDR,	8,  0, t31_clk_div_table),
 	DIV(CLK_DIV_SFC,		"div_sfc",		"mux_ssi",		CPM_SSICDR,	    8,  0, NULL),
 	DIV(CLK_DIV_SSI,		"div_ssi",		"mux_ssi",		CPM_SSICDR,	    8,  0, NULL),
-	DIV(CLK_DIV_CIM,		"div_cim",		"mux_cim",		CPM_CIMCDR,	    8,  0, NULL),
+    DIV(CLK_DIV_CIM,        "div_cim",      "mux_cim",      CPM_CIMCDR,     8, CLK_DIVIDER_ONE_BASED | CLK_DIVIDER_ALLOW_ZERO, NULL),
 	DIV(CLK_DIV_ISP,		"div_isp",		"mux_isp",		CPM_ISPCDR,	    4,  0, NULL),
 	DIV(CLK_DIV_RSA,		"div_rsa",		"mux_rsa",		CPM_RSACDR,	    4,  0, NULL),
 	DIV(CLK_DIV_EL150,		"div_el150",	"mux_el150",	CPM_EL150CDR,   4,  0, NULL),
