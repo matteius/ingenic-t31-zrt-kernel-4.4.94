@@ -120,6 +120,9 @@ static struct ingenic_bus_clock t31_bus_div_clks[] __initdata = {
  ********************************************************************************/
 
 static struct clk_div_table t31_clk_div_table[256] = {};
+static struct clk_div_table t31_clk_div_table_cim[256] = {};
+static struct clk_div_table t31_clk_div_table_isp[16] = {};
+static struct clk_div_table t31_clk_div_table_el150[16] = {};
 
 static struct ingenic_div_clock t31_div_clks[] __initdata = {
 	DIV(CLK_DIV_DDR,		"div_ddr",		"mux_ddr",		CPM_DDRCDR,	    4,  0, NULL),
@@ -129,10 +132,10 @@ static struct ingenic_div_clock t31_div_clks[] __initdata = {
 	DIV(CLK_DIV_MSC1,		"div_msc1",		"mux_msc1",		CPM_MSC1CDR,	8,  0, t31_clk_div_table),
 	DIV(CLK_DIV_SFC,		"div_sfc",		"mux_ssi",		CPM_SSICDR,	    8,  0, NULL),
 	DIV(CLK_DIV_SSI,		"div_ssi",		"mux_ssi",		CPM_SSICDR,	    8,  0, NULL),
-    DIV(CLK_DIV_CIM,        "div_cim",      "mux_cim",      CPM_CIMCDR,     8, CLK_DIVIDER_ONE_BASED | CLK_DIVIDER_ALLOW_ZERO, NULL),
-	DIV(CLK_DIV_ISP,		"div_isp",		"mux_isp",		CPM_ISPCDR,	    4,  0, NULL),
+    DIV(CLK_DIV_CIM,        "div_cim",      "mux_cim",      CPM_CIMCDR,     8,  0, t31_clk_div_table_cim),
+	DIV(CLK_DIV_ISP,		"div_isp",		"mux_isp",		CPM_ISPCDR,	    4,  0, t31_clk_div_table_isp),
 	DIV(CLK_DIV_RSA,		"div_rsa",		"mux_rsa",		CPM_RSACDR,	    4,  0, NULL),
-	DIV(CLK_DIV_EL150,		"div_el150",	"mux_el150",	CPM_EL150CDR,   4,  0, NULL),
+	DIV(CLK_DIV_EL150,		"div_el150",	"mux_el150",	CPM_EL150CDR,   4,  0, t31_clk_div_table_el150),
 
 };
 
@@ -157,7 +160,7 @@ static struct ingenic_gate_clock t31_gate_clks[] __initdata = {
 	GATE(CLK_GATE_RISCV,    "gate_riscv",		"div_riscv",	CPM_CLKGR,  26, 0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_MIPI_CSI, "gate_csi",		    "div_ahb0",	    CPM_CLKGR,  25, 0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_LCD,	    "gate_lcd",		    "div_lcd",	    CPM_CLKGR,  24, 0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_ISP,	    "gate_isp",		    "div_isp",	    CPM_CLKGR,  23, 0, 			CLK_GATE_SET_TO_DISABLE),
+	GATE(CLK_GATE_ISP,	    "gate_isp",		    "div_isp",	    CPM_CLKGR,  23, CLK_IGNORE_UNUSED, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_PDMA,	    "gate_pdma",		"div_ahb2",	    CPM_CLKGR,  21, 0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_SFC,	    "gate_sfc",		    "div_sfc",	    CPM_CLKGR,  20, 0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_SSI1,	    "gate_ssi1",		"div_ssi",	    CPM_CLKGR,  19, 0, 			CLK_GATE_SET_TO_DISABLE),
@@ -184,7 +187,7 @@ static struct ingenic_gate_clock t31_gate_clks[] __initdata = {
 	GATE(CLK_GATE_AHB1,	    "gate_ahb1",		"div_ahb2",	    CPM_CLKGR1, 6,  0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_AES,	    "gate_aes",		    "div_ahb2",	    CPM_CLKGR1, 5,  0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_GMAC,	    "gate_gmac",		"div_macphy",	CPM_CLKGR1, 4,  0, 			CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_IPU,      "gate_ipu",         "div_ahb0",     CPM_CLKGR1, 2,  0,          CLK_GATE_SET_TO_DISABLE),
+	GATE(CLK_GATE_IPU,      "gate_ipu",         "div_ahb0",     CPM_CLKGR1, 2,  CLK_IGNORE_UNUSED,          CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_DTRNG,	"gate_dtrng",		"div_apb",	    CPM_CLKGR1, 1,  0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_EL150,	"gate_el150",		"div_el150",    CPM_CLKGR1, 0,  0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_CE_I2ST,	    "ce_i2st",		    "div_i2st",	    CPM_I2STCDR, 29, 0, 0),
@@ -199,6 +202,24 @@ static void clk_div_table_generate(void)
 		t31_clk_div_table[i].val = i;
 		t31_clk_div_table[i].div = (i + 1) * 4;
 	}
+
+    // Generate divider table for div_cim
+    for (i = 0; i < ARRAY_SIZE(t31_clk_div_table_cim); i++) {
+        t31_clk_div_table_cim[i].val = i;
+        t31_clk_div_table_cim[i].div = i + 1;
+    }
+
+    // Generate divider table for div_isp
+    for (i = 0; i < ARRAY_SIZE(t31_clk_div_table_isp); i++) {
+        t31_clk_div_table_isp[i].val = i;
+        t31_clk_div_table_isp[i].div = (i + 1) * 10;
+    }
+
+    // Generate divider table for div_el150
+    for (i = 0; i < ARRAY_SIZE(t31_clk_div_table_el150); i++) {
+        t31_clk_div_table_el150[i].val = i;
+        t31_clk_div_table_el150[i].div = (i + 1) * 3;
+    }
 
 }
 
