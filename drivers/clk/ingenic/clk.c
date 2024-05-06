@@ -278,13 +278,6 @@ void __init ingenic_clk_register_cgu_div(struct ingenic_clk_provider *ctx,
 				pr_err("%s: failed to register lookup %s\n",
 						__func__, list->alias);
 		}
-
-        ret = clk_prepare_enable(clk);
-        if (ret) {
-            pr_err("%s: failed to enable cgu clock\n");
-            clk_unregister(clk);
-            return;
-        }
 	}
 }
 
@@ -333,13 +326,6 @@ void __init ingenic_clk_register_bus_div(struct ingenic_clk_provider *ctx,
 				pr_err("%s: failed to register lookup %s\n",
 						__func__, list->alias);
 		}
-
-        ret = clk_prepare_enable(clk);
-        if (ret) {
-            pr_err("%s: failed to enable bus div clock\n");
-            clk_unregister(clk);
-            return;
-        }
 	}
 }
 
@@ -397,9 +383,7 @@ void __init ingenic_clk_register_gate(struct ingenic_clk_provider *ctx,
 			continue;
 		}
 
-        ingenic_clk_add_lookup(ctx, clk, list->id);
-
-        /* register a clock lookup only if a clock alias is specified */
+		/* register a clock lookup only if a clock alias is specified */
 		if (list->alias) {
 			ret = clk_register_clkdev(clk, list->alias,
 							list->dev_name);
@@ -407,6 +391,9 @@ void __init ingenic_clk_register_gate(struct ingenic_clk_provider *ctx,
 				pr_err("%s: failed to register lookup %s\n",
 					__func__, list->alias);
 		}
+
+		ingenic_clk_add_lookup(ctx, clk, list->id);
+
 	}
 }
 
