@@ -521,12 +521,16 @@
 			status = "okay";
 		};
 
-		isp: isp@0x13300000 {
-			compatible = "ingenic,t31-isp";
+		isp_mem_map: isp_mem_map@0x13300000 {
+			compatible = "ingenic,isp-mem-map";
 			reg = <0x13300000 0x100000>;
+		};
+
+		isp: isp {
+			compatible = "ingenic,t31-isp";
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_ISP>;
-			status = "disabled";
+			status = "okay";
 		};
 	};
 
