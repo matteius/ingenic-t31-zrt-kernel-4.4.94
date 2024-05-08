@@ -284,14 +284,15 @@ static void __init ingenic_ost_init(struct device_node *np)
         return;
     }
 
-    ext_clk = of_clk_get_by_name(np, "ext");
-    if (IS_ERR_OR_NULL(ext_clk)) {
-        pr_warn("Warning Ingenic Ost: Can not get extern clock, Please check clk driver !!\n\n\t\n");
-        ext_rate = 24000000;
-    } else {
-        ext_rate = clk_get_rate(ext_clk);
-        clk_put(ext_clk);
-    }
+	ext_clk = clk_get(NULL, "ext");
+	if (IS_ERR_OR_NULL(ext_clk)) {
+		pr_warn("Warning Ingenic Ost: Can not get extern clock, Please check clk driver !!\n\n\t\n");
+		ext_rate = 24000000;
+	} else {
+
+		ext_rate = clk_get_rate(ext_clk);
+		clk_put(ext_clk);
+	}
 
     tmr->iobase = iobase;
     evt->iobase = iobase;

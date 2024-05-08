@@ -107,8 +107,6 @@
 		interrupt-parent = <&cpuintc>;
 		interrupt-names = "sys_ost";
 		interrupts = <CORE_SYS_OST_IRQ>;
-		clocks = <&ext>;
-		clock-names = "ext";
 	};
 
 	uart0: serial@0x10030000 {
@@ -391,142 +389,142 @@
 			compatible = "ingenic,innophy";
 			reg = <0x10000000 0x1000 0x10060000 0x1000>;
 		};
-	};
 
-	ahb2 {
-		compatible = "simple-bus";
-		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges = <>;
+		ahb2 {
+			compatible = "simple-bus";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <>;
 
-		aes: aes@0x13430000 {
-			compatible = "ingenic,aes";
-			reg = <0x13430000 0x10000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_AES>;
-			status = "okay";
-		};
-/*
-		hash: hash@0x13480000 {
-			compatible = "ingenic,hash";
-			reg = <0x13480000 0x10000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_HASH>;
-			status = "okay";
-		};
-*/
-		/*rsa: rsa@0x134c0000 {
-			compatible = "ingenic,rsa";
-			reg = <0x134c0000 0x10000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_RSA>;
-			status = "okay";
-		};
-*/
+			aes: aes@0x13430000 {
+				compatible = "ingenic,aes";
+				reg = <0x13430000 0x10000>;
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_AES>;
+				status = "okay";
+			};
+	/*
+			hash: hash@0x13480000 {
+				compatible = "ingenic,hash";
+				reg = <0x13480000 0x10000>;
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_HASH>;
+				status = "okay";
+			};
+	*/
+			/*rsa: rsa@0x134c0000 {
+				compatible = "ingenic,rsa";
+				reg = <0x134c0000 0x10000>;
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_RSA>;
+				status = "okay";
+			};
+	*/
 
-		mac0: mac@0x134b0000 {
-			compatible = "ingenic,t31-mac";
-			reg = <0x134b0000 0x2000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_GMAC0>;
-			status = "disabled";
-			ingenic,rst-ms = <10>;
-		};
+			mac0: mac@0x134b0000 {
+				compatible = "ingenic,t31-mac";
+				reg = <0x134b0000 0x2000>;
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_GMAC0>;
+				status = "disabled";
+				ingenic,rst-ms = <10>;
+			};
 
-		sfc: sfc@0x13440000 {
-			compatible = "ingenic,sfc";
-			reg = <0x13440000 0x10000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_SFC>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&sfc_pa>;
-			status = "disabled";
-		};
+			sfc: sfc@0x13440000 {
+				compatible = "ingenic,sfc";
+				reg = <0x13440000 0x10000>;
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_SFC>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&sfc_pa>;
+				status = "disabled";
+			};
 
-		pdma: dma@13420000 {
-			compatible = "ingenic,t31-pdma";
-			reg = <0x13420000 0x10000>;
-			interrupt-parent = <&core_intc>;
-			interrupt-names = "pdma", "pdmam";
-			interrupts = <IRQ_PDMA>, <IRQ_PDMAM>;
-			#dma-channels = <32>;
-			#dma-cells = <1>;
-			ingenic,reserved-chs = <0x3>;
-		};
+			pdma: dma@13420000 {
+				compatible = "ingenic,t31-pdma";
+				reg = <0x13420000 0x10000>;
+				interrupt-parent = <&core_intc>;
+				interrupt-names = "pdma", "pdmam";
+				interrupts = <IRQ_PDMA>, <IRQ_PDMAM>;
+				#dma-channels = <32>;
+				#dma-cells = <1>;
+				ingenic,reserved-chs = <0x3>;
+			};
 
 
-		otg: otg@0x13500000 {
-			compatible = "ingenic,dwc2-hsotg";
-			reg = <0x13500000 0x40000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_OTG>;
-			ingenic,usbphy=<&otg_phy>;
-			status = "disabled";
-		};
+			otg: otg@0x13500000 {
+				compatible = "ingenic,dwc2-hsotg";
+				reg = <0x13500000 0x40000>;
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_OTG>;
+				ingenic,usbphy=<&otg_phy>;
+				status = "disabled";
+			};
 
-		efuse: efuse@0x13540000 {
-			compatible = "ingenic,t40-efuse";
-			reg = <0x13540000 0x10000>;
-			status = "okay";
-		};
-	};
-
-	ahb1 {
-		compatible = "simple-bus";
-		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges = <>;
-
-        el150: el150@0x13200000 {
-			compatible = "ingenic,t31-el150";
-			reg = <0x13200000 0x100000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_EL150>;
-			status = "disabled";
+			efuse: efuse@0x13540000 {
+				compatible = "ingenic,t40-efuse";
+				reg = <0x13540000 0x10000>;
+				status = "okay";
+			};
 		};
 
-	};
+		ahb1 {
+			compatible = "simple-bus";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <>;
 
-	ahb0 {
-		compatible = "simple-bus";
-		#address-cells = <1>;
-		#size-cells = <1>;
-		ranges = <>;
+			el150: el150@0x13200000 {
+				compatible = "ingenic,t31-el150";
+				reg = <0x13200000 0x100000>;
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_EL150>;
+				status = "disabled";
+			};
 
-        msc0: msc@0x13450000 {
-			compatible = "ingenic,mmc";
-			reg = <0x13450000 0x10000>;
-			status = "okay";
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_MSC0>;
-			pinctrl-names ="default";
-			pinctrl-0 = <&msc0_4bit>;
 		};
 
-		msc1: msc@0x13460000 {
-			compatible = "ingenic,mmc";
-			reg = <0x13460000 0x10000>;
-			status = "disabled";
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_MSC1>;
-			pinctrl-names ="default";
-			pinctrl-0 = <&msc1_4bit>;
-		};
+		ahb0 {
+			compatible = "simple-bus";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <>;
 
-		ipu: ipu@0x13080000 {
-			compatible = "ingenic,t31-ipu";
-			reg = <0x13080000 0x10000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_IPU>;
-			status = "okay";
-		};
+			msc0: msc@0x13450000 {
+				compatible = "ingenic,mmc";
+				reg = <0x13450000 0x10000>;
+				status = "okay";
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_MSC0>;
+				pinctrl-names ="default";
+				pinctrl-0 = <&msc0_4bit>;
+			};
 
-		isp: isp@0x13300000 {
-			compatible = "ingenic,t31-isp";
-			reg = <0x13300000 0x100000>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_ISP>;
-			status = "okay";
+			msc1: msc@0x13460000 {
+				compatible = "ingenic,mmc";
+				reg = <0x13460000 0x10000>;
+				status = "disabled";
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_MSC1>;
+				pinctrl-names ="default";
+				pinctrl-0 = <&msc1_4bit>;
+			};
+
+			ipu: ipu@0x13080000 {
+				compatible = "ingenic,t31-ipu";
+				reg = <0x13080000 0x10000>;
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_IPU>;
+				status = "okay";
+			};
+
+			isp: isp@0x13300000 {
+				compatible = "ingenic,t31-isp";
+				reg = <0x13300000 0x100000>;
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_ISP>;
+				status = "disabled";
+			};
 		};
 	};
 

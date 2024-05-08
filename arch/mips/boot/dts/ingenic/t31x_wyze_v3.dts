@@ -178,8 +178,20 @@
 		startup-delay-us = <100000>;
 	};
 
-	extclk: extclk {
-		clock-frequency = <24000000>;
+	isp_gpio_enable: isp-dummy-fixed-reg {
+		status = "okay";
+		compatible = "regulator-fixed";
+
+		regulator-name = "isp-gpio-enable";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-boot-on;
+		regulator-always-on;
+		enable-active-high;
+
+		gpio = <&gpa 18 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+
+		startup-delay-us = <100000>;
 	};
 
 	gpio_keys: gpio_keys {
