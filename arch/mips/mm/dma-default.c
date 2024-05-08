@@ -24,7 +24,7 @@
 
 #include <dma-coherence.h>
 
-#if defined(CONFIG_DMA_MAYBE_COHERENT) && !defined(CONFIG_DMA_PERDEV_COHERENT)
+#if defined(CONFIG_DMA_MAYBE_COHERENT)
 /* User defined DMA coherency from command line. */
 enum coherent_io_user_state coherentio = IO_COHERENCE_DEFAULT;
 EXPORT_SYMBOL_GPL(coherentio);
@@ -73,7 +73,8 @@ static inline int cpu_needs_post_dma_flush(struct device *dev)
 	return !plat_device_is_coherent(dev) &&
 	       (boot_cpu_type() == CPU_R10000 ||
 		boot_cpu_type() == CPU_R12000 ||
-		boot_cpu_type() == CPU_BMIPS5000);
+		boot_cpu_type() == CPU_BMIPS5000 ||
+		boot_cpu_type() == CPU_JZRISC);
 }
 
 static gfp_t massage_gfp_flags(const struct device *dev, gfp_t gfp)
@@ -161,7 +162,8 @@ static void *mips_dma_alloc_coherent(struct device *dev, size_t size,
 	*dma_handle = plat_map_dma_mem(dev, ret, size);
 	if (!plat_device_is_coherent(dev)) {
 		dma_cache_wback_inv((unsigned long) ret, size);
-		ret = UNCAC_ADDR(ret);
+		if (!hw_coherentio)
+			ret = UNCAC_ADDR(ret);
 	}
 
 	return ret;
@@ -209,7 +211,7 @@ static int mips_dma_mmap(struct device *dev, struct vm_area_struct *vma,
 	unsigned long pfn;
 	int ret = -ENXIO;
 
-	if (!plat_device_is_coherent(dev))
+	if (!plat_device_is_coherent(dev) && !hw_coherentio)
 		addr = CAC_ADDR(addr);
 
 	pfn = page_to_pfn(virt_to_page((void *)addr));
