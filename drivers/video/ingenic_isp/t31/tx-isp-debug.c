@@ -173,8 +173,30 @@ void* private_dev_get_drvdata(const struct device *dev)
 
 int private_platform_get_irq(struct platform_device *dev, unsigned int num)
 {
-	printk("private_platform_get_irq: called with num = %d\n", num);
-	return platform_get_irq(dev, num);
+	int irq;
+
+	// Log the entry into the function and the parameters
+	printk("private_platform_get_irq: called with num = %d for device %s\n", num, dev_name(&dev->dev));
+
+	// Log additional device details for debugging
+	if (dev->resource) {
+		printk("Device resource: start = %pa, end = %pa\n", &dev->resource->start, &dev->resource->end);
+	}
+	if (dev->dev.of_node) {
+		printk("Device has OF node: %pOF\n", dev->dev.of_node);
+	}
+
+	// Call the actual platform_get_irq function
+	irq = platform_get_irq(dev, num);
+
+	// Check if the returned IRQ is valid
+	if (irq < 0)
+		printk("private_platform_get_irq: failed to get IRQ, returned %d\n", irq);
+	else
+		printk("private_platform_get_irq: got IRQ %d for device %s\n", irq, dev_name(&dev->dev));
+
+	// Return the obtained IRQ number
+	return irq;
 }
 EXPORT_SYMBOL(private_platform_get_irq);
 

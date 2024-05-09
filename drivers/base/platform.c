@@ -99,7 +99,7 @@ int platform_get_irq(struct platform_device *dev, unsigned int num)
 		int ret;
 
 		ret = of_irq_get(dev->dev.of_node, num);
-		if (ret > 0 || ret == -EPROBE_DEFER)
+		if (ret >= 0 || ret == -EPROBE_DEFER)
 			return ret;
 	}
 

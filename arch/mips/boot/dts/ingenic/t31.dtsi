@@ -518,6 +518,21 @@
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_ISP>;
 				status = "okay";
+
+				isp_m0: isp-m0 {
+					compatible = "ingenic,t31-isp";
+					interrupts = <IRQ_ISP>;
+				};
+
+				isp_w02: isp-w02 {
+					compatible = "ingenic,t31-isp";
+					interrupts = <IRQ_ISP>;
+				};
+
+				isp_w01: isp-w01 {
+					compatible = "ingenic,t31-isp";
+					interrupts = <IRQ_ISP>;
+				};
 			};
 		};
 	};
