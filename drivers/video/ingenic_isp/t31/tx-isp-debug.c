@@ -43,7 +43,6 @@
 #include <asm/uaccess.h>
 #include <asm/cacheflush.h>
 #include <jz_proc.h>
-#include <misc/isp_mem_map.h>
 
 #include <txx-funcs.h>
 
