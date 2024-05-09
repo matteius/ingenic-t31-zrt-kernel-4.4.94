@@ -194,35 +194,38 @@ void private_release_mem_region(resource_size_t start, resource_size_t n)
 EXPORT_SYMBOL(private_release_mem_region);
 
 void __iomem *private_ioremap(phys_addr_t offset, unsigned long size) {
-printk("private_ioremap: called with offset: %lx, size: %lu\n", offset, size);
-volatile void __iomem *addr = ioremap(offset, size);
+	printk("private_ioremap: called with offset: %lx, size: %lu\n", offset, size);
+	volatile void __iomem *addr = ioremap(offset, size);
 
-// Print non-zero memory values from addr to addr + size
-unsigned int *ptr = (unsigned int *)addr;
-unsigned int num_values = size / sizeof(unsigned int);
-unsigned int i;
-int printed_values = 0;
+	mdelay(1000);
 
-printk("Non-zero memory values from %p to %p:\n", addr, addr + size);
-for (i = 0; i < num_values; i++) {
-if (*ptr != 0) {
-if (printed_values % 4 == 0) {
-printk("%p: ", ptr);
-}
-printk("0x%08x ", *ptr);
-if ((printed_values + 1) % 4 == 0 || i == num_values - 1) {
-printk("\n");
-}
-printed_values++;
-}
-ptr++;
-}
+	// Print non-zero memory values from addr to addr + size
+	unsigned int *ptr = (unsigned int *)addr;
+	unsigned int num_values = size / sizeof(unsigned int);
+	unsigned int i;
+	int printed_values = 0;
 
-if (printed_values == 0) {
-printk("No non-zero memory values found.\n");
-}
+	printk("Non-zero memory values from %p to %p:\n", addr, addr + size);
+	for (i = 0; i < num_values; i++) {
+		unsigned int value = ioread32((void __iomem *)ptr);
+		if (value != 0) {
+			if (printed_values % 4 == 0) {
+				printk("%p: ", ptr);
+			}
+			printk("0x%08x ", *ptr);
+			if ((printed_values + 1) % 4 == 0 || i == num_values - 1) {
+				printk("\n");
+			}
+			printed_values++;
+		}
+		ptr += sizeof(unsigned int);
+	}
 
-return addr;
+	if (printed_values == 0) {
+	printk("No non-zero memory values found.\n");
+	}
+
+	return addr;
 }
 EXPORT_SYMBOL(private_ioremap);
 

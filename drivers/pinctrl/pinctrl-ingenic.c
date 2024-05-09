@@ -183,7 +183,7 @@ static int ingenic_gpio_get_pull_state(struct ingenic_gpio_chip *chip, u32 pins)
 	pull_up = (ingenic_gpio_readl(chip, PxPUEN) & BIT(pins)) >> pins;
 
 	if(pull_down && pull_up) {
-		dev_warn(chip->gc.parent, "Set both pull_up and pull_down on %s %d\n", chip->name, pins);
+		pr_warn("Set both pull_up and pull_down on %s %d\n", chip->name, pins);
 	}
 
 	if(pull_down) {
@@ -603,42 +603,41 @@ static int ingenic_of_gpio_xlate(struct gpio_chip *gc,
 }
 
 static int ingenic_gpio_chip_add(struct ingenic_pinctrl *pctl,
-		struct device_node *np, int base, int idx)
+                                 struct device_node *np, int base, int idx)
 {
-	struct ingenic_gpio_chip *jzgc = &pctl->gpio_chips[idx];
-	struct gpio_chip *gc = &jzgc->gc;
-	u32 ngpio;
+    struct ingenic_gpio_chip *jzgc = &pctl->gpio_chips[idx];
+    struct gpio_chip *gc = &jzgc->gc;
+    u32 ngpio;
 
-	jzgc->gc = ingenic_gpiolib_chip;
-	snprintf(jzgc->name, sizeof(jzgc->name), "GP%c", 'A' + idx);
+    jzgc->gc = ingenic_gpiolib_chip;
+    snprintf(jzgc->name, sizeof(jzgc->name), "GP%c", 'A' + idx);
 
-	if (of_property_read_u32(np, "ingenic,num-gpios", &ngpio))
-		ngpio = MAX_GPIOS_ON_CHIP;
-	if (of_property_read_u32(np, "ingenic,filter-gpios", &jzgc->filter_bitmap))
-		jzgc->filter_bitmap = 0;
-	if (of_property_read_u32(np, "ingenic,pull-gpios", &jzgc->pull_bitmap))
-		jzgc->pull_bitmap = 0;
-	if (of_property_read_u32(np, "#gpio-cells", &gc->of_gpio_n_cells))
-		gc->of_gpio_n_cells = 3;
-	jzgc->used_pins_bitmap = 0;
-	pr_debug("%s (%d) config:\nfilter %08x\npull %08x\ncells=%d\nbase%d\n",
-			jzgc->name,
-			ngpio,
-			jzgc->filter_bitmap,
-			jzgc->pull_bitmap,
-			gc->of_gpio_n_cells,
-			base);
-	jzgc->of_node = np;
-	jzgc->idx = idx;
-	jzgc->pctl = pctl;
-	gc->ngpio = (u16)ngpio;
-	gc->of_node = np;
-	gc->base = base;
-	gc->parent = pctl->dev;
-	gc->label = jzgc->name;
-	gc->of_xlate = ingenic_of_gpio_xlate;
+    if (of_property_read_u32(np, "ingenic,num-gpios", &ngpio))
+        ngpio = MAX_GPIOS_ON_CHIP;
+    if (of_property_read_u32(np, "ingenic,filter-gpios", &jzgc->filter_bitmap))
+        jzgc->filter_bitmap = 0;
+    if (of_property_read_u32(np, "ingenic,pull-gpios", &jzgc->pull_bitmap))
+        jzgc->pull_bitmap = 0;
+    if (of_property_read_u32(np, "#gpio-cells", &gc->of_gpio_n_cells))
+        gc->of_gpio_n_cells = 3;
+    jzgc->used_pins_bitmap = 0;
+    pr_debug("%s (%d) config:\nfilter %08x\npull %08x\ncells=%d\nbase%d\n",
+             jzgc->name,
+             ngpio,
+             jzgc->filter_bitmap,
+             jzgc->pull_bitmap,
+             gc->of_gpio_n_cells,
+             base);
+    jzgc->of_node = np;
+    jzgc->idx = idx;
+    jzgc->pctl = pctl;
+    gc->ngpio = (u16)ngpio;
+    gc->of_node = np;
+    gc->base = base;
+    gc->label = jzgc->name;
+    gc->of_xlate = ingenic_of_gpio_xlate;
 
-	return gpiochip_add(gc);
+    return gpiochip_add(gc);
 }
 
 static void ingenic_gpio_sleep_init(struct device_node *np,

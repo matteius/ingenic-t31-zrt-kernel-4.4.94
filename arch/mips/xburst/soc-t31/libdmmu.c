@@ -558,33 +558,38 @@ static struct dmmu_handle *create_handle(void)
 }
 
 static int dmmu_make_present(unsigned long addr, unsigned long end) {
-    struct vm_area_struct *vma;
-    struct page **pages;
-    int ret, len, write;
+	int ret, len, write;
+	struct vm_area_struct *vma;
+	unsigned long vm_page_prot;
+	unsigned int gup_flags;
+	
+	vma = find_vma(current->mm, addr);
+	if (!vma) {
+		printk("dmmu_make_present error. addr=%lx len=%lx\n", addr, end - addr);
+		return -1;
+	}
 
-    vma = find_vma(current->mm, addr);
-    if (!vma) {
-        printk("dmmu_make_present error. addr=%lx len=%lx\n", addr, end - addr);
-        return -1;
-    }
+	if (vma->vm_flags & VM_PFNMAP)
+		return 0;
 
-    if (vma->vm_flags & VM_PFNMAP)
-        return 0;
+	write = (vma->vm_flags & VM_WRITE) != 0;
+	BUG_ON(addr >= end);
+	BUG_ON(end > vma->vm_end);
 
-    write = (vma->vm_flags & VM_WRITE) != 0;
-    BUG_ON(addr >= end);
-    BUG_ON(end > vma->vm_end);
+	vm_page_prot = pgprot_val(vma->vm_page_prot);
+	vma->vm_page_prot = __pgprot(vm_page_prot | _PAGE_VALID | _PAGE_ACCESSED | _PAGE_PRESENT);
 
-    len = DIV_ROUND_UP(end - addr, PAGE_SIZE);
-    pages = kmalloc_array(len, sizeof(struct page *), GFP_KERNEL);
-    if (!pages)
-        return -ENOMEM;
+	len = DIV_ROUND_UP(end - addr, PAGE_SIZE);
+	gup_flags = write ? FOLL_WRITE : 0;
 
-    ret = get_user_pages(addr, len, write ? FOLL_WRITE : 0, pages, NULL);
+	ret = get_user_pages(addr, len, gup_flags, NULL, NULL);
 
-    kfree(pages);
-
-    return ret == len ? 0 : -1;
+	vma->vm_page_prot = __pgprot(vm_page_prot);
+	if (ret < 0) {
+		printk("dmmu_make_present get_user_pages error(%d). addr=%lx len=%lx\n", -ret, addr, end - addr);
+		return ret;
+	}
+	return ret == len ? 0 : -1;
 }
 
 static void dmmu_cache_wback(struct dmmu_handle *h)

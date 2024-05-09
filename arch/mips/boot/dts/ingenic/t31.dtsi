@@ -326,8 +326,6 @@
 			status = "okay";
 		};
 
-
-
 		i2c1: i2c@0x10051000 {
 			compatible = "ingenic,t31-i2c";
 			reg = <0x10051000 0x1000>;
@@ -335,11 +333,7 @@
 			interrupts = <IRQ_I2C1>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			emptyfifo_hold_master = <1>; /* embeddedsw.dts.params.emptyfifo_hold_master type NUMBER */
 			status = "okay";
-			speed-mode = <0>; /* appended from boardinfo */
-			i2c-sda-falling-time-ns = <5000>; /* appended from boardinfo */
-			i2c-scl-falling-time-ns = <5000>; /* appended from boardinfo */
 		};
 
         spi0: spi0@0x10043000 {
@@ -352,7 +346,7 @@
 			dma-names = "tx", "rx";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			status = "disabled";
+			status = "okay";
 		};
 		spi1: spi1@0x10044000 {
 			compatible = "ingenic,spi";
@@ -364,7 +358,7 @@
 			dma-names = "tx", "rx";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			status = "disabled";
+			status = "okay";
 		};
 
 		dtrng: dtrng@0x10072000 {
@@ -372,7 +366,7 @@
 			reg = <0x10072000 0x100>;
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_DTRNG>;
-			status = "disabled";
+			status = "okay";
 		};
 		des: des@0x10061000 {
 			compatible = "ingenic,des";
@@ -426,7 +420,7 @@
 				reg = <0x134b0000 0x2000>;
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_GMAC0>;
-				status = "disabled";
+				status = "okay";
 				ingenic,rst-ms = <10>;
 			};
 
@@ -437,7 +431,7 @@
 				interrupts = <IRQ_SFC>;
 				pinctrl-names = "default";
 				pinctrl-0 = <&sfc_pa>;
-				status = "disabled";
+				status = "okay";
 			};
 
 			pdma: dma@13420000 {
@@ -458,7 +452,7 @@
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_OTG>;
 				ingenic,usbphy=<&otg_phy>;
-				status = "disabled";
+				status = "okay";
 			};
 
 			efuse: efuse@0x13540000 {
@@ -479,7 +473,7 @@
 				reg = <0x13200000 0x100000>;
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_EL150>;
-				status = "disabled";
+				status = "okay";
 			};
 
 		};
@@ -523,7 +517,7 @@
 				reg = <0x13300000 0x100000>;
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_ISP>;
-				status = "disabled";
+				status = "okay";
 			};
 		};
 	};
