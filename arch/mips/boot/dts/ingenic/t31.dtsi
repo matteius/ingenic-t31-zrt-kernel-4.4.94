@@ -20,6 +20,7 @@
 		msc1 = &msc1;
 		mac0 = &mac0;
 		spi0 = &spi0;
+		isp_m0 = &isp_m0;
 	};
 
 	cpus: cpus {
@@ -491,7 +492,7 @@
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_MSC0>;
 				pinctrl-names ="default";
-				pinctrl-0 = <&msc0_4bit>;
+				pinctrl-0 = <&msc1_pb>;
 			};
 
 			msc1: msc@0x13460000 {
@@ -501,7 +502,7 @@
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_MSC1>;
 				pinctrl-names ="default";
-				pinctrl-0 = <&msc1_4bit>;
+				pinctrl-0 = <&msc0_pb>;
 			};
 
 			ipu: ipu@0x13080000 {
@@ -517,7 +518,9 @@
 				reg = <0x13300000 0x100000>;
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_ISP>;
-				status = "disabled";
+				pinctrl-names ="default";
+				pinctrl-0 = <&i2c1_pa>;
+				status = "okay";
 			};
 		};
 	};
