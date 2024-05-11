@@ -17,7 +17,6 @@ struct clk;
  * @lock: maintains exclusion between callbacks for a given clock-provider.
  */
 struct ingenic_clk_provider {
-    struct device_node *np;
 	void __iomem *reg_base;
 	struct clk_onecell_data clk_data;
 	spinlock_t lock;
@@ -54,8 +53,8 @@ struct ingenic_clock_alias {
  */
 struct ingenic_fixed_rate_clock {
 	unsigned int		id;
-	char			    *name;
-	const char		    *parent_name;
+	char			*name;
+	const char		*parent_name;
 	unsigned long		flags;
 	unsigned long		fixed_rate;
 };

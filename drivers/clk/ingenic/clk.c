@@ -91,7 +91,7 @@ void ingenic_clk_of_dump(struct ingenic_clk_provider *ctx)
 
 		clk = clk_data->clks[i];
 		if(clk != ERR_PTR(-ENOENT)) {
-			printk("clk->id: %d clk->name: %s \n", i,  __clk_get_name(clk));
+			printk("clk->id: %d __clk_get_name(clk): %s \n", i,  __clk_get_name(clk));
 		} else {
 			printk("clk->id: %d , clk: %p\n", i, clk);
 		}
@@ -103,9 +103,12 @@ void ingenic_clk_of_dump(struct ingenic_clk_provider *ctx)
 void ingenic_clk_add_lookup(struct ingenic_clk_provider *ctx, struct clk *clk,
 				unsigned int id)
 {
-	if (ctx->clk_data.clks && id) {
+	if (ctx->clk_data.clks) {
+        printk("Adding __clk_get_name(clk) to lookup: %s\n", __clk_get_name(clk));
 		ctx->clk_data.clks[id] = clk;
-	}
+	} else {
+        printk("Failed to add __clk_get_name(clk) to lookup: %s\n", __clk_get_name(clk));
+    }
 }
 
 /* register a list of aliases */
@@ -151,29 +154,29 @@ void __init ingenic_clk_register_fixed_rate(struct ingenic_clk_provider *ctx,
 	unsigned int idx, ret;
 
 	for (idx = 0; idx < nr_clk; idx++, list++) {
-        struct platform_device *dev = of_find_device_by_node(ctx->np);
         printk("list->name: %s\n", list->name);
         printk("list->parent_name: %s\n", list->parent_name);
         printk("list->flags: %d\n", list->flags);
         printk("list->fixed_rate: %d\n", list->fixed_rate);
-        clk = clk_register_fixed_rate((struct device *)dev, list->name,
+		clk = clk_register_fixed_rate(NULL, list->name,
                                       list->parent_name, list->flags, list->fixed_rate);
 		if (IS_ERR(clk)) {
+            printk("failed to register clock %s\n", list->name);
 			pr_err("%s: failed to register clock %s\n", __func__,
 				list->name);
 			continue;
 		}
 
+        printk("__clk_get_name(clk): %s\n", __clk_get_name(clk));
 		ingenic_clk_add_lookup(ctx, clk, list->id);
-
+        printk("clk lookup added\n");
 		ret = clk_register_clkdev(clk, list->name, NULL);
 		if (ret) {
+            printk("failed to register lookup %s\n", list->name);
             pr_err("%s: failed to register clock lookup for %s",
                    __func__, list->name);
         }
-        clk_enable(clk);
 	}
-    ingenic_clk_of_add_provider(ctx->np, ctx);
 }
 
 /* register a list of fixed factor clocks */
@@ -275,6 +278,12 @@ void __init ingenic_clk_register_cgu_div(struct ingenic_clk_provider *ctx,
 				pr_err("%s: failed to register lookup %s\n",
 						__func__, list->alias);
 		}
+        ret = clk_prepare_enable(clk);
+        if (ret) {
+            pr_err("%s: failed to enable cgu clock\n");
+            clk_unregister(clk);
+            return;
+        }
 	}
 }
 
@@ -432,32 +441,24 @@ void __init ingenic_power_register_gate(struct ingenic_clk_provider *ctx,
  * tree and register it
  */
 void __init ingenic_clk_of_register_fixed_ext(struct ingenic_clk_provider *ctx,
-                                              struct ingenic_fixed_rate_clock *fixed_rate_clk,
-                                              unsigned int nr_fixed_rate_clk,
-                                              const struct of_device_id *clk_matches)
+			struct ingenic_fixed_rate_clock *fixed_rate_clk,
+			unsigned int nr_fixed_rate_clk,
+			const struct of_device_id *clk_matches)
 {
-    struct clk *clk;
-    unsigned int idx;
+	const struct of_device_id *match;
+	struct device_node *clk_np;
+	u32 freq;
+	u32 index = 0;
 
-    for (idx = 0; idx < nr_fixed_rate_clk; idx++) {
-        printk("fixed_rate_clk[idx].name: %s\n", fixed_rate_clk[idx].name);
-        printk("fixed_rate_clk[idx].parent_name: %s\n", fixed_rate_clk[idx].parent_name);
-        printk("fixed_rate_clk[idx].flags: %d\n", fixed_rate_clk[idx].flags);
-        printk("fixed_rate_clk[idx].fixed_rate: %d\n", fixed_rate_clk[idx].fixed_rate);
-        clk = clk_register_fixed_rate(NULL, fixed_rate_clk[idx].name,
-                                      fixed_rate_clk[idx].parent_name, fixed_rate_clk[idx].flags,
-                                      fixed_rate_clk[idx].fixed_rate);
-
-        if (IS_ERR(clk)) {
-            pr_err("%s: failed to register clock %s\n", __func__,
-                   fixed_rate_clk[idx].name);
+	for_each_matching_node_and_match(clk_np, clk_matches, &match) {
+		if (of_property_read_u32(clk_np, "clock-frequency", &freq)) {
+            printk("clock-frequency not found\n");
             continue;
         }
-
-        ingenic_clk_add_lookup(ctx, clk, fixed_rate_clk[idx].id);
-
-        clk_register_clkdev(clk, fixed_rate_clk[idx].name, NULL);
-    }
+		fixed_rate_clk[index].fixed_rate = freq;
+		index++;
+	}
+	ingenic_clk_register_fixed_rate(ctx, fixed_rate_clk, nr_fixed_rate_clk);
 }
 
 /* utility function to get the rate of a specified clock */

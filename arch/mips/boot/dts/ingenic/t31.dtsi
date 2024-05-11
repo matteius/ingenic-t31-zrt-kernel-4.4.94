@@ -3,6 +3,7 @@
 #include <dt-bindings/sound/ingenic-baic.h>
 #include <dt-bindings/net/ingenic_gmac.h>
 #include <dt-bindings/dma/ingenic-pdma.h>
+#include <dt-bindings/clock/ingenic-t31.h>
 
 / {
 	#address-cells = <1>;
@@ -26,24 +27,25 @@
 		#size-cells = <0>;
 
 		cpu0: cpu@0 {
+			device_type = "cpu";
 			compatible = "ingenic,xburst";
 			reg = <0>;
-//			clock-frequency = <900000000>;
-		};
-	};
 
-	cpufreq: cpufreq-dt {
-		 compatible = "ingenic,t31-cpufreq";
-		 status = "okay";
+			clocks = <&cgu CLK_DIV_CIM>;
+			clock-names = "div_cim";
+		};
 	};
 
 	cpuintc: interrupt-controller {
 		#address-cells = <0>;
 		#interrupt-cells = <1>;
 		interrupt-controller;
-//		compatible = "ingenic,cpu-interrupt-controller";
 		compatible = "mti,cpu-interrupt-controller";
+	};
 
+	cpufreq: cpufreq-dt {
+		 compatible = "ingenic,t31-cpufreq";
+		 status = "okay";
 	};
 
 	core_intc: core-intc@0x10001000 {
@@ -76,13 +78,17 @@
 		status = "okay";
     };
 
-	clock: clock-controller@0x10000000 {
-		compatible = "ingenic,t31-clocks";
+	cgu: x1000-cgu@0x10000000 {
+		compatible = "ingenic,t31-clocks", "simple-mfd";
 		reg = <0x10000000 0x100>;
-		clocks = <&ext>, <&rtc_ext>;
-		clock-names = "ext", "rtc_ext";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x10000000 0x100>;
 		#clock-cells = <1>;
 		little-endian;
+		
+		clocks = <&ext>, <&rtc_ext>;
+		clock-names = "ext", "rtc_ext";
 		status = "okay";
 	};
 
@@ -93,6 +99,37 @@
 		interrupt-names = "sys_ost";
 		interrupts = <CORE_SYS_OST_IRQ>;
 	};
+
+	uart0: serial@0x10030000 {
+		compatible = "ingenic,x1000-uart";
+		reg = <0x10030000 0x100>;
+		interrupt-parent = <&core_intc>;
+		interrupts = <IRQ_UART0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart0_pc>;
+		status = "disabled";
+	};
+
+	uart1: serial@0x10031000 {
+		compatible = "ingenic,x1000-uart";
+		reg = <0x10031000 0x100>;
+		interrupt-parent = <&core_intc>;
+		interrupts = <IRQ_UART1>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart1_pb>;
+		status = "okay";
+	};
+
+	uart2: serial@0x10032000 {
+		compatible = "ingenic,x1000-uart";
+		reg = <0x10032000 0x100>;
+		interrupt-parent = <&core_intc>;
+		interrupts = <IRQ_UART2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart2_pc>;
+		status = "disabled";
+	};
+
 
 	apb {
 		compatible = "simple-bus";
@@ -268,37 +305,7 @@
 
 			status = "disabled";
 		};
-
-		uart0: serial@0x10030000 {
-			compatible = "ingenic,8250-uart";
-			reg = <0x10030000 0x1000>;
-			reg-shift = <2>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_UART0>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&uart0_pc>;
-			status = "disabled";
-		};
-		uart1: serial@0x10031000 {
-			compatible = "ingenic,8250-uart";
-			reg = <0x10031000 0x1000>;
-			reg-shift = <2>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_UART1>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&uart1_pb>;
-			status = "disabled";
-		};
-		uart2: serial@0x10032000 {
-			compatible = "ingenic,8250-uart";
-			reg = <0x10032000 0x1000>;
-			reg-shift = <2>;
-			interrupt-parent = <&core_intc>;
-			interrupts = <IRQ_UART2>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&uart2_pc>;
-			status = "disabled";
-		};
+		
 
 		i2c0: i2c@0x10050000 {
 			compatible = "ingenic,t31-i2c";
@@ -481,7 +488,7 @@
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_MSC0>;
 			pinctrl-names ="default";
-			pinctrl-0 = <&msc0_4bit>;
+				pinctrl-0 = <&msc0_pb>;
 		};
 
 		msc1: msc@0x13460000 {
@@ -491,7 +498,7 @@
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_MSC1>;
 			pinctrl-names ="default";
-			pinctrl-0 = <&msc1_4bit>;
+				pinctrl-0 = <&msc1_pb>;
 		};
 
 		ipu: ipu@0x13080000 {

@@ -10,11 +10,11 @@
 #include <soc/cpm.h>
 #include <soc/base.h>
 #include <dt-bindings/clock/ingenic-t31.h>
+#include <linux/early_printk.h>
 
 #include <jz_proc.h>
 #include "clk.h"
 
-#define CLK_FLG_ENABLE BIT(1)
 static struct ingenic_clk_provider *ctx;
 
 
@@ -120,6 +120,9 @@ static struct ingenic_bus_clock t31_bus_div_clks[] __initdata = {
  ********************************************************************************/
 
 static struct clk_div_table t31_clk_div_table[256] = {};
+static struct clk_div_table t31_clk_div_table_cim[256] = {};
+static struct clk_div_table t31_clk_div_table_isp[16] = {};
+static struct clk_div_table t31_clk_div_table_el150[16] = {};
 
 static struct ingenic_div_clock t31_div_clks[] __initdata = {
 	DIV(CLK_DIV_DDR,		"div_ddr",		"mux_ddr",		CPM_DDRCDR,	    4,  0, NULL),
@@ -200,6 +203,24 @@ static void clk_div_table_generate(void)
 		t31_clk_div_table[i].div = (i + 1) * 4;
 	}
 
+//// Generate divider table for div_cim
+//    for (i = 0; i < ARRAY_SIZE(t31_clk_div_table_cim); i++) {
+//        t31_clk_div_table_cim[i].val = i;
+//        t31_clk_div_table_cim[i].div = 50; // Set all entries to the divider value for 24 MHz
+//    }
+//
+//// Generate divider table for div_isp
+//    for (i = 0; i < ARRAY_SIZE(t31_clk_div_table_isp); i++) {
+//        t31_clk_div_table_isp[i].val = i;
+//        t31_clk_div_table_isp[i].div = 6; // Set all entries to the divider value for 200 MHz
+//    }
+//
+//// Generate divider table for div_el150
+//    for (i = 0; i < ARRAY_SIZE(t31_clk_div_table_el150); i++) {
+//        t31_clk_div_table_el150[i].val = i;
+//        t31_clk_div_table_el150[i].div = 3; // Set all entries to the divider value for 400 MHz
+//    }
+
 }
 
 static const struct of_device_id ext_clk_match[] __initconst = {
@@ -209,36 +230,38 @@ static const struct of_device_id ext_clk_match[] __initconst = {
 
 static int clocks_show(struct seq_file *m, void *v)
 {
-	int i = 0;
-	struct clk_onecell_data * clk_data = NULL;
-	struct clk *clk = NULL;
+    int i = 0;
+    struct clk_onecell_data * clk_data = NULL;
+    struct clk *clk = NULL;
 
-	if(m->private != NULL) {
-		seq_printf(m, "CLKGR\t: %08x\n", cpm_inl(CPM_CLKGR));
-		seq_printf(m, "CLKGR1\t: %08x\n", cpm_inl(CPM_CLKGR1));
-		seq_printf(m, "LCR1\t: %08x\n", cpm_inl(CPM_LCR));
-	} else {
-		seq_printf(m, " ID  NAME              FRE          sta     count   parent\n");
-		clk_data = &ctx->clk_data;
-		for(i = 0; i < clk_data->clk_num; i++) {
-			clk = clk_data->clks[i];
-			if (clk != ERR_PTR(-ENOENT)) {
-				if (__clk_get_name(clk) == NULL) {
-					seq_printf(m, "--------------------------------------------------------\n");
-				} else {
-					unsigned int mhz = _get_rate(__clk_get_name(clk)) / 1000;
-					seq_printf(m, "%3d %-15s %4d.%03dMHz %7sable   %d %10s\n", i, __clk_get_name(clk)
-								, mhz/1000, mhz%1000
-								, __clk_get_flags(clk) & CLK_FLG_ENABLE? "en": "dis"
-								, __clk_get_enable_count(clk)
-								, clk_get_parent(clk)? __clk_get_name(clk_get_parent(clk)): "root");
-				}
-			}
-		}
-	}
+    if (m->private != NULL) {
+        seq_printf(m, "CLKGR\t: %08x\n", cpm_inl(CPM_CLKGR));
+        seq_printf(m, "CLKGR1\t: %08x\n", cpm_inl(CPM_CLKGR1));
+        seq_printf(m, "LCR1\t: %08x\n", cpm_inl(CPM_LCR));
+    } else {
+        seq_printf(m, " ID  NAME              FRE          sta     count   parent\n");
+        clk_data = &ctx->clk_data;
+        for (i = 0; i < clk_data->clk_num; i++) {
+            clk = clk_data->clks[i];
+            if (clk != ERR_PTR(-ENOENT)) {
+                if (__clk_get_name(clk) == NULL) {
+                    seq_printf(m, "--------------------------------------------------------\n");
+                } else {
+                    unsigned int mhz = _get_rate(__clk_get_name(clk)) / 1000;
+                    int enabled = __clk_is_enabled(clk);
+                    seq_printf(m, "%3d %-15s %4d.%03dMHz %7sabled   %d %10s\n", i, __clk_get_name(clk),
+                               mhz / 1000, mhz % 1000,
+                               enabled ? "en" : "dis",
+                               __clk_get_enable_count(clk),
+                               clk_get_parent(clk) ? __clk_get_name(clk_get_parent(clk)) : "root");
+                }
+            }
+        }
+    }
 
-	return 0;
+    return 0;
 }
+
 
 static int clocks_open(struct inode *inode, struct file *file)
 {
@@ -253,33 +276,24 @@ static const struct file_operations clocks_proc_fops ={
 };
 
 /* Register t31 clocks. */
-static void __init t31_clk_init(struct device_node *np)
+static void __init t31_clk_init(struct device_node *np, void __iomem *base)
 {
-    printk("t31 Clock Power Management Unit init!\n");
+	void __iomem *reg_base;
 
-    struct ingenic_clk_provider *ctx;
+	printk("t31 Clock Power Management Unit init!\n");
+
+	reg_base = base;
+
+	if (np) {
+		reg_base = of_iomap(np, 0);
+		if (!reg_base)
+			panic("%s: failed to map registers\n", __func__);
+	}
 
 
-	printk("Calling kzalloc");
-    ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
-	printk("kzalloc returned");
-    if (!ctx) {
-        printk("%s: failed to allocate memory for CGU\n", __func__);
-        goto err_out;
-    }
-
-
-    printk("t31_clk_init: ctx = %p\n", ctx);
-    ctx->reg_base = of_iomap(np, 0);
-    if (!ctx->reg_base) {
-        printk("%s: failed to map CGU registers\n", __func__);
-        goto err_out_free;
-    }
-
-    ctx->np = np;
-
-    printk("spin_lock_init\n");
-    spin_lock_init(&ctx->lock);
+	ctx = ingenic_clk_init(np, reg_base, NR_CLKS);
+	if (!ctx)
+		panic("%s: unable to allocate context.\n", __func__);
 
     /* Register Ext Clocks From DT */
     printk("ingenic_clk_of_register_fixed_ext\n");
@@ -288,8 +302,8 @@ static void __init t31_clk_init(struct device_node *np)
 
     /* Register PLLs. */
     printk("ingenic_clk_register_pll\n");
-    ingenic_clk_register_pll(ctx, t31_pll_clks,
-                             ARRAY_SIZE(t31_pll_clks), ctx->reg_base);
+	ingenic_clk_register_pll(ctx, t31_pll_clks,
+				ARRAY_SIZE(t31_pll_clks), reg_base);
 
 
     /* Register Muxs */
@@ -320,6 +334,7 @@ static void __init t31_clk_init(struct device_node *np)
 
 
     //ingenic_clk_of_dump(ctx);
+    super_early_printk("t31_clk_init: done\n");
 
 
     pr_info("=========== t31 clocks: =============\n"
@@ -332,11 +347,6 @@ static void __init t31_clk_init(struct device_node *np)
             _get_rate("div_ahb0"), _get_rate("div_ahb2"),
             _get_rate("div_apb"), _get_rate("ext"), _get_rate("div_ddr"));
 
-    return;
-
-    err_out_free:
-    kfree(ctx);
-    err_out:
     return;
 }
 
