@@ -1846,6 +1846,11 @@ init_hw_perf_events(void)
 		mipspmu.cache_event_map = &xlp_cache_map;
 		mipspmu.map_raw_event = xlp_pmu_map_raw_event;
 		break;
+	case CPU_JZRISC:
+		mipspmu.name = "ingenic";
+		mipspmu.general_event_map = &ingenic_event_map;
+		mipspmu.cache_event_map = &ingenic_cache_map;
+		break;
 	default:
 		pr_cont("Either hardware does not support performance "
 			"counters, or not yet implemented.\n");
