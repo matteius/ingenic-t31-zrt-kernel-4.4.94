@@ -36,6 +36,8 @@
 #include "ingenic_regs_v13.h"
 #include "ingenic_ipu_v13.h"
 
+#define DEBUG 1
+
 // #define DEBUG
 #ifdef	DEBUG
 static int debug_ipu = 1;
@@ -1109,6 +1111,8 @@ static int ipu_probe(struct platform_device *pdev)
 #endif
 #endif
 
+	ipu_dump_info(ipu);
+
 	dev_set_drvdata(&pdev->dev, ipu);
 
 	__reset_ipu();
@@ -1117,6 +1121,8 @@ static int ipu_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "register misc device failed!\n");
 		goto err_misc_register;
 	}
+
+	ipu_dump_info(ipu);
 
 	return 0;
 
