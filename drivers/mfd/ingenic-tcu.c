@@ -79,7 +79,7 @@ struct ingenic_tcu {
 	spinlock_t lock;
 };
 
-#define TCU_DEBUG 0
+#define TCU_DEBUG 1
 
 static struct ingenic_tcu *tcu;
 
@@ -874,6 +874,9 @@ static int ingenic_tcu_probe(struct platform_device *pdev)
 
 	ret = mfd_add_devices(&pdev->dev, 0, tcu->tcu_cells,
 						  tcu->channel_num, res, tcu->irq_tcu0, NULL);
+
+
+	tcu_dump(16);
 
 	dev_info(&pdev->dev, "Ingenic TCU driver register completed ret = %d\n", ret);
 

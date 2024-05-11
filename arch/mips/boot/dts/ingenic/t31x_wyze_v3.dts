@@ -141,7 +141,7 @@
 &otg_phy {
 	dr_mode = "otg";
 	compatible = "ingenic,innophy", "syscon";
-	ingenic,drvvbus-gpio = <&gpb 15 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+	ingenic,drvvbus-gpio = <&gpb 16 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
 	status = "okay";
 };
 

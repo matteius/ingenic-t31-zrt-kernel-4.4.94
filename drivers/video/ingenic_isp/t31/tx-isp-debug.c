@@ -30,6 +30,7 @@
 #include <linux/init.h>
 #include <linux/resource.h>
 #include <linux/i2c-gpio.h>
+#include <linux/of_platform.h>
 
 #include <linux/gpio.h>
 
@@ -174,16 +175,76 @@ void* private_dev_get_drvdata(const struct device *dev)
 int private_platform_get_irq(struct platform_device *dev, unsigned int num)
 {
 	int irq;
+	struct resource *res;
+	int i;
+	const char *compatible;
+	struct device_node *node;
+	struct platform_device *actual_dev;
 
 	// Log the entry into the function and the parameters
 	printk("private_platform_get_irq: called with num = %d for device %s\n", num, dev_name(&dev->dev));
 
-	// Log additional device details for debugging
-	if (dev->resource) {
-		printk("Device resource: start = %pa, end = %pa\n", &dev->resource->start, &dev->resource->end);
+	// Log device name and ID
+	printk("Device name: %s, ID: %d, ID auto-generated: %s\n", dev->name, dev->id, dev->id_auto ? "yes" : "no");
+
+	// Log device resources
+	printk("Number of resources: %d\n", dev->num_resources);
+	for (i = 0; i < dev->num_resources; i++) {
+		res = &dev->resource[i];
+		printk("Resource %d: start = %pa, end = %pa, flags = %lx\n", i, &res->start, &res->end, res->flags);
 	}
+
+	// Log device properties
 	if (dev->dev.of_node) {
 		printk("Device has OF node: %pOF\n", dev->dev.of_node);
+		if (of_property_read_string(dev->dev.of_node, "compatible", &compatible) == 0) {
+			printk("Compatible: %s\n", compatible);
+		} else {
+			printk("Failed to read compatible property\n");
+		}
+	}
+
+	// Log device driver information
+	if (dev->dev.driver) {
+		printk("Device driver: %s\n", dev->dev.driver->name);
+	}
+
+	if (strcmp(dev_name(&dev->dev), "isp-m0") == 0) {
+		printk("Device is isp-m0\n");
+		node = of_find_node_by_name(NULL, "isp-m0");
+	} else if (strcmp(dev_name(&dev->dev), "isp-w02") == 0) {
+		printk("Device is isp-m1\n");
+		node = of_find_node_by_name(NULL, "isp-w02");
+	} else {
+		node = NULL;
+	}
+
+	if (node) {
+		actual_dev = of_find_device_by_node(node);
+		if (actual_dev) {
+			printk("Found actual device: %s\n", dev_name(&actual_dev->dev));
+			dev = actual_dev;
+		} else {
+			printk("Failed to find actual device for node %pOF\n", node);
+		}
+		of_node_put(node);
+	}
+
+
+	dev->driver_override = "ingenic,t31-isp";
+	// Log driver override
+	if (dev->driver_override) {
+		printk("Driver override: %s\n", dev->driver_override);
+	}
+
+	// Log MFD cell pointer
+	if (dev->mfd_cell) {
+		printk("Device has MFD cell: %p\n", dev->mfd_cell);
+	}
+
+	// Log device ID entry
+	if (dev->id_entry) {
+		printk("Device ID entry: name = %s\n", dev->id_entry->name);
 	}
 
 	// Call the actual platform_get_irq function

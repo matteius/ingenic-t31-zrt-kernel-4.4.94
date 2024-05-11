@@ -20,7 +20,6 @@
 		msc1 = &msc1;
 		mac0 = &mac0;
 		spi0 = &spi0;
-		isp_m0 = &isp_m0;
 	};
 
 	cpus: cpus {
@@ -32,8 +31,8 @@
 			compatible = "ingenic,xburst";
 			reg = <0>;
 
-			clocks = <&cgu CLK_DIV_CPU>;
-			clock-names = "cpu";
+			clocks = <&cgu CLK_DIV_CIM>;
+			clock-names = "div_cim";
 		};
 	};
 
@@ -42,17 +41,6 @@
 		#interrupt-cells = <1>;
 		interrupt-controller;
 		compatible = "mti,cpu-interrupt-controller";
-	};
-
-	intc: interrupt-controller@10001000 {
-		compatible = "ingenic,x1000-intc", "ingenic,jz4780-intc";
-		reg = <0x10001000 0x50>;
-
-		interrupt-controller;
-		#interrupt-cells = <1>;
-
-		interrupt-parent = <&cpuintc>;
-		interrupts = <2>;
 	};
 
 	cpufreq: cpufreq-dt {
@@ -492,7 +480,7 @@
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_MSC0>;
 				pinctrl-names ="default";
-				pinctrl-0 = <&msc1_pb>;
+				pinctrl-0 = <&msc0_pb>;
 			};
 
 			msc1: msc@0x13460000 {
@@ -502,7 +490,7 @@
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_MSC1>;
 				pinctrl-names ="default";
-				pinctrl-0 = <&msc0_pb>;
+				pinctrl-0 = <&msc1_pb>;
 			};
 
 			ipu: ipu@0x13080000 {
@@ -513,17 +501,48 @@
 				status = "okay";
 			};
 
-			isp_m0: isp-m0@0x13300000 {
+			cim: cim@0x13060000 {
+				compatible = "ingenic,isp-mem-map";
+				reg = <0x13060000 0x10000>;
+				interrupt-parent = <&core_intc>;
+				interrupts = <IRQ_MIPI>;
+				status = "okay";
+
+				clocks = <&cgu CLK_DIV_CPU>;
+				clock-names = "cpu";
+			};
+
+			isp_device: isp-device@10023000 {
 				compatible = "ingenic,t31-isp";
-				reg = <0x13300000 0x100000>;
+				reg = <0x10023000 0x10000>;
+				interrupt-parent = <&core_intc>;
+				status = "okay";
+			};
+
+			isp_m0: isp-m0@13300000 {
+				compatible = "ingenic,t31-isp";
+				reg = <0x13300000 0x10000>;
+				status = "okay";
 				interrupt-parent = <&core_intc>;
 				interrupts = <IRQ_ISP>;
-				pinctrl-names ="default";
-				pinctrl-0 = <&i2c1_pa>;
+			};
+
+
+			isp_w02: isp-w02@133e0000 {
+				compatible = "ingenic,t31-isp";
+				reg = <0x133e0000 0x10000>;
+				interrupt-parent = <&core_intc>;
+				status = "okay";
+				interrupts = <IRQ_VIC>;
+			};
+
+			isp_w01: isp-w01@133e0000 {
+				compatible = "ingenic,t31-isp";
+				reg = <0x133e0000 0x10000>;
+				interrupt-parent = <&core_intc>;
 				status = "okay";
 			};
 		};
 	};
-
 };
 #include "t31-pinctrl.dtsi"
