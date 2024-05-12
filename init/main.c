@@ -98,6 +98,7 @@
 #include <asm/setup.h>
 #include <asm/sections.h>
 #include <asm/cacheflush.h>
+#include <linux/early_printk.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/initcall.h>
@@ -533,22 +534,30 @@ asmlinkage __visible void __init start_kernel(void)
 	char *command_line;
 	char *after_dashes;
 
+    super_early_printk("Hello, world!\n");
 	set_task_stack_end_magic(&init_task);
+    super_early_printk("Task stack end magic set\n");
 	smp_setup_processor_id();
+    super_early_printk("SMP processor ID set\n");
 	debug_objects_early_init();
 
+    super_early_printk("Debug objects early init\n");
 	cgroup_init_early();
 
 	local_irq_disable();
 	early_boot_irqs_disabled = true;
 
+    super_early_printk("Local IRQs disabled\n");
 	/*
 	 * Interrupts are still disabled. Do necessary setups, then
 	 * enable them.
 	 */
 	boot_cpu_init();
+    super_early_printk("Boot CPU initialized\n");
 	page_address_init();
+    super_early_printk("Page address initialized\n");
 	pr_notice("%s", linux_banner);
+    super_early_printk("Printed banner\n");
 	setup_arch(&command_line);
 	/*
 	 * Set up the the initial canary and entropy after arch
@@ -559,13 +568,20 @@ asmlinkage __visible void __init start_kernel(void)
 	boot_init_stack_canary();
 	mm_init_cpumask(&init_mm);
 	setup_command_line(command_line);
+    super_early_printk("Command line setup\n");
 	setup_nr_cpu_ids();
+    super_early_printk("CPU IDs setup\n");
 	setup_per_cpu_areas();
+    super_early_printk("Per-CPU areas setup\n");
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
+    super_early_printk("SMP boot CPU prepared\n");
 	boot_cpu_hotplug_init();
+    super_early_printk("Boot CPU hotplug init\n");
 
 	build_all_zonelists(NULL);
+    super_early_printk("Built all zonelists\n");
 	page_alloc_init();
+    super_early_printk("Page allocation init\n");
 
 	pr_notice("Kernel command line: %s\n", boot_command_line);
 	parse_early_param();

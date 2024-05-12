@@ -31,6 +31,7 @@
 #include <asm/pgtable-bits.h>
 #include <asm/spram.h>
 #include <linux/uaccess.h>
+#include <linux/early_printk.h>
 
 /* Hardware capabilities */
 unsigned int elf_hwcap __read_mostly;
@@ -1868,22 +1869,106 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 	}
 }
 
+#ifdef CONFIG_XBURST_MXUV2
+extern int soc_support_mxuv2(void);
+#endif
 static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
 {
-	decode_configs(c);
-	/* JZRISC does not implement the CP0 counter. */
-	c->options &= ~MIPS_CPU_COUNTER;
-	BUG_ON(!__builtin_constant_p(cpu_has_counter) || cpu_has_counter);
-	switch (c->processor_id & PRID_IMP_MASK) {
-	case PRID_IMP_JZRISC:
-		c->cputype = CPU_JZRISC;
-		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
-		__cpu_name[cpu] = "Ingenic JZRISC";
-		break;
-	default:
-		panic("Unknown Ingenic Processor ID!");
-		break;
-	}
+    decode_configs(c);
+
+    /*
+     * XBurst misses a config2 register, so config3 decode was skipped in
+     * decode_configs().
+     */
+    decode_config3(c);
+
+    super_early_printk("###Decoded cpu id");
+
+
+    /* XBurst does not implement the CP0 counter. */
+    c->options &= ~MIPS_CPU_COUNTER;
+    BUG_ON(__builtin_constant_p(cpu_has_counter) && cpu_has_counter);
+
+    /* XBurst has virtually tagged icache */
+    c->icache.flags |= MIPS_CACHE_VTAG;
+
+    switch (c->processor_id & PRID_IMP_MASK) {
+
+        /* XBurst®1 with MXU1.0/MXU1.1 SIMD ISA */
+        case PRID_IMP_XBURST_REV1:
+
+            /*
+             * The XBurst core by default attempts to avoid branch target
+             * buffer lookups by detecting & special casing loops. This
+             * feature will cause BogoMIPS and lpj calculate in error.
+             * Set cp0 config7 bit 4 to disable this feature.
+             */
+            write_c0_config7(MIPS_CONF7_BTB_LOOP_EN);
+
+            switch (c->processor_id & PRID_COMP_MASK) {
+
+                /*
+                 * The config0 register in the XBurst CPUs with a processor ID of
+                 * PRID_COMP_INGENIC_D0 report themselves as MIPS32r2 compatible,
+                 * but they don't actually support this ISA.
+                 */
+                case PRID_COMP_INGENIC_D0:{
+                    c->isa_level &= ~MIPS_CPU_ISA_M32R2;
+
+                    /* FPU is not properly detected on JZ4760(B). */
+                    if (c->processor_id == 0x2ed0024f) {
+                        c->options |= MIPS_CPU_FPU;
+                    }
+
+                    /*
+                     * The config0 register in the XBurst CPUs with a processor ID of
+                     * PRID_COMP_INGENIC_D0 or PRID_COMP_INGENIC_D1 has an abandoned
+                     * huge page tlb mode, this mode is not compatible with the MIPS
+                     * standard, it will cause tlbmiss and into an infinite loop
+                     * (line 21 in the tlb-funcs.S) when starting the init process.
+                     * After chip reset, the default is HPTLB mode, Write 0xa9000000
+                     * to cp0 register 5 sel 4 to switch back to VTLB mode to prevent
+                     * getting stuck.
+                     */
+                    __attribute__((fallthrough));
+                }
+                case PRID_COMP_INGENIC_D1:
+                    write_c0_pwctl(XBURST_PAGECTRL_HPTLB_DIS);
+                    break;
+
+                default:
+                    break;
+            }
+            __attribute__((fallthrough));
+
+            /* XBurst®1 with MXU2.0 SIMD ISA */
+        case PRID_IMP_XBURST_REV2:
+            /* Ingenic uses the WA bit to achieve write-combine memory writes */
+            c->writecombine = _CACHE_CACHABLE_WA;
+            c->cputype = CPU_JZRISC;
+            __cpu_name[cpu] = "Ingenic XBurst";
+            super_early_printk("###It's Ingenic XBurst");
+            break;
+
+            /* XBurst®2 with MXU2.1 SIMD ISA */
+        case PRID_IMP_XBURST2:
+            c->cputype = CPU_JZRISC;
+            __cpu_name[cpu] = "Ingenic XBurst II";
+            super_early_printk("###It's Ingenic XBurst2");
+            break;
+
+        case PRID_IMP_XBURST2_REV2:
+            c->cputype = CPU_JZRISC;
+            __cpu_name[cpu] = "Ingenic XBurst II Rev2 T41";
+            super_early_printk("###It's Ingenic XBurst2 T41");
+            break;
+
+
+        default:
+            super_early_printk("###Unknown Ingenic Processor ID!");
+            panic("Unknown Ingenic Processor ID!");
+            break;
+    }
 }
 
 static inline void cpu_probe_netlogic(struct cpuinfo_mips *c, int cpu)
@@ -1998,11 +2083,17 @@ void cpu_probe(void)
 	c->processor_id = read_c0_prid();
 	switch (c->processor_id & PRID_COMP_MASK) {
 	case PRID_COMP_LEGACY:
-		cpu_probe_legacy(c, cpu);
-		break;
+    {
+        very_early_printk("PRID_COMP_LEGACY\n");
+        cpu_probe_legacy(c, cpu);
+        break;
+    }
 	case PRID_COMP_MIPS:
-		cpu_probe_mips(c, cpu);
-		break;
+    {
+        very_early_printk("PRID_COMP_MIPS\n");
+        cpu_probe_mips(c, cpu);
+        break;
+    }
 	case PRID_COMP_ALCHEMY:
 		cpu_probe_alchemy(c, cpu);
 		break;
@@ -2027,8 +2118,12 @@ void cpu_probe(void)
 	case PRID_COMP_INGENIC_D0:
 	case PRID_COMP_INGENIC_D1:
 	case PRID_COMP_INGENIC_E1:
-		cpu_probe_ingenic(c, cpu);
-		break;
+	case PRID_COMP_INGENIC_13:
+    {
+        very_early_printk("PRID_COMP_INGENIC\n");
+        cpu_probe_ingenic(c, cpu);
+        break;
+    }
 	case PRID_COMP_NETLOGIC:
 		cpu_probe_netlogic(c, cpu);
 		break;
@@ -2066,7 +2161,19 @@ void cpu_probe(void)
 	}
 
 	if (c->options & MIPS_CPU_FPU)
+        {
 		cpu_set_fpu_opts(c);
+                #if 0
+                if (c->isa_level & (MIPS_CPU_ISA_M32R1 | MIPS_CPU_ISA_M32R2 |
+                                   MIPS_CPU_ISA_M64R1 | MIPS_CPU_ISA_M64R2)) {
+                      if (c->fpu_id & MIPS_FPIR_3D)
+                               c->ases |= MIPS_ASE_MIPS3D;
+                       if (c->fpu_id & MIPS_FPIR_HAS2008)
+                               fpu_fcr31 = cpu_test_fpu_csr31(FPU_CSR_DEFAULT|FPU_CSR_MAC2008|FPU_CSR_ABS2008|FPU_CSR_NAN2008);
+               }
+               #endif
+
+        }
 	else
 		cpu_set_nofpu_opts(c);
 

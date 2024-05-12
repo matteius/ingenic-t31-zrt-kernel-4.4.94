@@ -97,9 +97,14 @@ static inline void r4k_on_each_cpu(unsigned int type,
 				   void (*func)(void *info), void *info)
 {
 	preempt_disable();
+#ifndef CONFIG_MACH_XBURST2
+	if (!mips_cm_present())
+		smp_call_function_many(&cpu_foreign_map, func, info, 1);
+#else
 	if (r4k_op_needs_ipi(type))
 		smp_call_function_many(&cpu_foreign_map[smp_processor_id()],
 				       func, info, 1);
+#endif
 	func(info);
 	preempt_enable();
 }
@@ -411,9 +416,13 @@ static void r4k_blast_scache_page_setup(void)
 {
 	unsigned long sc_lsize = cpu_scache_line_size();
 
-	if (scache_size == 0)
+	if (scache_size == 0) {
+#ifdef MIPS_BRIDGE_SYNC_WAR
+		r4k_blast_scache_page = (void *)blast_inclusive_scache;	/*CONFIG_MACH_XBURST*/
+#else
 		r4k_blast_scache_page = (void *)cache_noop;
-	else if (sc_lsize == 16)
+#endif
+	} else if (sc_lsize == 16)
 		r4k_blast_scache_page = blast_scache16_page;
 	else if (sc_lsize == 32)
 		r4k_blast_scache_page = blast_scache32_page;
@@ -429,9 +438,13 @@ static void r4k_blast_scache_page_indexed_setup(void)
 {
 	unsigned long sc_lsize = cpu_scache_line_size();
 
-	if (scache_size == 0)
+	if (scache_size == 0) {
+#ifdef MIPS_BRIDGE_SYNC_WAR
+		r4k_blast_scache_page_indexed = (void *)blast_inclusive_scache; /*CONFIG_MACH_XBURST*/
+#else
 		r4k_blast_scache_page_indexed = (void *)cache_noop;
-	else if (sc_lsize == 16)
+#endif
+	} else if (sc_lsize == 16)
 		r4k_blast_scache_page_indexed = blast_scache16_page_indexed;
 	else if (sc_lsize == 32)
 		r4k_blast_scache_page_indexed = blast_scache32_page_indexed;
@@ -447,9 +460,13 @@ static void r4k_blast_scache_setup(void)
 {
 	unsigned long sc_lsize = cpu_scache_line_size();
 
-	if (scache_size == 0)
+	if (scache_size == 0) {
+#ifdef MIPS_BRIDGE_SYNC_WAR
+		r4k_blast_scache = (void *)blast_inclusive_scache;	/*CONFIG_MACH_XBURST*/
+#else
 		r4k_blast_scache = (void *)cache_noop;
-	else if (sc_lsize == 16)
+#endif
+	} else if (sc_lsize == 16)
 		r4k_blast_scache = blast_scache16;
 	else if (sc_lsize == 32)
 		r4k_blast_scache = blast_scache32;
@@ -830,7 +847,7 @@ static void r4k_flush_icache_user_range(unsigned long start, unsigned long end)
 	return __r4k_flush_icache_range(start, end, true);
 }
 
-#ifdef CONFIG_DMA_NONCOHERENT
+#if defined(CONFIG_DMA_NONCOHERENT) || defined(CONFIG_DMA_MAYBE_COHERENT)
 
 static void r4k_dma_cache_wback_inv(unsigned long addr, unsigned long size)
 {
@@ -898,7 +915,18 @@ static void r4k_dma_cache_inv(unsigned long addr, unsigned long size)
 	if (!r4k_op_needs_ipi(R4K_INDEX) && size >= dcache_size) {
 		r4k_blast_dcache();
 	} else {
+#if defined(CONFIG_MACH_XBURST) || defined(CONFIG_MACH_XBURST2)
+		unsigned long lsize = cpu_dcache_line_size();
+		unsigned long cmask = (lsize - 1);
+		unsigned long lmask = ~(cmask);
+#endif
 		R4600_HIT_CACHEOP_WAR_IMPL;
+#if defined(CONFIG_MACH_XBURST) || defined(CONFIG_MACH_XBURST2)
+		if (addr & cmask)
+			cache_op(Hit_Writeback_Inv_D, addr & lmask);
+		if ((addr + size) & cmask)
+			cache_op(Hit_Writeback_Inv_D, (addr + size - 1) & lmask);
+#endif
 		blast_inv_dcache_range(addr, addr + size);
 	}
 	preempt_enable();
@@ -906,7 +934,7 @@ static void r4k_dma_cache_inv(unsigned long addr, unsigned long size)
 	bc_inv(addr, size);
 	__sync();
 }
-#endif /* CONFIG_DMA_NONCOHERENT */
+#endif /* CONFIG_DMA_NONCOHERENT || CONFIG_DMA_MAYBE_COHERENT */
 
 struct flush_cache_sigtramp_args {
 	struct mm_struct *mm;
@@ -958,18 +986,28 @@ static void local_r4k_flush_cache_sigtramp(void *args)
 
 	R4600_HIT_CACHEOP_WAR_IMPL;
 	if (!cpu_has_ic_fills_f_dc) {
-		if (dc_lsize)
-			vaddr ? flush_dcache_line(addr & ~(dc_lsize - 1))
-			      : protected_writeback_dcache_line(
-							addr & ~(dc_lsize - 1));
-		if (!cpu_icache_snoops_remote_store && scache_size)
-			vaddr ? flush_scache_line(addr & ~(sc_lsize - 1))
-			      : protected_writeback_scache_line(
-							addr & ~(sc_lsize - 1));
+	    if (dc_lsize) {
+	        vaddr ? flush_dcache_line(addr & ~(dc_lsize - 1))
+	              : protected_writeback_dcache_line(addr & ~(dc_lsize - 1));
+	    }
+
+	    if (!cpu_icache_snoops_remote_store && scache_size) {
+	        vaddr ? flush_scache_line(addr & ~(sc_lsize - 1))
+	              : protected_writeback_scache_line(addr & ~(sc_lsize - 1));
+	    }
 	}
-	if (ic_lsize)
-		vaddr ? flush_icache_line(addr & ~(ic_lsize - 1))
-		      : protected_flush_icache_line(addr & ~(ic_lsize - 1));
+
+	/* xburst-specific code */
+	#ifdef MIPS_BRIDGE_SYNC_WAR
+	else if (!cpu_icache_snoops_remote_store && MIPS_BRIDGE_SYNC_WAR) { /*CONFIG_MACH_XBURST*/
+	    __fast_iob();
+	}
+	#endif
+
+	if (ic_lsize) {
+	    vaddr ? flush_icache_line(addr & ~(ic_lsize - 1))
+	          : protected_flush_icache_line(addr & ~(ic_lsize - 1));
+	}
 
 	if (vaddr) {
 		if (map_coherent)
@@ -1526,7 +1564,6 @@ static void probe_pcache(void)
 
 	case CPU_ALCHEMY:
 	case CPU_I6400:
-	case CPU_I6500:
 		c->icache.flags |= MIPS_CACHE_IC_F_DC;
 		break;
 
@@ -1744,6 +1781,9 @@ static void setup_scache(void)
 	case CPU_LOONGSON3:
 		loongson3_sc_init();
 		return;
+	case CPU_JZRISC:
+		mips_sc_init();
+		return;
 
 	case CPU_CAVIUM_OCTEON3:
 	case CPU_XLP:
@@ -1847,7 +1887,10 @@ static void coherency_setup(void)
 	if (cca < 0 || cca > 7)
 		cca = read_c0_config() & CONF_CM_CMASK;
 	_page_cachable_default = cca << _CACHE_SHIFT;
-
+#ifdef CONFIG_MACH_XBURST
+	if (cca == CONF_CM_UNCACHED || cca == CONF_CM_CACHABLE_ACCELERATED)
+		pr_warn("WARNNIGG: Using Uncacheable Kseg0\n");
+#endif
 	pr_debug("Using cache attribute %d\n", cca);
 	change_c0_config(CONF_CM_CMASK, cca);
 

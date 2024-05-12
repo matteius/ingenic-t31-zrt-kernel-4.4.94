@@ -2255,6 +2255,15 @@ config MIPS_CPU_SCACHE
 	bool
 	select BOARD_SCACHE
 
+config XBURST_CPU_SCACHE
+	bool
+	select BOARD_SCACHE
+
+config XBURST2_CPU_SCACHE
+	bool
+	select BOARD_SCACHE
+	select CPU_SUPPORTS_CPUFREQ
+
 config R5000_CPU_SCACHE
 	bool
 	select BOARD_SCACHE

@@ -391,6 +391,22 @@
 #define cpu_has_mipsmt		__isa_lt_and_ase(6, MIPS_ASE_MIPSMT)
 #endif
 
+#ifndef cpu_has_mxu_v2
+#define cpu_has_mxu_v2      (cpu_data[0].ases & MIPS_ASE_XBURSTMXUV2)
+#endif
+
+#if defined(CONFIG_MACH_XBURST) && !defined(cpu_has_mxu)
+#define cpu_has_mxu            (cpu_data[0].ases & MIPS_ASE_CU2)
+#elif !defined(cpu_has_mxu)
+#define cpu_has_mxu            0
+#endif
+
+#if defined(CONFIG_MACH_XBURST2) && !defined(cpu_has_mxuv3)
+#define cpu_has_mxuv3          (cpu_data[0].ases & MIPS_ASE_CU2)
+#elif !defined(cpu_has_mxu)
+#define cpu_has_mxuv3          0
+#endif
+
 #ifndef cpu_has_vp
 #define cpu_has_vp		__isa_ge_and_opt(6, MIPS_CPU_VP)
 #endif
