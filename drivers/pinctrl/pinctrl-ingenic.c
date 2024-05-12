@@ -93,6 +93,8 @@
 #define INGENIC_PIN_GROUP(name, id, func)		\
 	INGENIC_PIN_GROUP_FUNCS(name, id, (void *)(func))
 
+#define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+
 enum jz_version {
 	ID_JZ4730,
 	ID_JZ4740,
@@ -3421,7 +3423,11 @@ static void ingenic_gpio_irq_enable(struct irq_data *irqd)
 	struct ingenic_gpio_chip *jzgc = gpiochip_get_data(gc);
 	irq_hw_number_t irq = irqd_to_hwirq(irqd);
 
-	gpiochip_enable_irq(gc, irq);
+	/* Set up the IRQ */
+	irq_set_chip_data(irq, gc);
+	irq_set_chip(irq, &ingenic_gpio_irqchip);
+	irq_set_handler_data(irq, jzgc);
+	irq_enable(irq);
 
 	if (is_soc_or_above(jzgc->jzpc, ID_JZ4770))
 		ingenic_gpio_set_bit(jzgc, JZ4770_GPIO_INT, irq, true);
@@ -3448,7 +3454,9 @@ static void ingenic_gpio_irq_disable(struct irq_data *irqd)
 	else
 		ingenic_gpio_set_bit(jzgc, JZ4730_GPIO_GPIER, irq, false);
 
-	gpiochip_disable_irq(gc, irq);
+	/* Disable the IRQ */
+	irq_disable(irq);
+	irq_set_chip_and_handler_name(irq, NULL, NULL, NULL);
 }
 
 static void ingenic_gpio_irq_ack(struct irq_data *irqd)
@@ -3539,7 +3547,7 @@ static void ingenic_gpio_irq_handler(struct irq_desc *desc)
 		flag = ingenic_gpio_read_reg(jzgc, JZ4730_GPIO_GPFR);
 
 	for_each_set_bit(i, &flag, 32)
-	generic_handle_domain_irq(gc->irq.domain, i);
+	handle_nested_irq(irq_find_mapping(gc->irq.domain, i));
 	chained_irq_exit(irq_chip, desc);
 }
 
@@ -3647,21 +3655,21 @@ static int ingenic_gpio_get_direction(struct gpio_chip *gc, unsigned int offset)
 	if (is_soc_or_above(jzpc, ID_JZ4770)) {
 		if (ingenic_get_pin_config(jzpc, pin, JZ4770_GPIO_INT) ||
 			ingenic_get_pin_config(jzpc, pin, JZ4770_GPIO_PAT1))
-			return GPIO_LINE_DIRECTION_IN;
-		return GPIO_LINE_DIRECTION_OUT;
+			return GPIOF_DIR_IN;
+		return GPIOF_DIR_OUT;
 	} else if (!is_soc_or_above(jzpc, ID_JZ4740)) {
 		if (!ingenic_get_pin_config(jzpc, pin, JZ4730_GPIO_GPDIR))
-			return GPIO_LINE_DIRECTION_IN;
-		return GPIO_LINE_DIRECTION_OUT;
+			return GPIOF_DIR_IN;
+		return GPIOF_DIR_OUT;
 	}
 
 	if (ingenic_get_pin_config(jzpc, pin, JZ4740_GPIO_SELECT))
-		return GPIO_LINE_DIRECTION_IN;
+		return GPIOF_DIR_IN;
 
 	if (ingenic_get_pin_config(jzpc, pin, JZ4740_GPIO_DIR))
-		return GPIO_LINE_DIRECTION_OUT;
+		return GPIOF_DIR_OUT;
 
-	return GPIO_LINE_DIRECTION_IN;
+	return GPIOF_DIR_IN;
 }
 
 static const struct pinctrl_ops ingenic_pctlops = {
@@ -3682,7 +3690,13 @@ static int ingenic_gpio_irq_request(struct irq_data *data)
 	if (ret)
 		return ret;
 
-	return gpiochip_reqres_irq(gpio_chip, irq);
+	/* Request the IRQ resources */
+	irq_set_chip_data(irq, gpio_chip);
+	irq_set_chip(irq, &ingenic_gpio_irqchip);
+	irq_set_handler_data(irq, data);
+	irq_enable(irq);
+
+	return 0;
 }
 
 static void ingenic_gpio_irq_release(struct irq_data *data)
@@ -3690,7 +3704,9 @@ static void ingenic_gpio_irq_release(struct irq_data *data)
 	struct gpio_chip *gpio_chip = irq_data_get_irq_chip_data(data);
 	irq_hw_number_t irq = irqd_to_hwirq(data);
 
-	return gpiochip_relres_irq(gpio_chip, irq);
+	/* Release the IRQ resources */
+	irq_disable(irq);
+	irq_set_chip_and_handler_name(irq, NULL, NULL, NULL);
 }
 
 static void ingenic_gpio_irq_print_chip(struct irq_data *data, struct seq_file *p)
@@ -3711,7 +3727,7 @@ static const struct irq_chip ingenic_gpio_irqchip = {
 		.irq_request_resources	= ingenic_gpio_irq_request,
 		.irq_release_resources	= ingenic_gpio_irq_release,
 		.irq_print_chip		= ingenic_gpio_irq_print_chip,
-		.flags			= IRQCHIP_MASK_ON_SUSPEND | IRQCHIP_IMMUTABLE,
+		.flags			= IRQCHIP_MASK_ON_SUSPEND | IRQCHIP_SKIP_SET_WAKE,
 };
 
 static int ingenic_pinmux_set_pin_fn(struct ingenic_pinctrl *jzpc,
@@ -4100,6 +4116,7 @@ static int ingenic_pinconf_group_get(struct pinctrl_dev *pctldev,
 	return 0;
 }
 
+
 static int ingenic_pinconf_group_set(struct pinctrl_dev *pctldev,
 									 unsigned int group, unsigned long *configs,
 									 unsigned int num_configs)
@@ -4121,6 +4138,79 @@ static int ingenic_pinconf_group_set(struct pinctrl_dev *pctldev,
 
 	return 0;
 }
+
+static int __init ingenic_gpio_probe(struct ingenic_pinctrl *jzpc,
+                                                                        struct fwnode_handle *fwnode)
+{
+       struct ingenic_gpio_chip *jzgc;
+       struct device *dev = jzpc->dev;
+       struct gpio_irq_chip *girq;
+       unsigned int bank;
+       int err;
+
+       err = fwnode_property_read_u32(fwnode, "reg", &bank);
+       if (err) {
+               dev_err(dev, "Cannot read \"reg\" property: %i\n", err);
+               return err;
+       }
+
+       jzgc = devm_kzalloc(dev, sizeof(*jzgc), GFP_KERNEL);
+       if (!jzgc)
+               return -ENOMEM;
+
+       jzgc->jzpc = jzpc;
+       jzgc->reg_base = bank * jzpc->info->reg_offset;
+
+       jzgc->gc.label = devm_kasprintf(dev, GFP_KERNEL, "GPIO%c", 'A' + bank);
+       if (!jzgc->gc.label)
+               return -ENOMEM;
+
+       /* DO NOT EXPAND THIS: FOR BACKWARD GPIO NUMBERSPACE COMPATIBIBILITY
+        * ONLY: WORK TO TRANSITION CONSUMERS TO USE THE GPIO DESCRIPTOR API IN
+        * <linux/gpio/consumer.h> INSTEAD.
+        */
+       jzgc->gc.base = bank * 32;
+
+       jzgc->gc.ngpio = 32;
+       jzgc->gc.parent = dev;
+       jzgc->gc.fwnode = fwnode;
+       jzgc->gc.owner = THIS_MODULE;
+
+       jzgc->gc.set = ingenic_gpio_set;
+       jzgc->gc.get = ingenic_gpio_get;
+       jzgc->gc.direction_input = ingenic_gpio_direction_input;
+       jzgc->gc.direction_output = ingenic_gpio_direction_output;
+       jzgc->gc.get_direction = ingenic_gpio_get_direction;
+       jzgc->gc.request = gpiochip_generic_request;
+       jzgc->gc.free = gpiochip_generic_free;
+
+       err = fwnode_irq_get(fwnode, 0);
+       if (err < 0)
+               return err;
+       if (!err)
+               return -EINVAL;
+       jzgc->irq = err;
+
+       girq = &jzgc->gc.irq;
+       gpio_irq_chip_set_chip(girq, &ingenic_gpio_irqchip);
+       girq->parent_handler = ingenic_gpio_irq_handler;
+       girq->num_parents = 1;
+       girq->parents = devm_kcalloc(dev, 1, sizeof(*girq->parents),
+									 -                                                                GFP_KERNEL);
+       if (!girq->parents)
+               return -ENOMEM;
+
+       girq->parents[0] = jzgc->irq;
+       girq->default_type = IRQ_TYPE_NONE;
+       girq->handler = handle_level_irq;
+
+       err = devm_gpiochip_add_data(dev, &jzgc->gc, jzgc);
+       if (err)
+               return err;
+
+       return 0;
+}
+
 
 static const struct pinconf_ops ingenic_confops = {
 		.is_generic = true,
@@ -4153,77 +4243,6 @@ static const struct of_device_id ingenic_gpio_of_matches[] __initconst = {
 		{},
 };
 
-static int __init ingenic_gpio_probe(struct ingenic_pinctrl *jzpc,
-									 struct fwnode_handle *fwnode)
-{
-	struct ingenic_gpio_chip *jzgc;
-	struct device *dev = jzpc->dev;
-	struct gpio_irq_chip *girq;
-	unsigned int bank;
-	int err;
-
-	err = fwnode_property_read_u32(fwnode, "reg", &bank);
-	if (err) {
-		dev_err(dev, "Cannot read \"reg\" property: %i\n", err);
-		return err;
-	}
-
-	jzgc = devm_kzalloc(dev, sizeof(*jzgc), GFP_KERNEL);
-	if (!jzgc)
-		return -ENOMEM;
-
-	jzgc->jzpc = jzpc;
-	jzgc->reg_base = bank * jzpc->info->reg_offset;
-
-	jzgc->gc.label = devm_kasprintf(dev, GFP_KERNEL, "GPIO%c", 'A' + bank);
-	if (!jzgc->gc.label)
-		return -ENOMEM;
-
-	/* DO NOT EXPAND THIS: FOR BACKWARD GPIO NUMBERSPACE COMPATIBIBILITY
-	 * ONLY: WORK TO TRANSITION CONSUMERS TO USE THE GPIO DESCRIPTOR API IN
-	 * <linux/gpio/consumer.h> INSTEAD.
-	 */
-	jzgc->gc.base = bank * 32;
-
-	jzgc->gc.ngpio = 32;
-	jzgc->gc.parent = dev;
-	jzgc->gc.fwnode = fwnode;
-	jzgc->gc.owner = THIS_MODULE;
-
-	jzgc->gc.set = ingenic_gpio_set;
-	jzgc->gc.get = ingenic_gpio_get;
-	jzgc->gc.direction_input = ingenic_gpio_direction_input;
-	jzgc->gc.direction_output = ingenic_gpio_direction_output;
-	jzgc->gc.get_direction = ingenic_gpio_get_direction;
-	jzgc->gc.request = gpiochip_generic_request;
-	jzgc->gc.free = gpiochip_generic_free;
-
-	err = fwnode_irq_get(fwnode, 0);
-	if (err < 0)
-		return err;
-	if (!err)
-		return -EINVAL;
-	jzgc->irq = err;
-
-	girq = &jzgc->gc.irq;
-	gpio_irq_chip_set_chip(girq, &ingenic_gpio_irqchip);
-	girq->parent_handler = ingenic_gpio_irq_handler;
-	girq->num_parents = 1;
-	girq->parents = devm_kcalloc(dev, 1, sizeof(*girq->parents),
-								 GFP_KERNEL);
-	if (!girq->parents)
-		return -ENOMEM;
-
-	girq->parents[0] = jzgc->irq;
-	girq->default_type = IRQ_TYPE_NONE;
-	girq->handler = handle_level_irq;
-
-	err = devm_gpiochip_add_data(dev, &jzgc->gc, jzgc);
-	if (err)
-		return err;
-
-	return 0;
-}
 
 static int __init ingenic_pinctrl_probe(struct platform_device *pdev)
 {

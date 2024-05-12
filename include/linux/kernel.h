@@ -46,6 +46,9 @@
 
 #define STACK_MAGIC	0xdeadbeef
 
+// Backport from future kernel version for our pinctrl driver
+#define PTR_IF(cond, ptr)       ((cond) ? (ptr) : NULL)
+
 /**
  * REPEAT_BYTE - repeat the value @x multiple times as an unsigned long value
  * @x: value to repeat
