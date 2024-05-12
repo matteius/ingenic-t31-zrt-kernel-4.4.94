@@ -2,7 +2,7 @@ obj-y				+= cgu.o
 obj-$(CONFIG_MACH_JZ4740)	+= jz4740-cgu.o
 obj-$(CONFIG_MACH_JZ4770)	+= jz4770-cgu.o
 obj-$(CONFIG_MACH_JZ4780)	+= jz4780-cgu.o
-
+obj-$(CONFIG_INGENIC_CGU_X1000)		+= x1000-cgu.o
 
 obj-$(CONFIG_COMMON_CLK) += clk.o clk-pll.o clk-div.o clk-bus.o power-gate.o
 obj-$(CONFIG_SOC_X2000_V12)	+= clk-x2000-v12.o

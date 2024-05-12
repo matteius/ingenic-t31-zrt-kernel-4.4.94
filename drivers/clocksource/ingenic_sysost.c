@@ -29,6 +29,8 @@
 #include <linux/delay.h>
 #include <soc/ost.h>
 
+#include <linux/early_printk.h>
+
 #define CLKSOURCE_DIV   (16)
 #define CLKEVENT_DIV    (16)
 
@@ -261,7 +263,7 @@ static void __init ingenic_clockevent_init(struct ingenic_timerevent *evt_dev, u
     clockevents_config_and_register(cd, evt_dev->rate, 4, 0xffffffff);
 }
 
-static void __init ingenic_ost_init(struct device_node *np)
+static int __init ingenic_ost_init(struct device_node *np)
 {
 
     printk("[%s][%d]====== ingenic_ost_init ====== \n", __func__, __LINE__);
@@ -271,21 +273,25 @@ static void __init ingenic_ost_init(struct device_node *np)
     unsigned long ext_rate;
     void __iomem *iobase = NULL;
     int irq_ost = -1;
+	int ret = 0;
 
     iobase = of_io_request_and_map(np, 0, "ost");
     if(iobase == NULL) {
+		super_early_printk("Failed to map clocksource iobase!\n");
         pr_err("Failed to map clocksource iobase!\n");
-        return;
+		return -ENOMEM;
     }
 
     irq_ost = of_irq_get_byname(np, "sys_ost");
     if (irq_ost < 0) {
+		super_early_printk("ftm: unable to get IRQ from DT\n");
         pr_err("ftm: unable to get IRQ from DT, %d\n", irq_ost);
-        return;
+		return irq_ost;
     }
 
     ext_clk = clk_get(NULL, "ext");
     if (IS_ERR_OR_NULL(ext_clk)) {
+		super_early_printk("Warning Ingenic Ost: Can not get extern clock, Please check clk driver !!\n\n\t\n");
         pr_warn("Warning Ingenic Ost: Can not get extern clock, Please check clk driver !!\n\n\t\n");
         ext_rate = 24000000;
     } else {
@@ -300,6 +306,8 @@ static void __init ingenic_ost_init(struct device_node *np)
 
     ingenic_clocksource_init(tmr, ext_rate);
     ingenic_clockevent_init(evt, ext_rate);
+
+	return ret;
 }
 
 TIMER_OF_DECLARE(x1000_ost_init, "ingenic,x1000-ost", ingenic_ost_init);

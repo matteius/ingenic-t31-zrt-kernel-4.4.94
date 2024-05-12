@@ -75,7 +75,7 @@ void __init plat_time_init(void)
 {
 	of_clk_init(NULL);
 
-	printk("=== enter timer_probe  ===\n");
+	printk("=== enter clocksource_probe  ===\n");
 	timer_probe();
 }
 

@@ -190,12 +190,14 @@
 		};
 
 		pinctrl: pinctrl@0x10010000 {
-			compatible = "ingenic,t31-pinctrl";
+			status = "disabled";
+			compatible = "ingenic,x1000-pinctrl";
 			reg = <0x10010000 0x1000>;
 			ingenic,num-chips = <6>;
 			ingenic,regs-offset = <0x100>;
 
 			gpa: gpa {
+				status = "disabled";
 				gpio-controller;
 				#gpio-cells = <3>;
 				#ingenic,pincfg-cells = <3>;
@@ -210,6 +212,7 @@
 			};
 
 			gpb: gpb {
+				status = "disabled";
 				gpio-controller;
 				#gpio-cells = <3>;
 				#ingenic,pincfg-cells = <3>;
@@ -224,6 +227,7 @@
 			};
 
 			gpc: gpc {
+				status = "disabled";
 				gpio-controller;
 				#gpio-cells = <3>;
 				#ingenic,pincfg-cells = <3>;

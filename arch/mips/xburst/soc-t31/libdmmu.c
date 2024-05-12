@@ -596,7 +596,6 @@ static int dmmu_make_present(unsigned long addr, unsigned long end)
         return ret;
     }
 
-    kfree(pages);
     return ret == len ? 0 : -1;
 }
 
