@@ -706,14 +706,16 @@ asmlinkage __visible void __init start_kernel(void)
 	}
 #endif
 	page_ext_init();
-	kmemleak_init();
+    super_early_printk("Page ext init\n");
 	debug_objects_mem_init();
 	setup_per_cpu_pageset();
+    super_early_printk("Setup per-CPU pageset\n");
 	numa_policy_init();
-	acpi_early_init();
+    super_early_printk("NUMA policy init\n");
 	if (late_time_init)
 		late_time_init();
 	sched_clock_init();
+    super_early_printk("Sched clock init\n");
 	calibrate_delay();
 	pid_idr_init();
 	anon_vma_init();
@@ -722,37 +724,55 @@ asmlinkage __visible void __init start_kernel(void)
 		efi_enter_virtual_mode();
 #endif
 	thread_stack_cache_init();
+    super_early_printk("Thread stack cache init\n");
 	cred_init();
+    super_early_printk("Cred init\n");
 	fork_init();
+    super_early_printk("Fork init\n");
 	proc_caches_init();
-	uts_ns_init();
+    super_early_printk("Proc caches init\n");
 	buffer_init();
+    super_early_printk("Buffer init\n");
 	key_init();
+    super_early_printk("Key init\n");
 	security_init();
+    super_early_printk("Security init\n");
 	dbg_late_init();
+    super_early_printk("Debug late init\n");
 	vfs_caches_init();
-	pagecache_init();
+    super_early_printk("VFS caches init\n");
 	signals_init();
+    super_early_printk("Signals init\n");
 	seq_file_init();
 	proc_root_init();
+    super_early_printk("Proc root init\n");
 	nsfs_init();
+    super_early_printk("NSFS init\n");
 	cpuset_init();
+    super_early_printk("CPU set init\n");
 	cgroup_init();
+    super_early_printk("Cgroup init\n");
 	taskstats_init_early();
+    super_early_printk("Taskstats init early\n");
 	delayacct_init();
+    super_early_printk("Delay accounting init\n");
 
 	check_bugs();
 
 	acpi_subsystem_init();
-	arch_post_acpi_subsys_init();
+    super_early_printk("ACPI subsystem init\n");
 	sfi_init_late();
+    super_early_printk("SFI init late\n");
 
 	if (efi_enabled(EFI_RUNTIME_SERVICES)) {
+        super_early_printk("EFI runtime services enabled\n");
 		efi_free_boot_services();
 	}
 
+    super_early_printk("Ftrace init\n");
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
+    super_early_printk("Rest init\n");
 }
 
 /* Call all constructor functions linked into the kernel. */

@@ -1541,18 +1541,6 @@ static void probe_pcache(void)
 			c->dcache.flags |= MIPS_CACHE_ALIASES;
 	}
 
-	/* Physically indexed caches don't suffer from virtual aliasing */
-	if (c->dcache.flags & MIPS_CACHE_PINDEX)
-		c->dcache.flags &= ~MIPS_CACHE_ALIASES;
-
-	/*
-	 * In systems with CM the icache fills from L2 or closer caches, and
-	 * thus sees remote stores without needing to write them back any
-	 * further than that.
-	 */
-	if (mips_cm_present())
-		c->icache.flags |= MIPS_IC_SNOOPS_REMOTE;
-
 	switch (current_cpu_type()) {
 	case CPU_20KC:
 		/*
@@ -2051,6 +2039,8 @@ void r4k_cache_init(void)
 		flush_icache_range = (void *)b5k_instruction_hazard;
 		local_flush_icache_range = (void *)b5k_instruction_hazard;
 
+		/* Cache aliases are handled in hardware; allow HIGHMEM */
+		current_cpu_data.dcache.flags &= ~MIPS_CACHE_ALIASES;
 
 		/* Optimization: an L2 flush implicitly flushes the L1 */
 		current_cpu_data.options |= MIPS_CPU_INCLUSIVE_CACHES;

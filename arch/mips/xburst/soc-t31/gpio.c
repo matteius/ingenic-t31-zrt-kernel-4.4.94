@@ -1,5 +1,7 @@
 #include <linux/kernel.h>
 #include <linux/printk.h>
+#include <linux/pinctrl/consumer.h>
+#include <linux/device.h>
 #include <linux/io.h>
 #include <soc/base.h>
 #include <soc/gpio.h>
@@ -132,18 +134,12 @@ void ingenic_pinctrl_unlock(int port, unsigned long flags);
 
 int jzgpio_set_func(int port, enum gpio_function func, unsigned long pins)
 {
-    unsigned long flags;
-
     if (port < 0 || port > 4) {
         printk(KERN_ERR "gpio: invalid gpio port for x2000: %d\n", port);
         return -EINVAL;
     }
 
-    flags = ingenic_pinctrl_lock(port);
-
     hal_gpio_port_set_func(port, pins, func);
-
-    ingenic_pinctrl_unlock(port, flags);
 
     return 0;
 }

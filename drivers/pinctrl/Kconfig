@@ -311,7 +311,7 @@ config PINCTRL_INGENIC
 	bool "Pinctrl driver for the Ingenic JZ47xx SoCs"
 	default y
 	depends on OF
-	depends on MACH_INGENIC || COMPILE_TEST
+	depends on MACH_INGENIC || MACH_XBURST || MACH_XBURST2 || COMPILE_TEST
 	select GENERIC_PINCONF
 	select GENERIC_PINCTRL_GROUPS
 	select GENERIC_PINMUX_FUNCTIONS

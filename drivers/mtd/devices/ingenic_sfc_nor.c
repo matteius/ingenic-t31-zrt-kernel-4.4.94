@@ -544,15 +544,13 @@ static int ingenic_spi_norflash_erase(struct mtd_info *mtd, struct erase_info *i
 		if (ret) {
 			dev_err(flash->dev,"erase error !\n");
 			mutex_unlock(&flash->lock);
-			instr->state = MTD_ERASE_FAILED;
+			instr->fail_addr = addr;
 			return ret;
 		}
 		addr += spi_nor_info->erase_size;
 	}
 	mutex_unlock(&flash->lock);
-	instr->state = MTD_ERASE_DONE;
 
-	mtd_erase_callback(instr);
 	return 0;
 }
 
@@ -825,6 +823,7 @@ static int __init ingenic_sfc_probe(struct platform_device *pdev)
 
 	L2CACHE_ALIGN_SIZE = 128;
 
+	printk("ingenic_spi_norflash: Start of SFC probe!\n");
 	flash = kzalloc(sizeof(struct sfc_flash), GFP_KERNEL);
 	if (flash == NULL) {
 		dev_err(&pdev->dev, "Failed to alloc mem for flash\n");
@@ -1026,6 +1025,18 @@ void ingenic_sfc_shutdown(struct platform_device *pdev)
 	return ;
 }
 
+
+static const struct spi_device_id ingenic_ids[] = {
+		/*
+		 * Allow non-DT platform devices to bind to the "spi-nor" modalias, and
+		 * hack around the fact that the SPI core does not provide uevent
+		 * matching for .of_match_table
+		 */
+		{"ingenic,sfc-nor"},
+		{ },
+};
+MODULE_DEVICE_TABLE(spi, m25p_ids);
+
 static const struct of_device_id ingenicsfc_match[] = {
 	{ .compatible = "ingenic,sfc", },
 	{},
@@ -1033,15 +1044,19 @@ static const struct of_device_id ingenicsfc_match[] = {
 MODULE_DEVICE_TABLE(of, ingenicsfc_match);
 
 static struct platform_driver ingenic_sfcdrv = {
-	.driver		= {
-		.name	= "ingenic-sfc",
-		.owner	= THIS_MODULE,
-		.of_match_table = ingenicsfc_match,
+	.spidrv = {
+			.driver = {
+					.name	= "\"ingenic-sfc",
+					.owner	= THIS_MODULE,
+					.of_match_table = ingenicsfc_match,
+			},
+			.id_table	= ingenic_ids,
 	},
-	.remove		= __exit_p(ingenic_sfc_remove),
+	.probe	= ingenic_sfc_probe,
+	.remove	= __exit_p(ingenic_sfc_remove),
 	.suspend	= ingenic_sfc_suspend,
 	.resume		= ingenic_sfc_resume,
-//	.shutdown	= ingenic_sfc_shutdown,
+	//.shutdown	= m25p_shutdown,
 };
 module_platform_driver_probe(ingenic_sfcdrv, ingenic_sfc_probe);
 MODULE_LICENSE("GPL");
