@@ -129,7 +129,6 @@
 		status = "disabled";
 	};
 
-
 	apb {
 		compatible = "simple-bus";
 		#address-cells = <1>;
@@ -145,14 +144,15 @@
 
 			#clock-cells = <1>;
 
-			clocks = <&rtc_ext>, <&ext>;
-			clock-names = "rtc_ext", "ext";
+			clocks = <&cgu CLK_GATE_TCU>, <&rtc_ext>, <&ext>;
+			clock-names = "tcu", "rtc_ext", "ext";
 
 			interrupt-controller;
 			#interrupt-cells = <1>;
 
 			interrupt-parent = <&core_intc>;
 			interrupts = <27 26 25>;
+			interrupt-names = "tcu_int2", "tcu_int1", "tcu_int0";
 
 			watchdog: watchdog@0x10002000 {
 				compatible = "ingenic,watchdog";
@@ -196,14 +196,14 @@
 		};*/
 
 		pinctrl: pinctrl@0x10010000 {
-			status = "disabled";
+			status = "okay";
 			compatible = "ingenic,jz4740-pinctrl";
 			reg = <0x10010000 0x1000>;
 			ingenic,num-chips = <6>;
 			ingenic,regs-offset = <0x100>;
 
 			gpa: gpa {
-				status = "disabled";
+				status = "okay";
 				gpio-controller;
 				#gpio-cells = <3>;
 				#ingenic,pincfg-cells = <3>;
@@ -212,13 +212,12 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
-				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
 
 			gpb: gpb {
-				status = "disabled";
+				status = "okay";
 				gpio-controller;
 				#gpio-cells = <3>;
 				#ingenic,pincfg-cells = <3>;
@@ -227,13 +226,12 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
-				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
 
 			gpc: gpc {
-				status = "disabled";
+				status = "okay";
 				gpio-controller;
 				#gpio-cells = <3>;
 				#ingenic,pincfg-cells = <3>;
@@ -242,7 +240,6 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
-				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
