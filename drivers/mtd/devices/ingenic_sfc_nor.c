@@ -806,7 +806,7 @@ static const struct attribute_group sfc_norflash_info_attr_group = {
 };
 
 
-static int __init ingenic_sfc_probe(struct platform_device *pdev)
+static int ingenic_sfc_probe(struct platform_device *pdev)
 {
 	struct sfc_flash *flash;
 	struct mtd_partition *ingenic_mtd_partition;
@@ -1014,7 +1014,7 @@ static int ingenic_sfc_resume(struct platform_device *pdev)
 	return 0;
 }
 
-void ingenic_sfc_shutdown(struct platform_device *pdev)
+static void ingenic_sfc_shutdown(struct platform_device *pdev)
 {
 	struct sfc_flash *flash = platform_get_drvdata(pdev);
 	struct sfc *sfc = flash->sfc;
@@ -1022,42 +1022,35 @@ void ingenic_sfc_shutdown(struct platform_device *pdev)
 	disable_irq(sfc->irq);
 	clk_disable_unprepare(sfc->clk_gate);
 	clk_disable_unprepare(sfc->clk);
-	return ;
 }
 
-
-static const struct spi_device_id ingenic_ids[] = {
-		/*
-		 * Allow non-DT platform devices to bind to the "spi-nor" modalias, and
-		 * hack around the fact that the SPI core does not provide uevent
-		 * matching for .of_match_table
-		 */
+static const struct platform_device_id ingenic_ids[] = {
 		{"ingenic,sfc-nor"},
 		{ },
 };
-MODULE_DEVICE_TABLE(spi, m25p_ids);
+MODULE_DEVICE_TABLE(platform, ingenic_ids);
 
 static const struct of_device_id ingenicsfc_match[] = {
-	{ .compatible = "ingenic,sfc", },
-	{},
+		{ .compatible = "ingenic,sfc-nor" },
+		{},
 };
 MODULE_DEVICE_TABLE(of, ingenicsfc_match);
 
-static struct platform_driver ingenic_sfcdrv = {
-	.spidrv = {
-			.driver = {
-					.name	= "\"ingenic-sfc",
-					.owner	= THIS_MODULE,
-					.of_match_table = ingenicsfc_match,
-			},
-			.id_table	= ingenic_ids,
-	},
-	.probe	= ingenic_sfc_probe,
-	.remove	= __exit_p(ingenic_sfc_remove),
-	.suspend	= ingenic_sfc_suspend,
-	.resume		= ingenic_sfc_resume,
-	//.shutdown	= m25p_shutdown,
+static struct platform_driver ingenic_sfc_driver = {
+		.driver = {
+				.name = "ingenic-sfc",
+				.owner = THIS_MODULE,
+				.of_match_table = of_match_ptr(ingenicsfc_match),
+		},
+		.id_table = ingenic_ids,
+		.probe = ingenic_sfc_probe,
+		.remove = ingenic_sfc_remove,
+		.suspend = ingenic_sfc_suspend,
+		.resume = ingenic_sfc_resume,
+		.shutdown = ingenic_sfc_shutdown,
 };
-module_platform_driver_probe(ingenic_sfcdrv, ingenic_sfc_probe);
+
+module_platform_driver(ingenic_sfc_driver);
+
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("INGENIC SFC Driver");
+MODULE_DESCRIPTION("Ingenic SFC Driver");

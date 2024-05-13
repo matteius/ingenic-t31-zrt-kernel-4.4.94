@@ -27,6 +27,7 @@
 #include <linux/mutex.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
+#include <linux/of_irq.h>
 
 #include <asm/uaccess.h>
 #include <asm/irq.h>
@@ -665,10 +666,10 @@ struct sfc *sfc_res_init(struct platform_device *pdev)
 
 	sfc->threshold = THRESHOLD;
 
-	/* request SFC irq */
-	sfc->irq = platform_get_irq(pdev, 0);
+	/* Get the IRQ number from the device tree */
+	sfc->irq = irq_of_parse_and_map(np, 0);
 	if (sfc->irq < 0) {
-		dev_err(&pdev->dev, "No IRQ specified\n");
+		dev_err(&pdev->dev, "Cannot get IRQ number from device tree\n");
 		return ERR_PTR(-ENOENT);
 	}
 

@@ -234,17 +234,21 @@ static inline void flush_scache_line(unsigned long addr)
  */
 static inline int protected_flush_icache_line(unsigned long addr)
 {
+	int ret;
 	switch (boot_cpu_type()) {
 	case CPU_LOONGSON2:
-		return protected_cache_op(Hit_Invalidate_I_Loongson2, addr);
-
+		ret = protected_cache_op(Hit_Invalidate_I_Loongson2, addr);
+		break;
 	default:
 #ifdef CONFIG_EVA
-		return protected_cachee_op(Hit_Invalidate_I, addr);
+		ret = protected_cachee_op(Hit_Invalidate_I, addr);
 #else
-		return protected_cache_op(Hit_Invalidate_I, addr);
+		ret = protected_cache_op(Hit_Invalidate_I, addr);
 #endif
+		__inv_btb();	/*CONFIG_MACH_XBURST*/
+		break;
 	}
+	return ret;
 }
 
 /*
@@ -255,20 +259,26 @@ static inline int protected_flush_icache_line(unsigned long addr)
  */
 static inline int protected_writeback_dcache_line(unsigned long addr)
 {
+	int ret;
 #ifdef CONFIG_EVA
-	return protected_cachee_op(Hit_Writeback_Inv_D, addr);
+	ret = protected_cachee_op(Hit_Writeback_Inv_D, addr);
 #else
-	return protected_cache_op(Hit_Writeback_Inv_D, addr);
+	ret = protected_cache_op(Hit_Writeback_Inv_D, addr);
 #endif
+	__sync_wb();	/*CONFIG_MACH_XBURST*/
+	return ret;
 }
 
 static inline int protected_writeback_scache_line(unsigned long addr)
 {
+	int ret;
 #ifdef CONFIG_EVA
-	return protected_cachee_op(Hit_Writeback_Inv_SD, addr);
+	ret = protected_cachee_op(Hit_Writeback_Inv_SD, addr);
 #else
-	return protected_cache_op(Hit_Writeback_Inv_SD, addr);
+	ret = protected_cache_op(Hit_Writeback_Inv_SD, addr);
 #endif
+	__bridge_sync_war();	/*CONFIG_MACH_XBURST*/
+	return ret;
 }
 
 /*
