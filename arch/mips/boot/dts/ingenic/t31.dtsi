@@ -199,7 +199,6 @@
 			ingenic,regs-offset = <0x100>;
 
 			gpa: gpa {
-				status = "okay";
 				gpio-controller;
 				#gpio-cells = <3>;
 				#ingenic,pincfg-cells = <3>;
@@ -208,12 +207,12 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
+				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
 
 			gpb: gpb {
-				status = "okay";
 				gpio-controller;
 				#gpio-cells = <3>;
 				#ingenic,pincfg-cells = <3>;
@@ -222,12 +221,12 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
+				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
 				ingenic,pull-gpios-high = <0x55555555>;
 			};
 
 			gpc: gpc {
-				status = "okay";
 				gpio-controller;
 				#gpio-cells = <3>;
 				#ingenic,pincfg-cells = <3>;
@@ -236,8 +235,8 @@
 				interrupt-parent = <&core_intc>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
+				ingenic,num-gpios = <32>;
 				ingenic,pull-gpios-low = <0x55555555>;
-				ingenic,pull-gpios-high = <0x55555555>;
 			};
 
 			i2c0_pins: i2c0-pins {
