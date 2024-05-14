@@ -379,9 +379,10 @@ static int debug_notifier_call(struct notifier_block *self,
 	int cpu;
 	struct debug_drvdata *drvdata;
 
-	mutex_lock(&debug_lock);
+	/* Bail out if we can't acquire the mutex or the functionality is off */
+	if (!mutex_trylock(&debug_lock))
+		return NOTIFY_DONE;
 
-	/* Bail out if the functionality is disabled */
 	if (!debug_enable)
 		goto skip_dump;
 
@@ -400,7 +401,7 @@ static int debug_notifier_call(struct notifier_block *self,
 
 skip_dump:
 	mutex_unlock(&debug_lock);
-	return 0;
+	return NOTIFY_DONE;
 }
 
 static struct notifier_block debug_notifier = {
@@ -666,6 +667,10 @@ static const struct amba_id debug_ids[] = {
 	},
 	{       /* Debug for Cortex-A72 */
 		.id	= 0x000bbd08,
+		.mask	= 0x000fffff,
+	},
+	{       /* Debug for Cortex-A73 */
+		.id	= 0x000bbd09,
 		.mask	= 0x000fffff,
 	},
 	{ 0, 0 },

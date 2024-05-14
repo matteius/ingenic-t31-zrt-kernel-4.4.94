@@ -612,7 +612,7 @@ static int xcan_start_xmit_mailbox(struct sk_buff *skb, struct net_device *ndev)
  *
  * Return: NETDEV_TX_OK on success and NETDEV_TX_BUSY when the tx queue is full
  */
-static int xcan_start_xmit(struct sk_buff *skb, struct net_device *ndev)
+static netdev_tx_t xcan_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
 	struct xcan_priv *priv = netdev_priv(ndev);
 	int ret;
@@ -1424,7 +1424,7 @@ static const struct xcan_devtype_data xcan_canfd_data = {
 		 XCAN_FLAG_RXMNF |
 		 XCAN_FLAG_TX_MAILBOXES |
 		 XCAN_FLAG_RX_FIFO_MULTI,
-	.bittiming_const = &xcan_bittiming_const,
+	.bittiming_const = &xcan_bittiming_const_canfd,
 	.btr_ts2_shift = XCAN_BTR_TS2_SHIFT_CANFD,
 	.btr_sjw_shift = XCAN_BTR_SJW_SHIFT_CANFD,
 	.bus_clk_name = "s_axi_aclk",
@@ -1536,7 +1536,12 @@ static int xcan_probe(struct platform_device *pdev)
 	spin_lock_init(&priv->tx_lock);
 
 	/* Get IRQ for the device */
-	ndev->irq = platform_get_irq(pdev, 0);
+	ret = platform_get_irq(pdev, 0);
+	if (ret < 0)
+		goto err_free;
+
+	ndev->irq = ret;
+
 	ndev->flags |= IFF_ECHO;	/* We support local echo */
 
 	platform_set_drvdata(pdev, ndev);

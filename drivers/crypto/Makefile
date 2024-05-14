@@ -46,6 +46,4 @@ obj-$(CONFIG_CRYPTO_DEV_VMX) += vmx/
 obj-$(CONFIG_CRYPTO_DEV_BCM_SPU) += bcm/
 obj-$(CONFIG_CRYPTO_DEV_SAFEXCEL) += inside-secure/
 obj-$(CONFIG_CRYPTO_DEV_ARTPEC6) += axis/
-obj-$(CONFIG_CRYPTO_DEV_INGENIC_AES) += ingenic-aes.o
-obj-$(CONFIG_CRYPTO_DEV_INGENIC_SHA) += ingenic-hash.o
-
+obj-y += hisilicon/

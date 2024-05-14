@@ -309,7 +309,6 @@ static int virtio_gpu_resource_create_ioctl(struct drm_device *dev, void *data,
 		}
 		return ret;
 	}
-	drm_gem_object_put_unlocked(obj);
 
 	rc->res_handle = res_id; /* similiar to a VM address */
 	rc->bo_handle = handle;
@@ -318,6 +317,15 @@ static int virtio_gpu_resource_create_ioctl(struct drm_device *dev, void *data,
 		virtio_gpu_unref_list(&validate_list);
 		dma_fence_put(&fence->f);
 	}
+
+	/*
+	 * The handle owns the reference now.  But we must drop our
+	 * remaining reference *after* we no longer need to dereference
+	 * the obj.  Otherwise userspace could guess the handle and
+	 * race closing it from another thread.
+	 */
+	drm_gem_object_put_unlocked(obj);
+
 	return 0;
 fail_unref:
 	if (vgdev->has_virgl_3d) {
@@ -527,6 +535,9 @@ static int virtio_gpu_get_caps_ioctl(struct drm_device *dev,
 				 atomic_read(&cache_ent->is_valid), 5 * HZ);
 	if (!ret)
 		return -EBUSY;
+
+	/* is_valid check must proceed before copy of the cache entry. */
+	smp_rmb();
 
 	ptr = cache_ent->caps_cache;
 

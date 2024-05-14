@@ -191,7 +191,7 @@ static int dsa_switch_rcv(struct sk_buff *skb, struct net_device *dev,
 	if (dsa_skb_defer_rx_timestamp(p, skb))
 		return 0;
 
-	netif_receive_skb(skb);
+	gro_cells_receive(&p->gcells, skb);
 
 	return 0;
 }
@@ -293,15 +293,22 @@ static int __init dsa_init_module(void)
 
 	rc = dsa_slave_register_notifier();
 	if (rc)
-		return rc;
+		goto register_notifier_fail;
 
 	rc = dsa_legacy_register();
 	if (rc)
-		return rc;
+		goto legacy_register_fail;
 
 	dev_add_pack(&dsa_pack_type);
 
 	return 0;
+
+legacy_register_fail:
+	dsa_slave_unregister_notifier();
+register_notifier_fail:
+	destroy_workqueue(dsa_owq);
+
+	return rc;
 }
 module_init(dsa_init_module);
 

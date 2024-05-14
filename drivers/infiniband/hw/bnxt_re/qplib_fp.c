@@ -360,7 +360,8 @@ void bnxt_qplib_disable_nq(struct bnxt_qplib_nq *nq)
 	}
 
 	/* Make sure the HW is stopped! */
-	bnxt_qplib_nq_stop_irq(nq, true);
+	if (nq->requested)
+		bnxt_qplib_nq_stop_irq(nq, true);
 
 	if (nq->bar_reg_iomem)
 		iounmap(nq->bar_reg_iomem);
@@ -636,12 +637,13 @@ int bnxt_qplib_query_srq(struct bnxt_qplib_res *res,
 	int rc = 0;
 
 	RCFW_CMD_PREP(req, QUERY_SRQ, cmd_flags);
-	req.srq_cid = cpu_to_le32(srq->id);
 
 	/* Configure the request */
 	sbuf = bnxt_qplib_rcfw_alloc_sbuf(rcfw, sizeof(*sb));
 	if (!sbuf)
 		return -ENOMEM;
+	req.resp_size = sizeof(*sb) / BNXT_QPLIB_CMDQE_UNITS;
+	req.srq_cid = cpu_to_le32(srq->id);
 	sb = sbuf->sb;
 	rc = bnxt_qplib_rcfw_send_message(rcfw, (void *)&req, (void *)&resp,
 					  (void *)sbuf, 0);
@@ -1969,6 +1971,7 @@ int bnxt_qplib_create_cq(struct bnxt_qplib_res *res, struct bnxt_qplib_cq *cq)
 	INIT_LIST_HEAD(&cq->sqf_head);
 	INIT_LIST_HEAD(&cq->rqf_head);
 	spin_lock_init(&cq->compl_lock);
+	spin_lock_init(&cq->flush_lock);
 
 	bnxt_qplib_arm_cq_enable(cq);
 	return 0;
@@ -2272,13 +2275,13 @@ static int bnxt_qplib_cq_process_req(struct bnxt_qplib_cq *cq,
 			/* Add qp to flush list of the CQ */
 			bnxt_qplib_add_flush_qp(qp);
 		} else {
+			/* Before we complete, do WA 9060 */
+			if (do_wa9060(qp, cq, cq_cons, sw_sq_cons,
+				      cqe_sq_cons)) {
+				*lib_qp = qp;
+				goto out;
+			}
 			if (swq->flags & SQ_SEND_FLAGS_SIGNAL_COMP) {
-				/* Before we complete, do WA 9060 */
-				if (do_wa9060(qp, cq, cq_cons, sw_sq_cons,
-					      cqe_sq_cons)) {
-					*lib_qp = qp;
-					goto out;
-				}
 				cqe->status = CQ_REQ_STATUS_OK;
 				cqe++;
 				(*budget)--;

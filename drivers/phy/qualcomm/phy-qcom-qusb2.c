@@ -231,6 +231,7 @@ static const struct qusb2_phy_cfg sdm845_phy_cfg = {
 	.mask_core_ready = CORE_READY_STATUS,
 	.has_pll_override = true,
 	.autoresume_en	  = BIT(0),
+	.update_tune1_with_efuse = true,
 };
 
 static const char * const qusb2_phy_vreg_names[] = {
@@ -394,7 +395,7 @@ static void qusb2_phy_set_tune2_param(struct qusb2_phy *qphy)
 {
 	struct device *dev = &qphy->phy->dev;
 	const struct qusb2_phy_cfg *cfg = qphy->cfg;
-	u8 *val;
+	u8 *val, hstx_trim;
 
 	/* efuse register is optional */
 	if (!qphy->cell)
@@ -402,25 +403,30 @@ static void qusb2_phy_set_tune2_param(struct qusb2_phy *qphy)
 
 	/*
 	 * Read efuse register having TUNE2/1 parameter's high nibble.
-	 * If efuse register shows value as 0x0, or if we fail to find
-	 * a valid efuse register settings, then use default value
-	 * as 0xB for high nibble that we have already set while
-	 * configuring phy.
+	 * If efuse register shows value as 0x0 (indicating value is not
+	 * fused), or if we fail to find a valid efuse register setting,
+	 * then use default value for high nibble that we have already
+	 * set while configuring the phy.
 	 */
 	val = nvmem_cell_read(qphy->cell, NULL);
-	if (IS_ERR(val) || !val[0]) {
+	if (IS_ERR(val)) {
+		dev_dbg(dev, "failed to read a valid hs-tx trim value\n");
+		return;
+	}
+	hstx_trim = val[0];
+	kfree(val);
+	if (!hstx_trim) {
 		dev_dbg(dev, "failed to read a valid hs-tx trim value\n");
 		return;
 	}
 
 	/* Fused TUNE1/2 value is the higher nibble only */
 	if (cfg->update_tune1_with_efuse)
-		qusb2_setbits(qphy->base, cfg->regs[QUSB2PHY_PORT_TUNE1],
-			      val[0] << 0x4);
+		qusb2_write_mask(qphy->base, cfg->regs[QUSB2PHY_PORT_TUNE1],
+				 hstx_trim << HSTX_TRIM_SHIFT, HSTX_TRIM_MASK);
 	else
-		qusb2_setbits(qphy->base, cfg->regs[QUSB2PHY_PORT_TUNE2],
-			      val[0] << 0x4);
-
+		qusb2_write_mask(qphy->base, cfg->regs[QUSB2PHY_PORT_TUNE2],
+				 hstx_trim << HSTX_TRIM_SHIFT, HSTX_TRIM_MASK);
 }
 
 static int qusb2_phy_set_mode(struct phy *phy, enum phy_mode mode)
@@ -524,7 +530,7 @@ static int __maybe_unused qusb2_phy_runtime_resume(struct device *dev)
 	}
 
 	if (!qphy->has_se_clk_scheme) {
-		clk_prepare_enable(qphy->ref_clk);
+		ret = clk_prepare_enable(qphy->ref_clk);
 		if (ret) {
 			dev_err(dev, "failed to enable ref clk, %d\n", ret);
 			goto disable_ahb_clk;

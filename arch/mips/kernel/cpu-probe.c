@@ -1490,6 +1490,8 @@ static inline void cpu_probe_legacy(struct cpuinfo_mips *c, unsigned int cpu)
 			__cpu_name[cpu] = "ICT Loongson-3";
 			set_elf_platform(cpu, "loongson3a");
 			set_isa(c, MIPS_CPU_ISA_M64R1);
+			c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_CAM |
+				MIPS_ASE_LOONGSON_EXT);
 			break;
 		case PRID_REV_LOONGSON3B_R1:
 		case PRID_REV_LOONGSON3B_R2:
@@ -1497,6 +1499,8 @@ static inline void cpu_probe_legacy(struct cpuinfo_mips *c, unsigned int cpu)
 			__cpu_name[cpu] = "ICT Loongson-3";
 			set_elf_platform(cpu, "loongson3b");
 			set_isa(c, MIPS_CPU_ISA_M64R1);
+			c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_CAM |
+				MIPS_ASE_LOONGSON_EXT);
 			break;
 		}
 
@@ -1862,6 +1866,8 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
 		decode_configs(c);
 		c->options |= MIPS_CPU_FTLB | MIPS_CPU_TLBINV | MIPS_CPU_LDPTE;
 		c->writecombine = _CACHE_UNCACHED_ACCELERATED;
+		c->ases |= (MIPS_ASE_LOONGSON_MMI | MIPS_ASE_LOONGSON_CAM |
+			MIPS_ASE_LOONGSON_EXT | MIPS_ASE_LOONGSON_EXT2);
 		break;
 	default:
 		panic("Unknown Loongson Processor ID!");
@@ -2083,17 +2089,11 @@ void cpu_probe(void)
 	c->processor_id = read_c0_prid();
 	switch (c->processor_id & PRID_COMP_MASK) {
 	case PRID_COMP_LEGACY:
-    {
-        very_early_printk("PRID_COMP_LEGACY\n");
-        cpu_probe_legacy(c, cpu);
-        break;
-    }
+		cpu_probe_legacy(c, cpu);
+		break;
 	case PRID_COMP_MIPS:
-    {
-        very_early_printk("PRID_COMP_MIPS\n");
-        cpu_probe_mips(c, cpu);
-        break;
-    }
+		cpu_probe_mips(c, cpu);
+		break;
 	case PRID_COMP_ALCHEMY:
 		cpu_probe_alchemy(c, cpu);
 		break;
@@ -2118,12 +2118,8 @@ void cpu_probe(void)
 	case PRID_COMP_INGENIC_D0:
 	case PRID_COMP_INGENIC_D1:
 	case PRID_COMP_INGENIC_E1:
-	case PRID_COMP_INGENIC_13:
-    {
-        very_early_printk("PRID_COMP_INGENIC\n");
-        cpu_probe_ingenic(c, cpu);
-        break;
-    }
+		cpu_probe_ingenic(c, cpu);
+		break;
 	case PRID_COMP_NETLOGIC:
 		cpu_probe_netlogic(c, cpu);
 		break;
@@ -2161,19 +2157,7 @@ void cpu_probe(void)
 	}
 
 	if (c->options & MIPS_CPU_FPU)
-        {
 		cpu_set_fpu_opts(c);
-                #if 0
-                if (c->isa_level & (MIPS_CPU_ISA_M32R1 | MIPS_CPU_ISA_M32R2 |
-                                   MIPS_CPU_ISA_M64R1 | MIPS_CPU_ISA_M64R2)) {
-                      if (c->fpu_id & MIPS_FPIR_3D)
-                               c->ases |= MIPS_ASE_MIPS3D;
-                       if (c->fpu_id & MIPS_FPIR_HAS2008)
-                               fpu_fcr31 = cpu_test_fpu_csr31(FPU_CSR_DEFAULT|FPU_CSR_MAC2008|FPU_CSR_ABS2008|FPU_CSR_NAN2008);
-               }
-               #endif
-
-        }
 	else
 		cpu_set_nofpu_opts(c);
 
@@ -2198,6 +2182,39 @@ void cpu_probe(void)
 		     "Vector register partitioning unimplemented!");
 		elf_hwcap |= HWCAP_MIPS_MSA;
 	}
+
+	if (cpu_has_mips16)
+		elf_hwcap |= HWCAP_MIPS_MIPS16;
+
+	if (cpu_has_mdmx)
+		elf_hwcap |= HWCAP_MIPS_MDMX;
+
+	if (cpu_has_mips3d)
+		elf_hwcap |= HWCAP_MIPS_MIPS3D;
+
+	if (cpu_has_smartmips)
+		elf_hwcap |= HWCAP_MIPS_SMARTMIPS;
+
+	if (cpu_has_dsp)
+		elf_hwcap |= HWCAP_MIPS_DSP;
+
+	if (cpu_has_dsp2)
+		elf_hwcap |= HWCAP_MIPS_DSP2;
+
+	if (cpu_has_dsp3)
+		elf_hwcap |= HWCAP_MIPS_DSP3;
+
+	if (cpu_has_mips16e2)
+		elf_hwcap |= HWCAP_MIPS_MIPS16E2;
+
+	if (cpu_has_loongson_mmi)
+		elf_hwcap |= HWCAP_LOONGSON_MMI;
+
+	if (cpu_has_loongson_ext)
+		elf_hwcap |= HWCAP_LOONGSON_EXT;
+
+	if (cpu_has_loongson_ext2)
+		elf_hwcap |= HWCAP_LOONGSON_EXT2;
 
 	if (cpu_has_vz)
 		cpu_probe_vz(c);

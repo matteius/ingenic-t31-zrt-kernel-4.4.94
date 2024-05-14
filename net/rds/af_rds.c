@@ -385,7 +385,7 @@ static int rds_recv_track_latency(struct rds_sock *rs, char __user *optval,
 
 	rs->rs_rx_traces = trace.rx_traces;
 	for (i = 0; i < rs->rs_rx_traces; i++) {
-		if (trace.rx_trace_pos[i] > RDS_MSG_RX_DGRAM_TRACE_MAX) {
+		if (trace.rx_trace_pos[i] >= RDS_MSG_RX_DGRAM_TRACE_MAX) {
 			rs->rs_rx_traces = 0;
 			return -EFAULT;
 		}
@@ -505,6 +505,9 @@ static int rds_connect(struct socket *sock, struct sockaddr *uaddr,
 	struct sockaddr_in *sin;
 	struct rds_sock *rs = rds_sk_to_rs(sk);
 	int ret = 0;
+
+	if (addr_len < offsetofend(struct sockaddr, sa_family))
+		return -EINVAL;
 
 	lock_sock(sk);
 

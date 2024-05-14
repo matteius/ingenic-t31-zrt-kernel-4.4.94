@@ -433,7 +433,7 @@ static int fill_res_cm_id_entry(struct sk_buff *msg,
 	struct nlattr *entry_attr;
 
 	if (port && port != cm_id->port_num)
-		return 0;
+		return -EAGAIN;
 
 	entry_attr = nla_nest_start(msg, RDMA_NLDEV_ATTR_RES_CM_ID_ENTRY);
 	if (!entry_attr)
@@ -578,10 +578,6 @@ static int fill_res_pd_entry(struct sk_buff *msg, struct netlink_callback *cb,
 	}
 	if (nla_put_u64_64bit(msg, RDMA_NLDEV_ATTR_RES_USECNT,
 			      atomic_read(&pd->usecnt), RDMA_NLDEV_ATTR_PAD))
-		goto err;
-	if ((pd->flags & IB_PD_UNSAFE_GLOBAL_RKEY) &&
-	    nla_put_u32(msg, RDMA_NLDEV_ATTR_RES_UNSAFE_GLOBAL_RKEY,
-			pd->unsafe_global_rkey))
 		goto err;
 
 	if (fill_res_name_pid(msg, res))

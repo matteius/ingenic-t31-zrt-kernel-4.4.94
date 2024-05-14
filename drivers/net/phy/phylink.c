@@ -54,6 +54,10 @@ struct phylink {
 
 	/* The link configuration settings */
 	struct phylink_link_state link_config;
+
+	/* The current settings */
+	phy_interface_t cur_interface;
+
 	struct gpio_desc *link_gpio;
 	struct timer_list link_poll;
 	void (*get_fixed_state)(struct net_device *dev,
@@ -222,6 +226,8 @@ static int phylink_parse_fixedlink(struct phylink *pl,
 			       __ETHTOOL_LINK_MODE_MASK_NBITS, true);
 	linkmode_zero(pl->supported);
 	phylink_set(pl->supported, MII);
+	phylink_set(pl->supported, Pause);
+	phylink_set(pl->supported, Asym_Pause);
 	if (s) {
 		__set_bit(s->bit, pl->supported);
 	} else {
@@ -348,6 +354,10 @@ static int phylink_get_mac_state(struct phylink *pl, struct phylink_link_state *
 	linkmode_zero(state->lp_advertising);
 	state->interface = pl->link_config.interface;
 	state->an_enabled = pl->link_config.an_enabled;
+	state->speed = SPEED_UNKNOWN;
+	state->duplex = DUPLEX_UNKNOWN;
+	state->pause = MLO_PAUSE_NONE;
+	state->an_complete = 0;
 	state->link = 1;
 
 	return pl->ops->mac_link_state(ndev, state);
@@ -370,8 +380,8 @@ static void phylink_get_fixed_state(struct phylink *pl, struct phylink_link_stat
  *  Local device  Link partner
  *  Pause AsymDir Pause AsymDir Result
  *    1     X       1     X     TX+RX
- *    0     1       1     1     RX
- *    1     1       0     1     TX
+ *    0     1       1     1     TX
+ *    1     1       0     1     RX
  */
 static void phylink_resolve_flow(struct phylink *pl,
 				 struct phylink_link_state *state)
@@ -392,7 +402,7 @@ static void phylink_resolve_flow(struct phylink *pl,
 			new_pause = MLO_PAUSE_TX | MLO_PAUSE_RX;
 		else if (pause & MLO_PAUSE_ASYM)
 			new_pause = state->pause & MLO_PAUSE_SYM ?
-				 MLO_PAUSE_RX : MLO_PAUSE_TX;
+				 MLO_PAUSE_TX : MLO_PAUSE_RX;
 	} else {
 		new_pause = pl->link_config.pause & MLO_PAUSE_TXRX_MASK;
 	}
@@ -473,12 +483,12 @@ static void phylink_resolve(struct work_struct *w)
 		if (!link_state.link) {
 			netif_carrier_off(ndev);
 			pl->ops->mac_link_down(ndev, pl->link_an_mode,
-					       pl->phy_state.interface);
+					       pl->cur_interface);
 			netdev_info(ndev, "Link is Down\n");
 		} else {
+			pl->cur_interface = link_state.interface;
 			pl->ops->mac_link_up(ndev, pl->link_an_mode,
-					     pl->phy_state.interface,
-					     pl->phydev);
+					     pl->cur_interface, pl->phydev);
 
 			netif_carrier_on(ndev);
 
@@ -500,6 +510,17 @@ static void phylink_run_resolve(struct phylink *pl)
 {
 	if (!pl->phylink_disable_state)
 		queue_work(system_power_efficient_wq, &pl->resolve);
+}
+
+static void phylink_run_resolve_and_disable(struct phylink *pl, int bit)
+{
+	unsigned long state = pl->phylink_disable_state;
+
+	set_bit(bit, &pl->phylink_disable_state);
+	if (state == 0) {
+		queue_work(system_power_efficient_wq, &pl->resolve);
+		flush_work(&pl->resolve);
+	}
 }
 
 static void phylink_fixed_poll(struct timer_list *t)
@@ -531,6 +552,11 @@ static int phylink_register_sfp(struct phylink *pl,
 		netdev_err(pl->netdev, "unable to parse \"sfp\" node: %d\n",
 			   ret);
 		return ret;
+	}
+
+	if (!fwnode_device_is_available(ref.fwnode)) {
+		fwnode_handle_put(ref.fwnode);
+		return 0;
 	}
 
 	pl->sfp_bus = sfp_register_upstream(ref.fwnode, pl->netdev, pl,
@@ -907,6 +933,9 @@ void phylink_start(struct phylink *pl)
 		    phylink_an_mode_str(pl->link_an_mode),
 		    phy_modes(pl->link_config.interface));
 
+	/* Always set the carrier off */
+	netif_carrier_off(pl->netdev);
+
 	/* Apply the link configuration to the MAC when starting. This allows
 	 * a fixed-link to start with the correct parameters, and also
 	 * ensures that we set the appropriate advertisement for Serdes links.
@@ -952,9 +981,7 @@ void phylink_stop(struct phylink *pl)
 	if (pl->link_an_mode == MLO_AN_FIXED && !IS_ERR(pl->link_gpio))
 		del_timer_sync(&pl->link_poll);
 
-	set_bit(PHYLINK_DISABLE_STOPPED, &pl->phylink_disable_state);
-	queue_work(system_power_efficient_wq, &pl->resolve);
-	flush_work(&pl->resolve);
+	phylink_run_resolve_and_disable(pl, PHYLINK_DISABLE_STOPPED);
 }
 EXPORT_SYMBOL_GPL(phylink_stop);
 
@@ -1237,7 +1264,7 @@ int phylink_ethtool_set_pauseparam(struct phylink *pl,
 		return -EOPNOTSUPP;
 
 	if (!phylink_test(pl->supported, Asym_Pause) &&
-	    !pause->autoneg && pause->rx_pause != pause->tx_pause)
+	    pause->rx_pause != pause->tx_pause)
 		return -EINVAL;
 
 	config->pause &= ~(MLO_PAUSE_AN | MLO_PAUSE_TXRX_MASK);
@@ -1661,9 +1688,7 @@ static void phylink_sfp_link_down(void *upstream)
 
 	ASSERT_RTNL();
 
-	set_bit(PHYLINK_DISABLE_LINK, &pl->phylink_disable_state);
-	queue_work(system_power_efficient_wq, &pl->resolve);
-	flush_work(&pl->resolve);
+	phylink_run_resolve_and_disable(pl, PHYLINK_DISABLE_LINK);
 }
 
 static void phylink_sfp_link_up(void *upstream)

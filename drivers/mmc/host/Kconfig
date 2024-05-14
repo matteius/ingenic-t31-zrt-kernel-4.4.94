@@ -4,17 +4,6 @@
 
 comment "MMC/SD/SDIO Host Controller Drivers"
 
-
-config MMC_SDHCI_INGENIC
-        tristate "Ingenic(XBurst2)  MMC/SD Card Controller(MSC) support"
-        depends on SOC_X2000
-        select MMC_SDHCI
-        help
-          This selects the Ingenic XBurst2 SD/MMC Card Controller MSC.
-          If you have platform with a SD/Multimedia Card slot and compact
-          with this version, say Y or M here.
-          If unsure, say N.
-
 config MMC_DEBUG
 	bool "MMC host drivers debugging"
 	depends on MMC != n
@@ -432,7 +421,7 @@ config MMC_OMAP_HS
 
 config MMC_WBSD
 	tristate "Winbond W83L51xD SD/MMC Card Interface support"
-	depends on ISA_DMA_API
+	depends on ISA_DMA_API && !M68K
 	help
 	  This selects the Winbond(R) W83L51xD Secure digital and
           Multimedia card Interface.
@@ -442,11 +431,12 @@ config MMC_WBSD
 	  If unsure, say N.
 
 config MMC_AU1X
-	tristate "Alchemy AU1XX0 MMC Card Interface support"
+	bool "Alchemy AU1XX0 MMC Card Interface support"
 	depends on MIPS_ALCHEMY
+	depends on MMC=y
 	help
 	  This selects the AMD Alchemy(R) Multimedia card interface.
-	  If you have a Alchemy platform with a MMC slot, say Y or M here.
+	  If you have a Alchemy platform with a MMC slot, say Y here.
 
 	  If unsure, say N.
 
@@ -791,23 +781,6 @@ config MMC_JZ4740
 	  If you have a board based on such a SoC and with a SD/MMC slot,
 	  say Y or M here.
 
-config INGENIC_MMC
-	tristate "Ingenic(XBurst)  MMC/SD Card Controller(MSC) support"
-	depends on MACH_XBURST
-	help
-	  This selects the Ingenic XBurst SD/MMC Card Controller.
-	  If you have platform with a SD/Multimedia Card slot and compact
-	  with this version, say Y or M here.
-	  If unsure, say N.
-
-config INGENIC_MMC_MMC0
-	bool "INGENIC_MMC MMC0"
-	depends on INGENIC_MMC
-
-config INGENIC_MMC_MMC1
-	bool "INGENIC_MMC MMC1"
-	depends on INGENIC_MMC
-
 config MMC_VUB300
 	tristate "VUB300 USB to SDIO/SD/MMC Host Controller support"
 	depends on USB
@@ -962,11 +935,14 @@ config MMC_SDHCI_XENON
 
 config MMC_SDHCI_OMAP
 	tristate "TI SDHCI Controller Support"
+	depends on ARCH_OMAP2PLUS || ARCH_KEYSTONE || COMPILE_TEST
 	depends on MMC_SDHCI_PLTFM && OF
+	select THERMAL
+	imply TI_SOC_THERMAL
 	help
 	  This selects the Secure Digital Host Controller Interface (SDHCI)
-	  support present in TI's DRA7 SOCs. The controller supports
-	  SD/MMC/SDIO devices.
+	  support present in TI's Keystone/OMAP2+/DRA7 SOCs. The controller
+	  supports SD/MMC/SDIO devices.
 
 	  If you have a controller with this interface, say Y or M here.
 

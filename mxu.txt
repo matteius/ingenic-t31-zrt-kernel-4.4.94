@@ -1,0 +1,414 @@
+drivers/tty/serial/imx.c:	struct imxuart_platform_data *pdata = dev_get_platdata(&pdev->dev);
+drivers/usb/serial/Kconfig:	  module will be called mxuport.
+drivers/usb/serial/Makefile:obj-$(CONFIG_USB_SERIAL_MXUPORT)		+= mxuport.o
+drivers/usb/serial/mxuport.c: *	mxuport.c - MOXA UPort series driver
+drivers/usb/serial/mxuport.c:struct mxuport_port {
+drivers/usb/serial/mxuport.c:static const struct usb_device_id mxuport_idtable[] = {
+drivers/usb/serial/mxuport.c:MODULE_DEVICE_TABLE(usb, mxuport_idtable);
+drivers/usb/serial/mxuport.c:static int mxuport_prepare_write_buffer(struct usb_serial_port *port,
+drivers/usb/serial/mxuport.c:static int mxuport_recv_ctrl_urb(struct usb_serial *serial,
+drivers/usb/serial/mxuport.c:static int mxuport_send_ctrl_data_urb(struct usb_serial *serial,
+drivers/usb/serial/mxuport.c:static int mxuport_send_ctrl_urb(struct usb_serial *serial,
+drivers/usb/serial/mxuport.c:	return mxuport_send_ctrl_data_urb(serial, request, value, index,
+drivers/usb/serial/mxuport.c: * mxuport_throttle - throttle function of driver
+drivers/usb/serial/mxuport.c:static void mxuport_throttle(struct tty_struct *tty)
+drivers/usb/serial/mxuport.c:	mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_RX_HOST_EN,
+drivers/usb/serial/mxuport.c: * mxuport_unthrottle - unthrottle function of driver
+drivers/usb/serial/mxuport.c:static void mxuport_unthrottle(struct tty_struct *tty)
+drivers/usb/serial/mxuport.c:	mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_RX_HOST_EN,
+drivers/usb/serial/mxuport.c:static void mxuport_process_read_urb_data(struct usb_serial_port *port,
+drivers/usb/serial/mxuport.c:static void mxuport_msr_event(struct usb_serial_port *port, u8 buf[4])
+drivers/usb/serial/mxuport.c:	struct mxuport_port *mxport = usb_get_serial_port_data(port);
+drivers/usb/serial/mxuport.c:static void mxuport_lsr_event(struct usb_serial_port *port, u8 buf[4])
+drivers/usb/serial/mxuport.c:static void mxuport_process_read_urb_event(struct usb_serial_port *port,
+drivers/usb/serial/mxuport.c:		mxuport_msr_event(port, buf);
+drivers/usb/serial/mxuport.c:		mxuport_lsr_event(port, buf);
+drivers/usb/serial/mxuport.c:static void mxuport_process_read_urb_demux_data(struct urb *urb)
+drivers/usb/serial/mxuport.c:			mxuport_process_read_urb_data(demux_port, ch, rcv_len);
+drivers/usb/serial/mxuport.c:static void mxuport_process_read_urb_demux_event(struct urb *urb)
+drivers/usb/serial/mxuport.c:			mxuport_process_read_urb_event(demux_port, ch,
+drivers/usb/serial/mxuport.c:static void mxuport_process_read_urb(struct urb *urb)
+drivers/usb/serial/mxuport.c:		mxuport_process_read_urb_demux_data(urb);
+drivers/usb/serial/mxuport.c:		mxuport_process_read_urb_demux_event(urb);
+drivers/usb/serial/mxuport.c:static bool mxuport_tx_empty(struct usb_serial_port *port)
+drivers/usb/serial/mxuport.c:	err = mxuport_recv_ctrl_urb(serial, RQ_VENDOR_GET_OUTQUEUE, 0,
+drivers/usb/serial/mxuport.c:static int mxuport_set_mcr(struct usb_serial_port *port, u8 mcr_state)
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_MCR,
+drivers/usb/serial/mxuport.c:static int mxuport_set_dtr(struct usb_serial_port *port, int on)
+drivers/usb/serial/mxuport.c:	struct mxuport_port *mxport = usb_get_serial_port_data(port);
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_DTR,
+drivers/usb/serial/mxuport.c:static int mxuport_set_rts(struct usb_serial_port *port, u8 state)
+drivers/usb/serial/mxuport.c:	struct mxuport_port *mxport = usb_get_serial_port_data(port);
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_RTS,
+drivers/usb/serial/mxuport.c:static void mxuport_dtr_rts(struct usb_serial_port *port, int on)
+drivers/usb/serial/mxuport.c:	struct mxuport_port *mxport = usb_get_serial_port_data(port);
+drivers/usb/serial/mxuport.c:	err = mxuport_set_mcr(port, mcr_state);
+drivers/usb/serial/mxuport.c:static int mxuport_tiocmset(struct tty_struct *tty, unsigned int set,
+drivers/usb/serial/mxuport.c:	struct mxuport_port *mxport = usb_get_serial_port_data(port);
+drivers/usb/serial/mxuport.c:	err = mxuport_set_mcr(port, mcr_state);
+drivers/usb/serial/mxuport.c:static int mxuport_tiocmget(struct tty_struct *tty)
+drivers/usb/serial/mxuport.c:	struct mxuport_port *mxport;
+drivers/usb/serial/mxuport.c:static int mxuport_set_termios_flow(struct tty_struct *tty,
+drivers/usb/serial/mxuport.c:		err = mxuport_send_ctrl_data_urb(serial, RQ_VENDOR_SET_CHARS,
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_XONXOFF,
+drivers/usb/serial/mxuport.c:			mxuport_set_dtr(port, 1);
+drivers/usb/serial/mxuport.c:		mxuport_set_dtr(port, 0);
+drivers/usb/serial/mxuport.c:		err = mxuport_set_rts(port, rts);
+drivers/usb/serial/mxuport.c:static void mxuport_set_termios(struct tty_struct *tty,
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_data_urb(serial, RQ_VENDOR_SET_LINE,
+drivers/usb/serial/mxuport.c:	err = mxuport_set_termios_flow(tty, old_termios, port, serial);
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_data_urb(serial, RQ_VENDOR_SET_BAUD,
+drivers/usb/serial/mxuport.c:static int mxuport_calc_num_ports(struct usb_serial *serial,
+drivers/usb/serial/mxuport.c:static int mxuport_get_fw_version(struct usb_serial *serial, u32 *version)
+drivers/usb/serial/mxuport.c:	err = mxuport_recv_ctrl_urb(serial, RQ_VENDOR_GET_VERSION, 0, 0,
+drivers/usb/serial/mxuport.c:static int mxuport_download_fw(struct usb_serial *serial,
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_START_FW_DOWN, 0, 0);
+drivers/usb/serial/mxuport.c:		err = mxuport_send_ctrl_data_urb(serial, RQ_VENDOR_FW_DATA,
+drivers/usb/serial/mxuport.c:			mxuport_send_ctrl_urb(serial, RQ_VENDOR_STOP_FW_DOWN,
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_STOP_FW_DOWN, 0, 0);
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_QUERY_FW_READY, 0, 0);
+drivers/usb/serial/mxuport.c:static int mxuport_probe(struct usb_serial *serial,
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_QUERY_FW_CONFIG, 0, 0);
+drivers/usb/serial/mxuport.c:		mxuport_send_ctrl_urb(serial, RQ_VENDOR_RESET_DEVICE, 0, 0);
+drivers/usb/serial/mxuport.c:	err = mxuport_get_fw_version(serial, &version);
+drivers/usb/serial/mxuport.c:			err = mxuport_download_fw(serial, fw_p);
+drivers/usb/serial/mxuport.c:			err  = mxuport_get_fw_version(serial, &version);
+drivers/usb/serial/mxuport.c:static int mxuport_port_probe(struct usb_serial_port *port)
+drivers/usb/serial/mxuport.c:	struct mxuport_port *mxport;
+drivers/usb/serial/mxuport.c:	mxport = devm_kzalloc(&port->dev, sizeof(struct mxuport_port),
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_FIFO_DISABLE,
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_HIGH_PERFOR,
+drivers/usb/serial/mxuport.c:	return mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_INTERFACE,
+drivers/usb/serial/mxuport.c:static int mxuport_attach(struct usb_serial *serial)
+drivers/usb/serial/mxuport.c:static void mxuport_release(struct usb_serial *serial)
+drivers/usb/serial/mxuport.c:static int mxuport_open(struct tty_struct *tty, struct usb_serial_port *port)
+drivers/usb/serial/mxuport.c:	struct mxuport_port *mxport = usb_get_serial_port_data(port);
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_RX_HOST_EN,
+drivers/usb/serial/mxuport.c:	err = mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_OPEN,
+drivers/usb/serial/mxuport.c:		mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_RX_HOST_EN,
+drivers/usb/serial/mxuport.c:		mxuport_set_termios(tty, port, NULL);
+drivers/usb/serial/mxuport.c:static void mxuport_close(struct usb_serial_port *port)
+drivers/usb/serial/mxuport.c:	mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_OPEN, 0,
+drivers/usb/serial/mxuport.c:	mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_RX_HOST_EN, 0,
+drivers/usb/serial/mxuport.c:static void mxuport_break_ctl(struct tty_struct *tty, int break_state)
+drivers/usb/serial/mxuport.c:	mxuport_send_ctrl_urb(serial, RQ_VENDOR_SET_BREAK,
+drivers/usb/serial/mxuport.c:static int mxuport_resume(struct usb_serial *serial)
+drivers/usb/serial/mxuport.c:static struct usb_serial_driver mxuport_device = {
+drivers/usb/serial/mxuport.c:		.name =		"mxuport",
+drivers/usb/serial/mxuport.c:	.id_table		= mxuport_idtable,
+drivers/usb/serial/mxuport.c:	.probe			= mxuport_probe,
+drivers/usb/serial/mxuport.c:	.port_probe		= mxuport_port_probe,
+drivers/usb/serial/mxuport.c:	.attach			= mxuport_attach,
+drivers/usb/serial/mxuport.c:	.release		= mxuport_release,
+drivers/usb/serial/mxuport.c:	.calc_num_ports		= mxuport_calc_num_ports,
+drivers/usb/serial/mxuport.c:	.open			= mxuport_open,
+drivers/usb/serial/mxuport.c:	.close			= mxuport_close,
+drivers/usb/serial/mxuport.c:	.set_termios		= mxuport_set_termios,
+drivers/usb/serial/mxuport.c:	.break_ctl		= mxuport_break_ctl,
+drivers/usb/serial/mxuport.c:	.tx_empty		= mxuport_tx_empty,
+drivers/usb/serial/mxuport.c:	.throttle		= mxuport_throttle,
+drivers/usb/serial/mxuport.c:	.unthrottle		= mxuport_unthrottle,
+drivers/usb/serial/mxuport.c:	.tiocmget		= mxuport_tiocmget,
+drivers/usb/serial/mxuport.c:	.tiocmset		= mxuport_tiocmset,
+drivers/usb/serial/mxuport.c:	.dtr_rts		= mxuport_dtr_rts,
+drivers/usb/serial/mxuport.c:	.process_read_urb	= mxuport_process_read_urb,
+drivers/usb/serial/mxuport.c:	.prepare_write_buffer	= mxuport_prepare_write_buffer,
+drivers/usb/serial/mxuport.c:	.resume			= mxuport_resume,
+drivers/usb/serial/mxuport.c:	&mxuport_device, NULL
+drivers/usb/serial/mxuport.c:module_usb_serial_driver(serial_drivers, mxuport_idtable);
+drivers/soc/fsl/qe/ucc.c:static void get_cmxucr_reg(unsigned int ucc_num, __be32 __iomem **cmxucr,
+drivers/soc/fsl/qe/ucc.c:	*cmxucr = &qe_immr->qmx.cmxucr[cmx];
+drivers/soc/fsl/qe/ucc.c:	__be32 __iomem *cmxucr;
+drivers/soc/fsl/qe/ucc.c:	get_cmxucr_reg(ucc_num, &cmxucr, &reg_num, &shift);
+drivers/soc/fsl/qe/ucc.c:		setbits32(cmxucr, mask << shift);
+drivers/soc/fsl/qe/ucc.c:		clrbits32(cmxucr, mask << shift);
+drivers/soc/fsl/qe/ucc.c:	__be32 __iomem *cmxucr;
+drivers/soc/fsl/qe/ucc.c:	get_cmxucr_reg(ucc_num, &cmxucr, &reg_num, &shift);
+drivers/soc/fsl/qe/ucc.c:	clrsetbits_be32(cmxucr, QE_CMXUCR_TX_CLK_SRC_MASK << shift,
+drivers/net/wan/fsl_ucc_hdlc.h:	u32 cmxucr[4];
+drivers/net/wan/fsl_ucc_hdlc.c:	memcpy_fromio(priv->cmxucr, qe_mux_reg->cmxucr, 4 * sizeof(u32));
+drivers/net/wan/fsl_ucc_hdlc.c:	memcpy_toio(qe_mux_reg->cmxucr, priv->cmxucr, 4 * sizeof(u32));
+include/linux/platform_data/serial-imx.h:struct imxuart_platform_data {
+include/soc/fsl/qe/immap_qe.h:	__be32	cmxucr[4];	/* CMX UCCx clock route registers */
+include/soc/fsl/qe/immap_qe.h:	__be32	cmxupcr;	/* CMX UPC clock route register */
+arch/arm/mach-imx/mach-qong.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-armadillo5x0.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-kzm_arm11_01.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-mx27_3ds.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-imx27_visstrim_m10.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-mx31ads.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-pca100.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-mx31lilly.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-mx35_3ds.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mx31moboard-devboard.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-mx31lite.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-mx27ads.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mx31moboard-smartbot.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-bug.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-mx31_3ds.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-pcm043.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/mach-pcm037.c:static const struct imxuart_platform_data uart_pdata __initconst = {
+arch/arm/mach-imx/devices/platform-imx-uart.c:		const struct imxuart_platform_data *pdata)
+arch/arm/mach-imx/devices/devices-common.h:		const struct imxuart_platform_data *pdata);
+arch/arm/mach-imx/mach-mx21ads.c:static const struct imxuart_platform_data uart_pdata_rts __initconst = {
+arch/arm/mach-imx/mach-mx21ads.c:static const struct imxuart_platform_data uart_pdata_norts __initconst = {
+arch/arm/mach-imx/mach-mx31moboard.c:static const struct imxuart_platform_data uart0_pdata __initconst = {
+arch/arm/mach-imx/mach-mx31moboard.c:static const struct imxuart_platform_data uart4_pdata __initconst = {
+arch/mips/kernel/cpu-probe.c:extern int soc_support_mxuv2(void);
+arch/mips/xburst2/common/mxuv3.c:#include <mxuv3.h>
+arch/mips/xburst2/common/mxuv3.c:void __init_mxuv3(void)
+arch/mips/xburst2/common/mxuv3.c:	/* open mxuv3 and set thread status ST0_CU2 */
+arch/mips/xburst2/common/mxuv3.c:	/* dump mxuv3 control and status register */
+arch/mips/xburst2/common/mxuv3.c:void __save_mxuv3(void *tsk_void)
+arch/mips/xburst2/common/mxuv3.c:	struct xburst_mxu_struct *mxu = &tsk->thread.mxu;
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[0];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[1];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[2];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[3];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[4];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[5];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[6];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[7];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[8];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[9];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[10];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[11];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[12];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[13];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[14];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[15];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[16];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[17];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[18];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[19];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[20];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[21];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[22];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[23];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[24];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[25];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[26];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[27];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[28];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[29];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[30];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[31];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[0];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[1];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[2];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[3];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->csr;
+arch/mips/xburst2/common/mxuv3.c:	asm volatile(".word	0x7010f803 | 9 << 6 \n\t"); // t1 <- mxu.csr
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[0];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[1];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[2];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[3];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[4];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[5];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[6];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[7];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[8];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[9];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[10];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[11];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[12];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[13];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[14];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[15];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[16];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[17];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[18];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[19];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[20];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[21];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[22];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[23];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[24];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[25];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[26];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[27];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[28];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[29];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[30];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[31];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[0];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[1];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[2];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[3];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->csr;
+arch/mips/xburst2/common/mxuv3.c:void __restore_mxuv3(void * tsk_void)
+arch/mips/xburst2/common/mxuv3.c:	struct xburst_mxu_struct *mxu = &tsk->thread.mxu;
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->csr;
+arch/mips/xburst2/common/mxuv3.c:	asm volatile(".word 0x7011f803 | 9 << 21 \n\t");// mxu.csr <- t1
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[0];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[1];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[2];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[3];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[0];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[1];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[2];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[3];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[4];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[5];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[6];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[7];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[8];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[9];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[10];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[11];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[12];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[13];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[14];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[15];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[16];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[17];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[18];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[19];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[20];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[21];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[22];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[23];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[24];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[25];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[26];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[27];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[28];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[29];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[30];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[31];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->csr;
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[0];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[1];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[2];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vsr[3];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[0];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[1];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[2];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[3];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[4];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[5];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[6];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[7];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[8];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[9];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[10];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[11];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[12];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[13];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[14];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[15];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[16];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[17];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[18];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[19];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[20];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[21];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[22];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[23];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[24];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[25];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[26];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[27];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[28];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[29];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[30];
+arch/mips/xburst2/common/mxuv3.c:	base = &mxu->vpr[31];
+arch/mips/xburst2/common/Makefile:obj-y += mxuv3.o
+arch/mips/xburst2/soc-x2000-v12/include/cpu-feature-overrides.h:#define cpu_has_mxu                     0
+arch/mips/xburst2/soc-t40/include/cpu-feature-overrides.h:#define cpu_has_mxuv3                   1
+arch/mips/xburst2/core/include/mxuv3.h:void __init_mxuv3(void);
+arch/mips/xburst2/core/include/mxuv3.h:void __save_mxuv3(void *tsk_void);
+arch/mips/xburst2/core/include/mxuv3.h:void __restore_mxuv3(void *tsk_void);
+arch/mips/xburst2/core/include/mxuv3.h:static inline void init_mxuv3(void)
+arch/mips/xburst2/core/include/mxuv3.h:	if(cpu_has_mxuv3)
+arch/mips/xburst2/core/include/mxuv3.h:		__init_mxuv3();
+arch/mips/xburst2/core/include/mxuv3.h:#define save_mxuv3(tsk)							\
+arch/mips/xburst2/core/include/mxuv3.h:		if (cpu_has_mxuv3)						\
+arch/mips/xburst2/core/include/mxuv3.h:			__save_mxuv3(tsk);					\
+arch/mips/xburst2/core/include/mxuv3.h:#define restore_mxuv3(tsk)						\
+arch/mips/xburst2/core/include/mxuv3.h:		if (cpu_has_mxuv3)						\
+arch/mips/xburst2/core/include/mxuv3.h:			__restore_mxuv3(tsk);					\
+arch/mips/xburst2/core/include/mxu.h:#include <mxu_media.h>
+arch/mips/xburst2/core/include/mxu.h:/* There is no mxu implement in XBURST2, leave empty */
+arch/mips/xburst2/core/include/mxu.h:static inline void __init_mxu(void)
+arch/mips/xburst2/core/include/mxu.h:static inline void __save_mxu(void * tsk_void)
+arch/mips/xburst2/core/include/mxu.h:static inline void __restore_mxu(void * tsk_void)
+arch/mips/xburst2/core/include/mxu.h:static inline void init_mxu(void)
+arch/mips/xburst2/core/include/mxu.h:	if(cpu_has_mxu)
+arch/mips/xburst2/core/include/mxu.h:		__init_mxu();
+arch/mips/xburst2/core/include/mxu.h:#define save_mxu(tsk)							\
+arch/mips/xburst2/core/include/mxu.h:		if (cpu_has_mxu)						\
+arch/mips/xburst2/core/include/mxu.h:			__save_mxu(tsk);					\
+arch/mips/xburst2/core/include/mxu.h:#define restore_mxu(tsk)						\
+arch/mips/xburst2/core/include/mxu.h:		if (cpu_has_mxu)						\
+arch/mips/xburst2/core/include/mxu.h:			__restore_mxu(tsk);					\
+arch/mips/xburst/soc-t31/include/cpu-feature-overrides.h:#define cpu_has_mxu                     0
+arch/mips/xburst/common/include/mxu.h:#include <mxu_media.h>
+arch/mips/xburst/common/include/mxu.h:static inline void __init_mxu(void)
+arch/mips/xburst/common/include/mxu.h:void __save_mxu(void *);
+arch/mips/xburst/common/include/mxu.h:void __restore_mxu(void * tsk_void);
+arch/mips/xburst/common/include/mxu.h:static inline void init_mxu(void)
+arch/mips/xburst/common/include/mxu.h:	if(cpu_has_mxu)
+arch/mips/xburst/common/include/mxu.h:		__init_mxu();
+arch/mips/xburst/common/include/mxu.h:#define save_mxu(tsk)							\
+arch/mips/xburst/common/include/mxu.h:		if (cpu_has_mxu)						\
+arch/mips/xburst/common/include/mxu.h:			__save_mxu(tsk);					\
+arch/mips/xburst/common/include/mxu.h:#define restore_mxu(tsk)						\
+arch/mips/xburst/common/include/mxu.h:		if (cpu_has_mxu)						\
+arch/mips/xburst/common/include/mxu.h:			__restore_mxu(tsk);					\
+arch/mips/xburst/common/include/mxu.h:#define __get_mxu_regs(tsk)						\
+arch/mips/xburst/common/include/mxu.h:			__save_mxu(current);				\
+arch/mips/xburst/common/include/mxu.h:		tsk->thread.mxu.regs;					\
+arch/mips/xburst/common/include/mxu.h:#define __let_mxu_regs(tsk,regs)				\
+arch/mips/xburst/common/include/mxu.h:			tsk->thread.mxu.regs[i] = regs[i];	\
+arch/mips/xburst/common/include/mxu.h:			__save_mxu(current);				\
+arch/mips/xburst/common/Makefile:obj-y	+= prom.o mxu-xburst.o jz_notifier.o proc.o
+arch/mips/xburst/common/Makefile:obj-$(CONFIG_XBURST_MXUV2)	+= mxu-v2-ex.obj
+arch/mips/xburst/common/mxu-xburst.c:#include <mxu.h>
+arch/mips/xburst/common/mxu-xburst.c:void __save_mxu(void *tsk_void)
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[0] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[1] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[2] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[3] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[4] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[5] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[6] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[7] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[8] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[9] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[10] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[11] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[12] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[13] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[14] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:	tsk->thread.mxu.regs[15] = reg_val;
+arch/mips/xburst/common/mxu-xburst.c:void __restore_mxu(void * tsk_void)
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[0];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[1];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[2];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[3];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[4];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[5];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[6];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[7];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[8];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[9];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[10];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[11];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[12];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[13];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[14];
+arch/mips/xburst/common/mxu-xburst.c:	reg_val = tsk->thread.mxu.regs[15];
+arch/mips/xburst/soc-x1800/include/cpu-feature-overrides.h:#define cpu_has_mxu                     0
+arch/mips/xburst/core/include/mxuv3.h:void __init_mxuv3(void);
+arch/mips/xburst/core/include/mxuv3.h:void __save_mxuv3(void *tsk_void);
+arch/mips/xburst/core/include/mxuv3.h:void __restore_mxuv3(void *tsk_void);
+arch/mips/xburst/core/include/mxuv3.h:static inline void init_mxuv3(void)
+arch/mips/xburst/core/include/mxuv3.h:	if(cpu_has_mxuv3)
+arch/mips/xburst/core/include/mxuv3.h:		__init_mxuv3();
+arch/mips/xburst/core/include/mxuv3.h:#define save_mxuv3(tsk)							\
+arch/mips/xburst/core/include/mxuv3.h:		if (cpu_has_mxuv3)						\
+arch/mips/xburst/core/include/mxuv3.h:			__save_mxuv3(tsk);					\
+arch/mips/xburst/core/include/mxuv3.h:#define restore_mxuv3(tsk)						\
+arch/mips/xburst/core/include/mxuv3.h:		if (cpu_has_mxuv3)						\
+arch/mips/xburst/core/include/mxuv3.h:			__restore_mxuv3(tsk);					\

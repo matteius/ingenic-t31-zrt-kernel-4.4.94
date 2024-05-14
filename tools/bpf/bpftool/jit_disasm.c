@@ -10,6 +10,8 @@
  * Licensed under the GNU General Public License, version 2.0 (GPLv2)
  */
 
+#define _GNU_SOURCE
+#include <stdio.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -49,12 +51,16 @@ static int fprintf_json(void *out, const char *fmt, ...)
 {
 	va_list ap;
 	char *s;
+	int err;
 
 	va_start(ap, fmt);
+	err = vasprintf(&s, fmt, ap);
+	va_end(ap);
+	if (err < 0)
+		return -1;
+
 	if (!oper_count) {
 		int i;
-
-		s = va_arg(ap, char *);
 
 		/* Strip trailing spaces */
 		i = strlen(s) - 1;
@@ -68,11 +74,10 @@ static int fprintf_json(void *out, const char *fmt, ...)
 	} else if (!strcmp(fmt, ",")) {
 		   /* Skip */
 	} else {
-		s = va_arg(ap, char *);
 		jsonw_string(json_wtr, s);
 		oper_count++;
 	}
-	va_end(ap);
+	free(s);
 	return 0;
 }
 

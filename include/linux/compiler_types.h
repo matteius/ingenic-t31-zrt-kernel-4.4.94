@@ -151,6 +151,10 @@ struct ftrace_likely_data {
 #define __assume_aligned(a, ...)
 #endif
 
+#ifndef asm_volatile_goto
+#define asm_volatile_goto(x...) asm goto(x)
+#endif
+
 /* Are two types/vars the same type (ignoring qualifiers)? */
 #define __same_type(a, b) __builtin_types_compatible_p(typeof(a), typeof(b))
 
@@ -174,6 +178,10 @@ struct ftrace_likely_data {
 
 #ifndef __diag_GCC
 #define __diag_GCC(version, severity, string)
+#endif
+
+#ifndef __copy
+# define __copy(symbol)
 #endif
 
 #define __diag_push()	__diag(push)
@@ -224,6 +232,12 @@ struct ftrace_likely_data {
 #define notrace			__attribute__((hotpatch(0, 0)))
 #else
 #define notrace			__attribute__((no_instrument_function))
+#endif
+
+#if defined(__KERNEL__) && !defined(__ASSEMBLY__)
+/* Section for code which can't be instrumented at all */
+#define noinstr								\
+	noinline notrace __attribute((__section__(".noinstr.text")))
 #endif
 
 /*

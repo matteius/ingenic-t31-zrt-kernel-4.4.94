@@ -64,17 +64,11 @@ struct mips_perf_event {
 	#define CNTR_EVEN	0x55555555
 	#define CNTR_ODD	0xaaaaaaaa
 	#define CNTR_ALL	0xffffffff
-#ifdef CONFIG_MIPS_MT_SMP
 	enum {
 		T  = 0,
 		V  = 1,
 		P  = 2,
 	} range;
-#else
-	#define T
-	#define V
-	#define P
-#endif
 };
 
 static struct mips_perf_event raw_event;
@@ -325,9 +319,7 @@ static void mipsxx_pmu_enable_event(struct hw_perf_event *evt, int idx)
 {
 	struct perf_event *event = container_of(evt, struct perf_event, hw);
 	struct cpu_hw_events *cpuc = this_cpu_ptr(&cpu_hw_events);
-#ifdef CONFIG_MIPS_MT_SMP
 	unsigned int range = evt->event_base >> 24;
-#endif /* CONFIG_MIPS_MT_SMP */
 
 	WARN_ON(idx < 0 || idx >= mipspmu.num_counters);
 
@@ -336,21 +328,15 @@ static void mipsxx_pmu_enable_event(struct hw_perf_event *evt, int idx)
 		/* Make sure interrupt enabled. */
 		MIPS_PERFCTRL_IE;
 
-#ifdef CONFIG_CPU_BMIPS5000
-	{
+	if (IS_ENABLED(CONFIG_CPU_BMIPS5000)) {
 		/* enable the counter for the calling thread */
 		cpuc->saved_ctrl[idx] |=
 			(1 << (12 + vpe_id())) | BRCM_PERFCTRL_TC;
-	}
-#else
-#ifdef CONFIG_MIPS_MT_SMP
-	if (range > V) {
+	} else if (IS_ENABLED(CONFIG_MIPS_MT_SMP) && range > V) {
 		/* The counter is processor wide. Set it up to count all TCs. */
 		pr_debug("Enabling perf counter for all TCs\n");
 		cpuc->saved_ctrl[idx] |= M_TC_EN_ALL;
-	} else
-#endif /* CONFIG_MIPS_MT_SMP */
-	{
+	} else {
 		unsigned int cpu, ctrl;
 
 		/*
@@ -365,7 +351,6 @@ static void mipsxx_pmu_enable_event(struct hw_perf_event *evt, int idx)
 		cpuc->saved_ctrl[idx] |= ctrl;
 		pr_debug("Enabling perf counter for CPU%d\n", cpu);
 	}
-#endif /* CONFIG_CPU_BMIPS5000 */
 	/*
 	 * We do not actually let the counter run. Leave it until start().
 	 */
@@ -570,19 +555,6 @@ static int mipspmu_get_irq(void)
 
 	if (mipspmu.irq >= 0) {
 		/* Request my own irq handler. */
-#ifdef CONFIG_MACH_XBURST2
-		/* on ingenic xburst2 cpu, should request percpu interrupt. */
-		err = request_percpu_irq(mipspmu.irq, mipsxx_pmu_handle_irq,
-				"mips_perf_pmu", &mipspmu);
-
-		if (err) {
-			pr_warning("Unable to request IRQ%d for MIPS "
-			   "performance counters!\n", mipspmu.irq);
-		} else {
-			/* enable all cpus interrtup here. */
-			on_each_cpu(enable_interrupt, NULL, 1);
-		}
-#else
 		err = request_irq(mipspmu.irq, mipsxx_pmu_handle_irq,
 				  IRQF_PERCPU | IRQF_NOBALANCING |
 				  IRQF_NO_THREAD | IRQF_NO_SUSPEND |
@@ -592,8 +564,6 @@ static int mipspmu_get_irq(void)
 			pr_warn("Unable to request IRQ%d for MIPS performance counters!\n",
 				mipspmu.irq);
 		}
-
-#endif
 	} else if (cp0_perfcount_irq < 0) {
 		/*
 		 * We are sharing the irq number with the timer interrupt.
@@ -611,15 +581,9 @@ static int mipspmu_get_irq(void)
 
 static void mipspmu_free_irq(void)
 {
-	if (mipspmu.irq >= 0) {
-#ifdef CONFIG_MACH_XBURST2
-		/* disable interrupt on all cpus */
-		on_each_cpu(disable_interrupt, NULL, 1);
-		free_percpu_irq(mipspmu.irq, &mipspmu);
-#else
-		free_irq(mipspmu.irq, NULL);
-#endif
-	} else if (cp0_perfcount_irq < 0)
+	if (mipspmu.irq >= 0)
+		free_irq(mipspmu.irq, &mipspmu);
+	else if (cp0_perfcount_irq < 0)
 		perf_irq = save_perf_irq;
 }
 

@@ -227,11 +227,13 @@ static int arfs_create_groups(struct mlx5e_flow_table *ft,
 
 	ft->g = kcalloc(MLX5E_ARFS_NUM_GROUPS,
 			sizeof(*ft->g), GFP_KERNEL);
-	in = kvzalloc(inlen, GFP_KERNEL);
-	if  (!in || !ft->g) {
-		kvfree(ft->g);
-		kvfree(in);
+	if (!ft->g)
 		return -ENOMEM;
+
+	in = kvzalloc(inlen, GFP_KERNEL);
+	if (!in) {
+		err = -ENOMEM;
+		goto err_free_g;
 	}
 
 	mc = MLX5_ADDR_OF(create_flow_group_in, in, match_criteria);
@@ -251,7 +253,7 @@ static int arfs_create_groups(struct mlx5e_flow_table *ft,
 		break;
 	default:
 		err = -EINVAL;
-		goto out;
+		goto err_free_in;
 	}
 
 	switch (type) {
@@ -273,7 +275,7 @@ static int arfs_create_groups(struct mlx5e_flow_table *ft,
 		break;
 	default:
 		err = -EINVAL;
-		goto out;
+		goto err_free_in;
 	}
 
 	MLX5_SET_CFG(in, match_criteria_enable, MLX5_MATCH_OUTER_HEADERS);
@@ -282,7 +284,7 @@ static int arfs_create_groups(struct mlx5e_flow_table *ft,
 	MLX5_SET_CFG(in, end_flow_index, ix - 1);
 	ft->g[ft->num_groups] = mlx5_create_flow_group(ft->t, in);
 	if (IS_ERR(ft->g[ft->num_groups]))
-		goto err;
+		goto err_clean_group;
 	ft->num_groups++;
 
 	memset(in, 0, inlen);
@@ -291,18 +293,20 @@ static int arfs_create_groups(struct mlx5e_flow_table *ft,
 	MLX5_SET_CFG(in, end_flow_index, ix - 1);
 	ft->g[ft->num_groups] = mlx5_create_flow_group(ft->t, in);
 	if (IS_ERR(ft->g[ft->num_groups]))
-		goto err;
+		goto err_clean_group;
 	ft->num_groups++;
 
 	kvfree(in);
 	return 0;
 
-err:
+err_clean_group:
 	err = PTR_ERR(ft->g[ft->num_groups]);
 	ft->g[ft->num_groups] = NULL;
-out:
+err_free_in:
 	kvfree(in);
-
+err_free_g:
+	kfree(ft->g);
+	ft->g = NULL;
 	return err;
 }
 
@@ -435,12 +439,6 @@ arfs_hash_bucket(struct arfs_table *arfs_t, __be16 src_port,
 	bucket_idx = hash_long(l, ARFS_HASH_SHIFT);
 
 	return &arfs_t->rules_hash[bucket_idx];
-}
-
-static u8 arfs_get_ip_proto(const struct sk_buff *skb)
-{
-	return (skb->protocol == htons(ETH_P_IP)) ?
-		ip_hdr(skb)->protocol : ipv6_hdr(skb)->nexthdr;
 }
 
 static struct arfs_table *arfs_get_table(struct mlx5e_arfs_tables *arfs,
@@ -599,31 +597,9 @@ out:
 	arfs_may_expire_flow(priv);
 }
 
-/* return L4 destination port from ip4/6 packets */
-static __be16 arfs_get_dst_port(const struct sk_buff *skb)
-{
-	char *transport_header;
-
-	transport_header = skb_transport_header(skb);
-	if (arfs_get_ip_proto(skb) == IPPROTO_TCP)
-		return ((struct tcphdr *)transport_header)->dest;
-	return ((struct udphdr *)transport_header)->dest;
-}
-
-/* return L4 source port from ip4/6 packets */
-static __be16 arfs_get_src_port(const struct sk_buff *skb)
-{
-	char *transport_header;
-
-	transport_header = skb_transport_header(skb);
-	if (arfs_get_ip_proto(skb) == IPPROTO_TCP)
-		return ((struct tcphdr *)transport_header)->source;
-	return ((struct udphdr *)transport_header)->source;
-}
-
 static struct arfs_rule *arfs_alloc_rule(struct mlx5e_priv *priv,
 					 struct arfs_table *arfs_t,
-					 const struct sk_buff *skb,
+					 const struct flow_keys *fk,
 					 u16 rxq, u32 flow_id)
 {
 	struct arfs_rule *rule;
@@ -638,19 +614,19 @@ static struct arfs_rule *arfs_alloc_rule(struct mlx5e_priv *priv,
 	INIT_WORK(&rule->arfs_work, arfs_handle_work);
 
 	tuple = &rule->tuple;
-	tuple->etype = skb->protocol;
+	tuple->etype = fk->basic.n_proto;
+	tuple->ip_proto = fk->basic.ip_proto;
 	if (tuple->etype == htons(ETH_P_IP)) {
-		tuple->src_ipv4 = ip_hdr(skb)->saddr;
-		tuple->dst_ipv4 = ip_hdr(skb)->daddr;
+		tuple->src_ipv4 = fk->addrs.v4addrs.src;
+		tuple->dst_ipv4 = fk->addrs.v4addrs.dst;
 	} else {
-		memcpy(&tuple->src_ipv6, &ipv6_hdr(skb)->saddr,
+		memcpy(&tuple->src_ipv6, &fk->addrs.v6addrs.src,
 		       sizeof(struct in6_addr));
-		memcpy(&tuple->dst_ipv6, &ipv6_hdr(skb)->daddr,
+		memcpy(&tuple->dst_ipv6, &fk->addrs.v6addrs.dst,
 		       sizeof(struct in6_addr));
 	}
-	tuple->ip_proto = arfs_get_ip_proto(skb);
-	tuple->src_port = arfs_get_src_port(skb);
-	tuple->dst_port = arfs_get_dst_port(skb);
+	tuple->src_port = fk->ports.src;
+	tuple->dst_port = fk->ports.dst;
 
 	rule->flow_id = flow_id;
 	rule->filter_id = priv->fs.arfs.last_filter_id++ % RPS_NO_FILTER;
@@ -661,37 +637,33 @@ static struct arfs_rule *arfs_alloc_rule(struct mlx5e_priv *priv,
 	return rule;
 }
 
-static bool arfs_cmp_ips(struct arfs_tuple *tuple,
-			 const struct sk_buff *skb)
+static bool arfs_cmp(const struct arfs_tuple *tuple, const struct flow_keys *fk)
 {
-	if (tuple->etype == htons(ETH_P_IP) &&
-	    tuple->src_ipv4 == ip_hdr(skb)->saddr &&
-	    tuple->dst_ipv4 == ip_hdr(skb)->daddr)
-		return true;
-	if (tuple->etype == htons(ETH_P_IPV6) &&
-	    (!memcmp(&tuple->src_ipv6, &ipv6_hdr(skb)->saddr,
-		     sizeof(struct in6_addr))) &&
-	    (!memcmp(&tuple->dst_ipv6, &ipv6_hdr(skb)->daddr,
-		     sizeof(struct in6_addr))))
-		return true;
+	if (tuple->src_port != fk->ports.src || tuple->dst_port != fk->ports.dst)
+		return false;
+	if (tuple->etype != fk->basic.n_proto)
+		return false;
+	if (tuple->etype == htons(ETH_P_IP))
+		return tuple->src_ipv4 == fk->addrs.v4addrs.src &&
+		       tuple->dst_ipv4 == fk->addrs.v4addrs.dst;
+	if (tuple->etype == htons(ETH_P_IPV6))
+		return !memcmp(&tuple->src_ipv6, &fk->addrs.v6addrs.src,
+			       sizeof(struct in6_addr)) &&
+		       !memcmp(&tuple->dst_ipv6, &fk->addrs.v6addrs.dst,
+			       sizeof(struct in6_addr));
 	return false;
 }
 
 static struct arfs_rule *arfs_find_rule(struct arfs_table *arfs_t,
-					const struct sk_buff *skb)
+					const struct flow_keys *fk)
 {
 	struct arfs_rule *arfs_rule;
 	struct hlist_head *head;
-	__be16 src_port = arfs_get_src_port(skb);
-	__be16 dst_port = arfs_get_dst_port(skb);
 
-	head = arfs_hash_bucket(arfs_t, src_port, dst_port);
+	head = arfs_hash_bucket(arfs_t, fk->ports.src, fk->ports.dst);
 	hlist_for_each_entry(arfs_rule, head, hlist) {
-		if (arfs_rule->tuple.src_port == src_port &&
-		    arfs_rule->tuple.dst_port == dst_port &&
-		    arfs_cmp_ips(&arfs_rule->tuple, skb)) {
+		if (arfs_cmp(&arfs_rule->tuple, fk))
 			return arfs_rule;
-		}
 	}
 
 	return NULL;
@@ -704,20 +676,24 @@ int mlx5e_rx_flow_steer(struct net_device *dev, const struct sk_buff *skb,
 	struct mlx5e_arfs_tables *arfs = &priv->fs.arfs;
 	struct arfs_table *arfs_t;
 	struct arfs_rule *arfs_rule;
+	struct flow_keys fk;
 
-	if (skb->protocol != htons(ETH_P_IP) &&
-	    skb->protocol != htons(ETH_P_IPV6))
+	if (!skb_flow_dissect_flow_keys(skb, &fk, 0))
+		return -EPROTONOSUPPORT;
+
+	if (fk.basic.n_proto != htons(ETH_P_IP) &&
+	    fk.basic.n_proto != htons(ETH_P_IPV6))
 		return -EPROTONOSUPPORT;
 
 	if (skb->encapsulation)
 		return -EPROTONOSUPPORT;
 
-	arfs_t = arfs_get_table(arfs, arfs_get_ip_proto(skb), skb->protocol);
+	arfs_t = arfs_get_table(arfs, fk.basic.ip_proto, fk.basic.n_proto);
 	if (!arfs_t)
 		return -EPROTONOSUPPORT;
 
 	spin_lock_bh(&arfs->arfs_lock);
-	arfs_rule = arfs_find_rule(arfs_t, skb);
+	arfs_rule = arfs_find_rule(arfs_t, &fk);
 	if (arfs_rule) {
 		if (arfs_rule->rxq == rxq_index) {
 			spin_unlock_bh(&arfs->arfs_lock);
@@ -725,8 +701,7 @@ int mlx5e_rx_flow_steer(struct net_device *dev, const struct sk_buff *skb,
 		}
 		arfs_rule->rxq = rxq_index;
 	} else {
-		arfs_rule = arfs_alloc_rule(priv, arfs_t, skb,
-					    rxq_index, flow_id);
+		arfs_rule = arfs_alloc_rule(priv, arfs_t, &fk, rxq_index, flow_id);
 		if (!arfs_rule) {
 			spin_unlock_bh(&arfs->arfs_lock);
 			return -ENOMEM;

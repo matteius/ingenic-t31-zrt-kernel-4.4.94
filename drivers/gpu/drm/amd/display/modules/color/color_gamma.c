@@ -1069,9 +1069,13 @@ static void build_evenly_distributed_points(
 	struct dividers dividers)
 {
 	struct gamma_pixel *p = points;
-	struct gamma_pixel *p_last = p + numberof_points - 1;
+	struct gamma_pixel *p_last;
 
 	uint32_t i = 0;
+
+	// This function should not gets called with 0 as a parameter
+	ASSERT(numberof_points > 0);
+	p_last = p + numberof_points - 1;
 
 	do {
 		struct fixed31_32 value = dc_fixpt_from_fraction(i,
@@ -1083,7 +1087,7 @@ static void build_evenly_distributed_points(
 
 		++p;
 		++i;
-	} while (i != numberof_points);
+	} while (i < numberof_points);
 
 	p->r = dc_fixpt_div(p_last->r, dividers.divider1);
 	p->g = dc_fixpt_div(p_last->g, dividers.divider1);
@@ -1202,6 +1206,7 @@ static void interpolate_user_regamma(uint32_t hw_points_num,
 	struct fixed31_32 lut2;
 	struct fixed31_32 delta_lut;
 	struct fixed31_32 delta_index;
+	const struct fixed31_32 one = dc_fixpt_from_int(1);
 
 	i = 0;
 	/* fixed_pt library has problems handling too small values */
@@ -1229,6 +1234,9 @@ static void interpolate_user_regamma(uint32_t hw_points_num,
 					hw_x = coordinates_x[i].regamma_y_blue;
 			} else
 				hw_x = coordinates_x[i].x;
+
+			if (dc_fixpt_le(one, hw_x))
+				hw_x = one;
 
 			norm_x = dc_fixpt_mul(norm_factor, hw_x);
 			index = dc_fixpt_floor(norm_x);
@@ -1557,7 +1565,7 @@ bool calculate_user_regamma_ramp(struct dc_transfer_func *output_tf,
 
 	kfree(rgb_regamma);
 rgb_regamma_alloc_fail:
-	kvfree(rgb_user);
+	kfree(rgb_user);
 rgb_user_alloc_fail:
 	return ret;
 }

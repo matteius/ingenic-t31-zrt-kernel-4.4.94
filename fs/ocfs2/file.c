@@ -492,10 +492,11 @@ int ocfs2_truncate_file(struct inode *inode,
 	 * greater than page size, so we have to truncate them
 	 * anyway.
 	 */
-	unmap_mapping_range(inode->i_mapping, new_i_size + PAGE_SIZE - 1, 0, 1);
-	truncate_inode_pages(inode->i_mapping, new_i_size);
 
 	if (OCFS2_I(inode)->ip_dyn_features & OCFS2_INLINE_DATA_FL) {
+		unmap_mapping_range(inode->i_mapping,
+				    new_i_size + PAGE_SIZE - 1, 0, 1);
+		truncate_inode_pages(inode->i_mapping, new_i_size);
 		status = ocfs2_truncate_inline(inode, di_bh, new_i_size,
 					       i_size_read(inode), 1);
 		if (status)
@@ -513,6 +514,9 @@ int ocfs2_truncate_file(struct inode *inode,
 		mlog_errno(status);
 		goto bail_unlock_sem;
 	}
+
+	unmap_mapping_range(inode->i_mapping, new_i_size + PAGE_SIZE - 1, 0, 1);
+	truncate_inode_pages(inode->i_mapping, new_i_size);
 
 	status = ocfs2_commit_truncate(osb, inode, di_bh);
 	if (status < 0) {
@@ -1252,22 +1256,24 @@ int ocfs2_setattr(struct dentry *dentry, struct iattr *attr)
 				goto bail_unlock;
 			}
 		}
+		down_write(&OCFS2_I(inode)->ip_alloc_sem);
 		handle = ocfs2_start_trans(osb, OCFS2_INODE_UPDATE_CREDITS +
 					   2 * ocfs2_quota_trans_credits(sb));
 		if (IS_ERR(handle)) {
 			status = PTR_ERR(handle);
 			mlog_errno(status);
-			goto bail_unlock;
+			goto bail_unlock_alloc;
 		}
 		status = __dquot_transfer(inode, transfer_to);
 		if (status < 0)
 			goto bail_commit;
 	} else {
+		down_write(&OCFS2_I(inode)->ip_alloc_sem);
 		handle = ocfs2_start_trans(osb, OCFS2_INODE_UPDATE_CREDITS);
 		if (IS_ERR(handle)) {
 			status = PTR_ERR(handle);
 			mlog_errno(status);
-			goto bail_unlock;
+			goto bail_unlock_alloc;
 		}
 	}
 
@@ -1280,6 +1286,8 @@ int ocfs2_setattr(struct dentry *dentry, struct iattr *attr)
 
 bail_commit:
 	ocfs2_commit_trans(osb, handle);
+bail_unlock_alloc:
+	up_write(&OCFS2_I(inode)->ip_alloc_sem);
 bail_unlock:
 	if (status && inode_locked) {
 		ocfs2_inode_unlock_tracker(inode, 1, &oh, had_lock);
@@ -1533,6 +1541,45 @@ static void ocfs2_truncate_cluster_pages(struct inode *inode, u64 byte_start,
 	}
 }
 
+/*
+ * zero out partial blocks of one cluster.
+ *
+ * start: file offset where zero starts, will be made upper block aligned.
+ * len: it will be trimmed to the end of current cluster if "start + len"
+ *      is bigger than it.
+ */
+static int ocfs2_zeroout_partial_cluster(struct inode *inode,
+					u64 start, u64 len)
+{
+	int ret;
+	u64 start_block, end_block, nr_blocks;
+	u64 p_block, offset;
+	u32 cluster, p_cluster, nr_clusters;
+	struct super_block *sb = inode->i_sb;
+	u64 end = ocfs2_align_bytes_to_clusters(sb, start);
+
+	if (start + len < end)
+		end = start + len;
+
+	start_block = ocfs2_blocks_for_bytes(sb, start);
+	end_block = ocfs2_blocks_for_bytes(sb, end);
+	nr_blocks = end_block - start_block;
+	if (!nr_blocks)
+		return 0;
+
+	cluster = ocfs2_bytes_to_clusters(sb, start);
+	ret = ocfs2_get_clusters(inode, cluster, &p_cluster,
+				&nr_clusters, NULL);
+	if (ret)
+		return ret;
+	if (!p_cluster)
+		return 0;
+
+	offset = start_block - ocfs2_clusters_to_blocks(sb, cluster);
+	p_block = ocfs2_clusters_to_blocks(sb, p_cluster) + offset;
+	return sb_issue_zeroout(sb, p_block, nr_blocks, GFP_NOFS);
+}
+
 static int ocfs2_zero_partial_clusters(struct inode *inode,
 				       u64 start, u64 len)
 {
@@ -1542,6 +1589,7 @@ static int ocfs2_zero_partial_clusters(struct inode *inode,
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
 	unsigned int csize = osb->s_clustersize;
 	handle_t *handle;
+	loff_t isize = i_size_read(inode);
 
 	/*
 	 * The "start" and "end" values are NOT necessarily part of
@@ -1562,6 +1610,26 @@ static int ocfs2_zero_partial_clusters(struct inode *inode,
 	if ((start & (csize - 1)) == 0 && (end & (csize - 1)) == 0)
 		goto out;
 
+	/* No page cache for EOF blocks, issue zero out to disk. */
+	if (end > isize) {
+		/*
+		 * zeroout eof blocks in last cluster starting from
+		 * "isize" even "start" > "isize" because it is
+		 * complicated to zeroout just at "start" as "start"
+		 * may be not aligned with block size, buffer write
+		 * would be required to do that, but out of eof buffer
+		 * write is not supported.
+		 */
+		ret = ocfs2_zeroout_partial_cluster(inode, isize,
+					end - isize);
+		if (ret) {
+			mlog_errno(ret);
+			goto out;
+		}
+		if (start >= isize)
+			goto out;
+		end = isize;
+	}
 	handle = ocfs2_start_trans(osb, OCFS2_INODE_UPDATE_CREDITS);
 	if (IS_ERR(handle)) {
 		ret = PTR_ERR(handle);
@@ -1869,7 +1937,7 @@ static int __ocfs2_change_file_space(struct file *file, struct inode *inode,
 {
 	int ret;
 	s64 llen;
-	loff_t size;
+	loff_t size, orig_isize;
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
 	struct buffer_head *di_bh = NULL;
 	handle_t *handle;
@@ -1961,6 +2029,15 @@ static int __ocfs2_change_file_space(struct file *file, struct inode *inode,
 	default:
 		ret = -EINVAL;
 	}
+
+	orig_isize = i_size_read(inode);
+	/* zeroout eof blocks in the cluster. */
+	if (!ret && change_size && orig_isize < size) {
+		ret = ocfs2_zeroout_partial_cluster(inode, orig_isize,
+					size - orig_isize);
+		if (!ret)
+			i_size_write(inode, size);
+	}
 	up_write(&OCFS2_I(inode)->ip_alloc_sem);
 	if (ret) {
 		mlog_errno(ret);
@@ -1976,9 +2053,6 @@ static int __ocfs2_change_file_space(struct file *file, struct inode *inode,
 		mlog_errno(ret);
 		goto out_inode_unlock;
 	}
-
-	if (change_size && i_size_read(inode) < size)
-		i_size_write(inode, size);
 
 	inode->i_ctime = inode->i_mtime = current_time(inode);
 	ret = ocfs2_mark_inode_dirty(handle, inode, di_bh);
@@ -2037,14 +2111,20 @@ static long ocfs2_fallocate(struct file *file, int mode, loff_t offset,
 	struct ocfs2_space_resv sr;
 	int change_size = 1;
 	int cmd = OCFS2_IOC_RESVSP64;
+	int ret = 0;
 
 	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE))
 		return -EOPNOTSUPP;
 	if (!ocfs2_writes_unwritten_extents(osb))
 		return -EOPNOTSUPP;
 
-	if (mode & FALLOC_FL_KEEP_SIZE)
+	if (mode & FALLOC_FL_KEEP_SIZE) {
 		change_size = 0;
+	} else {
+		ret = inode_newsize_ok(inode, offset + len);
+		if (ret)
+			return ret;
+	}
 
 	if (mode & FALLOC_FL_PUNCH_HOLE)
 		cmd = OCFS2_IOC_UNRESVSP64;
@@ -2106,54 +2186,88 @@ static int ocfs2_is_io_unaligned(struct inode *inode, size_t count, loff_t pos)
 	return 0;
 }
 
-static int ocfs2_prepare_inode_for_refcount(struct inode *inode,
-					    struct file *file,
-					    loff_t pos, size_t count,
-					    int *meta_level)
+static int ocfs2_inode_lock_for_extent_tree(struct inode *inode,
+					    struct buffer_head **di_bh,
+					    int meta_level,
+					    int write_sem,
+					    int wait)
 {
-	int ret;
-	struct buffer_head *di_bh = NULL;
-	u32 cpos = pos >> OCFS2_SB(inode->i_sb)->s_clustersize_bits;
-	u32 clusters =
-		ocfs2_clusters_for_bytes(inode->i_sb, pos + count) - cpos;
+	int ret = 0;
 
-	ret = ocfs2_inode_lock(inode, &di_bh, 1);
-	if (ret) {
-		mlog_errno(ret);
+	if (wait)
+		ret = ocfs2_inode_lock(inode, di_bh, meta_level);
+	else
+		ret = ocfs2_try_inode_lock(inode, di_bh, meta_level);
+	if (ret < 0)
 		goto out;
+
+	if (wait) {
+		if (write_sem)
+			down_write(&OCFS2_I(inode)->ip_alloc_sem);
+		else
+			down_read(&OCFS2_I(inode)->ip_alloc_sem);
+	} else {
+		if (write_sem)
+			ret = down_write_trylock(&OCFS2_I(inode)->ip_alloc_sem);
+		else
+			ret = down_read_trylock(&OCFS2_I(inode)->ip_alloc_sem);
+
+		if (!ret) {
+			ret = -EAGAIN;
+			goto out_unlock;
+		}
 	}
 
-	*meta_level = 1;
-
-	ret = ocfs2_refcount_cow(inode, di_bh, cpos, clusters, UINT_MAX);
-	if (ret)
-		mlog_errno(ret);
-out:
-	brelse(di_bh);
 	return ret;
+
+out_unlock:
+	brelse(*di_bh);
+	*di_bh = NULL;
+	ocfs2_inode_unlock(inode, meta_level);
+out:
+	return ret;
+}
+
+static void ocfs2_inode_unlock_for_extent_tree(struct inode *inode,
+					       struct buffer_head **di_bh,
+					       int meta_level,
+					       int write_sem)
+{
+	if (write_sem)
+		up_write(&OCFS2_I(inode)->ip_alloc_sem);
+	else
+		up_read(&OCFS2_I(inode)->ip_alloc_sem);
+
+	brelse(*di_bh);
+	*di_bh = NULL;
+
+	if (meta_level >= 0)
+		ocfs2_inode_unlock(inode, meta_level);
 }
 
 static int ocfs2_prepare_inode_for_write(struct file *file,
 					 loff_t pos, size_t count, int wait)
 {
 	int ret = 0, meta_level = 0, overwrite_io = 0;
+	int write_sem = 0;
 	struct dentry *dentry = file->f_path.dentry;
 	struct inode *inode = d_inode(dentry);
 	struct buffer_head *di_bh = NULL;
 	loff_t end;
+	u32 cpos;
+	u32 clusters;
 
 	/*
 	 * We start with a read level meta lock and only jump to an ex
 	 * if we need to make modifications here.
 	 */
 	for(;;) {
-		if (wait)
-			ret = ocfs2_inode_lock(inode, NULL, meta_level);
-		else
-			ret = ocfs2_try_inode_lock(inode,
-				overwrite_io ? NULL : &di_bh, meta_level);
+		ret = ocfs2_inode_lock_for_extent_tree(inode,
+						       &di_bh,
+						       meta_level,
+						       write_sem,
+						       wait);
 		if (ret < 0) {
-			meta_level = -1;
 			if (ret != -EAGAIN)
 				mlog_errno(ret);
 			goto out;
@@ -2165,15 +2279,8 @@ static int ocfs2_prepare_inode_for_write(struct file *file,
 		 */
 		if (!wait && !overwrite_io) {
 			overwrite_io = 1;
-			if (!down_read_trylock(&OCFS2_I(inode)->ip_alloc_sem)) {
-				ret = -EAGAIN;
-				goto out_unlock;
-			}
 
 			ret = ocfs2_overwrite_io(inode, di_bh, pos, count);
-			brelse(di_bh);
-			di_bh = NULL;
-			up_read(&OCFS2_I(inode)->ip_alloc_sem);
 			if (ret < 0) {
 				if (ret != -EAGAIN)
 					mlog_errno(ret);
@@ -2192,7 +2299,10 @@ static int ocfs2_prepare_inode_for_write(struct file *file,
 		 * set inode->i_size at the end of a write. */
 		if (should_remove_suid(dentry)) {
 			if (meta_level == 0) {
-				ocfs2_inode_unlock(inode, meta_level);
+				ocfs2_inode_unlock_for_extent_tree(inode,
+								   &di_bh,
+								   meta_level,
+								   write_sem);
 				meta_level = 1;
 				continue;
 			}
@@ -2208,18 +2318,32 @@ static int ocfs2_prepare_inode_for_write(struct file *file,
 
 		ret = ocfs2_check_range_for_refcount(inode, pos, count);
 		if (ret == 1) {
-			ocfs2_inode_unlock(inode, meta_level);
-			meta_level = -1;
+			ocfs2_inode_unlock_for_extent_tree(inode,
+							   &di_bh,
+							   meta_level,
+							   write_sem);
+			meta_level = 1;
+			write_sem = 1;
+			ret = ocfs2_inode_lock_for_extent_tree(inode,
+							       &di_bh,
+							       meta_level,
+							       write_sem,
+							       wait);
+			if (ret < 0) {
+				if (ret != -EAGAIN)
+					mlog_errno(ret);
+				goto out;
+			}
 
-			ret = ocfs2_prepare_inode_for_refcount(inode,
-							       file,
-							       pos,
-							       count,
-							       &meta_level);
+			cpos = pos >> OCFS2_SB(inode->i_sb)->s_clustersize_bits;
+			clusters =
+				ocfs2_clusters_for_bytes(inode->i_sb, pos + count) - cpos;
+			ret = ocfs2_refcount_cow(inode, di_bh, cpos, clusters, UINT_MAX);
 		}
 
 		if (ret < 0) {
-			mlog_errno(ret);
+			if (ret != -EAGAIN)
+				mlog_errno(ret);
 			goto out_unlock;
 		}
 
@@ -2230,10 +2354,10 @@ out_unlock:
 	trace_ocfs2_prepare_inode_for_write(OCFS2_I(inode)->ip_blkno,
 					    pos, count, wait);
 
-	brelse(di_bh);
-
-	if (meta_level >= 0)
-		ocfs2_inode_unlock(inode, meta_level);
+	ocfs2_inode_unlock_for_extent_tree(inode,
+					   &di_bh,
+					   meta_level,
+					   write_sem);
 
 out:
 	return ret;
@@ -2343,7 +2467,7 @@ static ssize_t ocfs2_file_write_iter(struct kiocb *iocb,
 
 	written = __generic_file_write_iter(iocb, from);
 	/* buffered aio wouldn't have proper lock coverage today */
-	BUG_ON(written == -EIOCBQUEUED && !(iocb->ki_flags & IOCB_DIRECT));
+	BUG_ON(written == -EIOCBQUEUED && !direct_io);
 
 	/*
 	 * deep in g_f_a_w_n()->ocfs2_direct_IO we pass in a ocfs2_dio_end_io
@@ -2463,7 +2587,7 @@ static ssize_t ocfs2_file_read_iter(struct kiocb *iocb,
 	trace_generic_file_read_iter_ret(ret);
 
 	/* buffered aio wouldn't have proper lock coverage today */
-	BUG_ON(ret == -EIOCBQUEUED && !(iocb->ki_flags & IOCB_DIRECT));
+	BUG_ON(ret == -EIOCBQUEUED && !direct_io);
 
 	/* see ocfs2_file_write_iter */
 	if (ret == -EIOCBQUEUED || !ocfs2_iocb_is_rw_locked(iocb)) {

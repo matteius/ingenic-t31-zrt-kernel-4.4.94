@@ -48,6 +48,7 @@
 
 	timer {
 		compatible = "arm,armv7-timer";
+		status = "disabled";	/* See ARM architected timer wrap erratum i940 */
 		interrupts = <GIC_PPI 13 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>,
 			     <GIC_PPI 14 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>,
 			     <GIC_PPI 11 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>,
@@ -150,6 +151,7 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 		ranges = <0x0 0x0 0x0 0xc0000000>;
+		dma-ranges = <0x80000000 0x0 0x80000000 0x80000000>;
 		ti,hwmods = "l3_main_1", "l3_main_2";
 		reg = <0x0 0x44000000 0x0 0x1000000>,
 		      <0x0 0x45000000 0x0 0x1000>;
@@ -311,6 +313,7 @@
 			#address-cells = <1>;
 			ranges = <0x51000000 0x51000000 0x3000
 				  0x0	     0x20000000 0x10000000>;
+			dma-ranges;
 			/**
 			 * To enable PCI endpoint mode, disable the pcie1_rc
 			 * node and enable pcie1_ep mode.
@@ -336,6 +339,7 @@
 						<0 0 0 2 &pcie1_intc 2>,
 						<0 0 0 3 &pcie1_intc 3>,
 						<0 0 0 4 &pcie1_intc 4>;
+				ti,syscon-unaligned-access = <&scm_conf1 0x14 1>;
 				status = "disabled";
 				pcie1_intc: interrupt-controller {
 					interrupt-controller;
@@ -354,7 +358,7 @@
 				ti,hwmods = "pcie1";
 				phys = <&pcie1_phy>;
 				phy-names = "pcie-phy0";
-				ti,syscon-unaligned-access = <&scm_conf1 0x14 2>;
+				ti,syscon-unaligned-access = <&scm_conf1 0x14 1>;
 				status = "disabled";
 			};
 		};
@@ -365,6 +369,7 @@
 			#address-cells = <1>;
 			ranges = <0x51800000 0x51800000 0x3000
 				  0x0	     0x30000000 0x10000000>;
+			dma-ranges;
 			status = "disabled";
 			pcie2_rc: pcie@51800000 {
 				reg = <0x51800000 0x2000>, <0x51802000 0x14c>, <0x1000 0x2000>;
@@ -387,6 +392,7 @@
 						<0 0 0 2 &pcie2_intc 2>,
 						<0 0 0 3 &pcie2_intc 3>,
 						<0 0 0 4 &pcie2_intc 4>;
+				ti,syscon-unaligned-access = <&scm_conf1 0x14 2>;
 				pcie2_intc: interrupt-controller {
 					interrupt-controller;
 					#address-cells = <0>;
@@ -905,6 +911,8 @@
 			reg = <0x48032000 0x80>;
 			interrupts = <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>;
 			ti,hwmods = "timer2";
+			clock-names = "fck";
+			clocks = <&l4per_clkctrl DRA7_TIMER2_CLKCTRL 24>;
 		};
 
 		timer3: timer@48034000 {
@@ -912,6 +920,10 @@
 			reg = <0x48034000 0x80>;
 			interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
 			ti,hwmods = "timer3";
+			clock-names = "fck";
+			clocks = <&l4per_clkctrl DRA7_TIMER3_CLKCTRL 24>;
+			assigned-clocks = <&l4per_clkctrl DRA7_TIMER3_CLKCTRL 24>;
+			assigned-clock-parents = <&timer_sys_clk_div>;
 		};
 
 		timer4: timer@48036000 {
@@ -919,6 +931,10 @@
 			reg = <0x48036000 0x80>;
 			interrupts = <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>;
 			ti,hwmods = "timer4";
+			clock-names = "fck";
+			clocks = <&l4per_clkctrl DRA7_TIMER4_CLKCTRL 24>;
+			assigned-clocks = <&l4per_clkctrl DRA7_TIMER4_CLKCTRL 24>;
+			assigned-clock-parents = <&timer_sys_clk_div>;
 		};
 
 		timer5: timer@48820000 {
@@ -1369,7 +1385,7 @@
 			status = "disabled";
 		};
 
-		qspi: qspi@4b300000 {
+		qspi: spi@4b300000 {
 			compatible = "ti,dra7xxx-qspi";
 			reg = <0x4b300000 0x100>,
 			      <0x5c000000 0x4000000>;

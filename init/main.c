@@ -91,14 +91,11 @@
 #include <linux/cache.h>
 #include <linux/rodata_test.h>
 #include <linux/jump_label.h>
-#include <linux/mem_encrypt.h>
 
 #include <asm/io.h>
-#include <asm/bugs.h>
 #include <asm/setup.h>
 #include <asm/sections.h>
 #include <asm/cacheflush.h>
-#include <linux/early_printk.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/initcall.h>
@@ -106,7 +103,6 @@
 static int kernel_init(void *);
 
 extern void init_IRQ(void);
-extern void fork_init(void);
 extern void radix_tree_init(void);
 
 /*
@@ -495,8 +491,6 @@ void __init __weak thread_stack_cache_init(void)
 }
 #endif
 
-void __init __weak mem_encrypt_init(void) { }
-
 bool initcall_debug;
 core_param(initcall_debug, initcall_debug, bool, 0644);
 
@@ -534,56 +528,36 @@ asmlinkage __visible void __init start_kernel(void)
 	char *command_line;
 	char *after_dashes;
 
-    super_early_printk("Hello, world!\n");
 	set_task_stack_end_magic(&init_task);
-    super_early_printk("Task stack end magic set\n");
 	smp_setup_processor_id();
-    super_early_printk("SMP processor ID set\n");
 	debug_objects_early_init();
 
-    super_early_printk("Debug objects early init\n");
 	cgroup_init_early();
 
 	local_irq_disable();
 	early_boot_irqs_disabled = true;
 
-    super_early_printk("Local IRQs disabled\n");
 	/*
 	 * Interrupts are still disabled. Do necessary setups, then
 	 * enable them.
 	 */
 	boot_cpu_init();
-    super_early_printk("Boot CPU initialized\n");
 	page_address_init();
-    super_early_printk("Page address initialized\n");
 	pr_notice("%s", linux_banner);
-    super_early_printk("Printed banner\n");
 	setup_arch(&command_line);
-	/*
-	 * Set up the the initial canary and entropy after arch
-	 * and after adding latent and command line entropy.
-	 */
-	add_latent_entropy();
-	add_device_randomness(command_line, strlen(command_line));
-	boot_init_stack_canary();
 	mm_init_cpumask(&init_mm);
 	setup_command_line(command_line);
-    super_early_printk("Command line setup\n");
 	setup_nr_cpu_ids();
-    super_early_printk("CPU IDs setup\n");
 	setup_per_cpu_areas();
-    super_early_printk("Per-CPU areas setup\n");
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
-    super_early_printk("SMP boot CPU prepared\n");
 	boot_cpu_hotplug_init();
-    super_early_printk("Boot CPU hotplug init\n");
 
 	build_all_zonelists(NULL);
-    super_early_printk("Built all zonelists\n");
 	page_alloc_init();
-    super_early_printk("Page allocation init\n");
 
 	pr_notice("Kernel command line: %s\n", boot_command_line);
+	/* parameters may set static keys */
+	jump_label_init();
 	parse_early_param();
 	after_dashes = parse_args("Booting kernel",
 				  static_command_line, __start___param,
@@ -592,8 +566,6 @@ asmlinkage __visible void __init start_kernel(void)
 	if (!IS_ERR_OR_NULL(after_dashes))
 		parse_args("Setting init args", after_dashes, NULL, 0, -1, -1,
 			   NULL, set_init_arg);
-
-	jump_label_init();
 
 	/*
 	 * These use large bootmem allocations and must precede
@@ -658,7 +630,17 @@ asmlinkage __visible void __init start_kernel(void)
 	softirq_init();
 	timekeeping_init();
 	time_init();
-	printk_safe_init();
+
+	/*
+	 * For best initial stack canary entropy, prepare it after:
+	 * - setup_arch() for any UEFI RNG entropy and boot cmdline access
+	 * - timekeeping_init() for ktime entropy used in random_init()
+	 * - time_init() for making random_get_entropy() work on some platforms
+	 * - random_init() to initialize the RNG from from early entropy sources
+	 */
+	random_init(command_line);
+	boot_init_stack_canary();
+
 	perf_event_init();
 	profile_init();
 	call_function_init();
@@ -688,14 +670,6 @@ asmlinkage __visible void __init start_kernel(void)
 	 */
 	locking_selftest();
 
-	/*
-	 * This needs to be called before any devices perform DMA
-	 * operations that might use the SWIOTLB bounce buffers. It will
-	 * mark the bounce buffers as decrypted so that their usage will
-	 * not cause "plain-text" data to be decrypted when accessed.
-	 */
-	mem_encrypt_init();
-
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start && !initrd_below_start_ok &&
 	    page_to_pfn(virt_to_page((void *)initrd_start)) < min_low_pfn) {
@@ -705,18 +679,18 @@ asmlinkage __visible void __init start_kernel(void)
 		initrd_start = 0;
 	}
 #endif
-	page_ext_init();
-    super_early_printk("Page ext init\n");
+	kmemleak_init();
 	debug_objects_mem_init();
 	setup_per_cpu_pageset();
-    super_early_printk("Setup per-CPU pageset\n");
 	numa_policy_init();
-    super_early_printk("NUMA policy init\n");
+	acpi_early_init();
 	if (late_time_init)
 		late_time_init();
 	sched_clock_init();
-    super_early_printk("Sched clock init\n");
 	calibrate_delay();
+
+	arch_cpu_finalize_init();
+
 	pid_idr_init();
 	anon_vma_init();
 #ifdef CONFIG_X86
@@ -724,55 +698,38 @@ asmlinkage __visible void __init start_kernel(void)
 		efi_enter_virtual_mode();
 #endif
 	thread_stack_cache_init();
-    super_early_printk("Thread stack cache init\n");
 	cred_init();
-    super_early_printk("Cred init\n");
 	fork_init();
-    super_early_printk("Fork init\n");
 	proc_caches_init();
-    super_early_printk("Proc caches init\n");
+	uts_ns_init();
 	buffer_init();
-    super_early_printk("Buffer init\n");
 	key_init();
-    super_early_printk("Key init\n");
 	security_init();
-    super_early_printk("Security init\n");
 	dbg_late_init();
-    super_early_printk("Debug late init\n");
 	vfs_caches_init();
-    super_early_printk("VFS caches init\n");
+	pagecache_init();
 	signals_init();
-    super_early_printk("Signals init\n");
 	seq_file_init();
 	proc_root_init();
-    super_early_printk("Proc root init\n");
 	nsfs_init();
-    super_early_printk("NSFS init\n");
 	cpuset_init();
-    super_early_printk("CPU set init\n");
 	cgroup_init();
-    super_early_printk("Cgroup init\n");
 	taskstats_init_early();
-    super_early_printk("Taskstats init early\n");
 	delayacct_init();
-    super_early_printk("Delay accounting init\n");
 
-	check_bugs();
 
 	acpi_subsystem_init();
-    super_early_printk("ACPI subsystem init\n");
+	arch_post_acpi_subsys_init();
 	sfi_init_late();
-    super_early_printk("SFI init late\n");
 
 	if (efi_enabled(EFI_RUNTIME_SERVICES)) {
-        super_early_printk("EFI runtime services enabled\n");
 		efi_free_boot_services();
 	}
 
-    super_early_printk("Ftrace init\n");
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
-    super_early_printk("Rest init\n");
+
+	prevent_tail_call_optimization();
 }
 
 /* Call all constructor functions linked into the kernel. */
@@ -811,7 +768,7 @@ static int __init initcall_blacklist(char *str)
 		}
 	} while (str_entry);
 
-	return 0;
+	return 1;
 }
 
 static bool __init_or_module initcall_blacklisted(initcall_t fn)
@@ -1064,7 +1021,9 @@ static noinline void __init kernel_init_freeable(void);
 bool rodata_enabled __ro_after_init = true;
 static int __init set_debug_rodata(char *str)
 {
-	return strtobool(str, &rodata_enabled);
+	if (strtobool(str, &rodata_enabled))
+		pr_warn("Invalid option string for rodata: '%s'\n", str);
+	return 1;
 }
 __setup("rodata=", set_debug_rodata);
 #endif
@@ -1161,7 +1120,7 @@ static noinline void __init kernel_init_freeable(void)
 	 */
 	set_mems_allowed(node_states[N_MEMORY]);
 
-	cad_pid = task_pid(current);
+	cad_pid = get_pid(task_pid(current));
 
 	smp_prepare_cpus(setup_max_cpus);
 
@@ -1176,6 +1135,8 @@ static noinline void __init kernel_init_freeable(void)
 	sched_init_smp();
 
 	page_alloc_init_late();
+	/* Initialize page ext after all struct pages are initialized. */
+	page_ext_init();
 
 	do_basic_setup();
 

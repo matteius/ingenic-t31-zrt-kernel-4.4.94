@@ -47,7 +47,10 @@ struct qdisc_size_table {
 struct qdisc_skb_head {
 	struct sk_buff	*head;
 	struct sk_buff	*tail;
-	__u32		qlen;
+	union {
+		u32		qlen;
+		atomic_t	atomic_qlen;
+	};
 	spinlock_t	lock;
 };
 
@@ -105,6 +108,7 @@ struct Qdisc {
 
 	spinlock_t		busylock ____cacheline_aligned_in_smp;
 	spinlock_t		seqlock;
+	struct rcu_head		rcu;
 };
 
 static inline void qdisc_refcount_inc(struct Qdisc *qdisc)
@@ -112,6 +116,19 @@ static inline void qdisc_refcount_inc(struct Qdisc *qdisc)
 	if (qdisc->flags & TCQ_F_BUILTIN)
 		return;
 	refcount_inc(&qdisc->refcnt);
+}
+
+/* Intended to be used by unlocked users, when concurrent qdisc release is
+ * possible.
+ */
+
+static inline struct Qdisc *qdisc_refcount_inc_nz(struct Qdisc *qdisc)
+{
+	if (qdisc->flags & TCQ_F_BUILTIN)
+		return qdisc;
+	if (refcount_inc_not_zero(&qdisc->refcnt))
+		return qdisc;
+	return NULL;
 }
 
 static inline bool qdisc_is_running(struct Qdisc *qdisc)
@@ -213,6 +230,8 @@ struct Qdisc_ops {
 					  struct netlink_ext_ack *extack);
 	void			(*attach)(struct Qdisc *sch);
 	int			(*change_tx_queue_len)(struct Qdisc *, unsigned int);
+	void			(*change_real_num_tx)(struct Qdisc *sch,
+						      unsigned int new_real_tx);
 
 	int			(*dump)(struct Qdisc *, struct sk_buff *);
 	int			(*dump_stats)(struct Qdisc *, struct gnet_dump *);
@@ -270,7 +289,8 @@ struct tcf_proto_ops {
 	int			(*reoffload)(struct tcf_proto *tp, bool add,
 					     tc_setup_cb_t *cb, void *cb_priv,
 					     struct netlink_ext_ack *extack);
-	void			(*bind_class)(void *, u32, unsigned long);
+	void			(*bind_class)(void *, u32, unsigned long,
+					      void *, unsigned long);
 	void *			(*tmplt_create)(struct net *net,
 						struct tcf_chain *chain,
 						struct nlattr **tca,
@@ -384,27 +404,19 @@ static inline void qdisc_cb_private_validate(const struct sk_buff *skb, int sz)
 	BUILD_BUG_ON(sizeof(qcb->data) < sz);
 }
 
-static inline int qdisc_qlen_cpu(const struct Qdisc *q)
-{
-	return this_cpu_ptr(q->cpu_qstats)->qlen;
-}
-
 static inline int qdisc_qlen(const struct Qdisc *q)
 {
 	return q->q.qlen;
 }
 
-static inline int qdisc_qlen_sum(const struct Qdisc *q)
+static inline u32 qdisc_qlen_sum(const struct Qdisc *q)
 {
-	__u32 qlen = q->qstats.qlen;
-	int i;
+	u32 qlen = q->qstats.qlen;
 
-	if (q->flags & TCQ_F_NOLOCK) {
-		for_each_possible_cpu(i)
-			qlen += per_cpu_ptr(q->cpu_qstats, i)->qlen;
-	} else {
+	if (q->flags & TCQ_F_NOLOCK)
+		qlen += atomic_read(&q->q.atomic_qlen);
+	else
 		qlen += q->q.qlen;
-	}
 
 	return qlen;
 }
@@ -424,6 +436,11 @@ static inline struct Qdisc *qdisc_root(const struct Qdisc *qdisc)
 	struct Qdisc *q = rcu_dereference_rtnl(qdisc->dev_queue->qdisc);
 
 	return q;
+}
+
+static inline struct Qdisc *qdisc_root_bh(const struct Qdisc *qdisc)
+{
+	return rcu_dereference_bh(qdisc->dev_queue->qdisc);
 }
 
 static inline struct Qdisc *qdisc_root_sleeping(const struct Qdisc *qdisc)
@@ -546,6 +563,8 @@ void qdisc_class_hash_grow(struct Qdisc *, struct Qdisc_class_hash *);
 void qdisc_class_hash_destroy(struct Qdisc_class_hash *);
 
 int dev_qdisc_change_tx_queue_len(struct net_device *dev);
+void dev_qdisc_change_real_num_tx(struct net_device *dev,
+				  unsigned int new_real_tx);
 void dev_init_scheduler(struct net_device *dev);
 void dev_shutdown(struct net_device *dev);
 void dev_activate(struct net_device *dev);
@@ -554,7 +573,8 @@ void dev_deactivate_many(struct list_head *head);
 struct Qdisc *dev_graft_qdisc(struct netdev_queue *dev_queue,
 			      struct Qdisc *qdisc);
 void qdisc_reset(struct Qdisc *qdisc);
-void qdisc_destroy(struct Qdisc *qdisc);
+void qdisc_put(struct Qdisc *qdisc);
+void qdisc_put_unlocked(struct Qdisc *qdisc);
 void qdisc_tree_reduce_backlog(struct Qdisc *qdisc, unsigned int n,
 			       unsigned int len);
 struct Qdisc *qdisc_alloc(struct netdev_queue *dev_queue,
@@ -776,14 +796,14 @@ static inline void qdisc_qstats_cpu_backlog_inc(struct Qdisc *sch,
 	this_cpu_add(sch->cpu_qstats->backlog, qdisc_pkt_len(skb));
 }
 
-static inline void qdisc_qstats_cpu_qlen_inc(struct Qdisc *sch)
+static inline void qdisc_qstats_atomic_qlen_inc(struct Qdisc *sch)
 {
-	this_cpu_inc(sch->cpu_qstats->qlen);
+	atomic_inc(&sch->q.atomic_qlen);
 }
 
-static inline void qdisc_qstats_cpu_qlen_dec(struct Qdisc *sch)
+static inline void qdisc_qstats_atomic_qlen_dec(struct Qdisc *sch)
 {
-	this_cpu_dec(sch->cpu_qstats->qlen);
+	atomic_dec(&sch->q.atomic_qlen);
 }
 
 static inline void qdisc_qstats_cpu_requeues_inc(struct Qdisc *sch)
@@ -1057,6 +1077,7 @@ struct psched_ratecfg {
 	u64	rate_bytes_ps; /* bytes per second */
 	u32	mult;
 	u16	overhead;
+	u16	mpu;
 	u8	linklayer;
 	u8	shift;
 };
@@ -1065,6 +1086,9 @@ static inline u64 psched_l2t_ns(const struct psched_ratecfg *r,
 				unsigned int len)
 {
 	len += r->overhead;
+
+	if (len < r->mpu)
+		len = r->mpu;
 
 	if (unlikely(r->linklayer == TC_LINKLAYER_ATM))
 		return ((u64)(DIV_ROUND_UP(len,48)*53) * r->mult) >> r->shift;
@@ -1088,6 +1112,7 @@ static inline void psched_ratecfg_getrate(struct tc_ratespec *res,
 	res->rate = min_t(u64, r->rate_bytes_ps, ~0U);
 
 	res->overhead = r->overhead;
+	res->mpu = r->mpu;
 	res->linklayer = (r->linklayer & TC_LINKLAYER_MASK);
 }
 

@@ -107,7 +107,6 @@ void bust_spinlocks(int yes)
 
 /*
  * Find out which address space caused the exception.
- * Access register mode is impossible, ignore space == 3.
  */
 static inline enum fault_type get_fault_type(struct pt_regs *regs)
 {
@@ -131,6 +130,10 @@ static inline enum fault_type get_fault_type(struct pt_regs *regs)
 			return KERNEL_FAULT;
 		}
 		return VDSO_FAULT;
+	}
+	if (trans_exc_code == 1) {
+		/* access register mode, not used in the kernel */
+		return USER_FAULT;
 	}
 	/* home space exception -> access via kernel ASCE */
 	return KERNEL_FAULT;
@@ -452,7 +455,9 @@ static inline vm_fault_t do_exception(struct pt_regs *regs, int access)
 	flags = FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_KILLABLE;
 	if (user_mode(regs))
 		flags |= FAULT_FLAG_USER;
-	if (access == VM_WRITE || (trans_exc_code & store_indication) == 0x400)
+	if ((trans_exc_code & store_indication) == 0x400)
+		access = VM_WRITE;
+	if (access == VM_WRITE)
 		flags |= FAULT_FLAG_WRITE;
 	down_read(&mm->mmap_sem);
 

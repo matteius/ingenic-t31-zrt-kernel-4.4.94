@@ -364,7 +364,7 @@ static int get_dimm_info(u32 mtr, u32 amap, struct dimm_info *dimm,
 	size = ((1ull << (rows + cols + ranks)) * banks) >> (20 - 3);
 	npages = MiB_TO_PAGES(size);
 
-	edac_dbg(0, "mc#%d: channel %d, dimm %d, %lld Mb (%d pages) bank: %d, rank: %d, row: %#x, col: %#x\n",
+	edac_dbg(0, "mc#%d: channel %d, dimm %d, %lld MiB (%d pages) bank: %d, rank: %d, row: %#x, col: %#x\n",
 		 imc->mc, chan, dimmno, size, npages,
 		 banks, 1 << ranks, rows, cols);
 
@@ -424,7 +424,7 @@ unknown_size:
 	dimm->mtype = MEM_NVDIMM;
 	dimm->edac_mode = EDAC_SECDED; /* likely better than this */
 
-	edac_dbg(0, "mc#%d: channel %d, dimm %d, %llu Mb (%u pages)\n",
+	edac_dbg(0, "mc#%d: channel %d, dimm %d, %llu MiB (%u pages)\n",
 		 imc->mc, chan, dimmno, size >> 20, dimm->nr_pages);
 
 	snprintf(dimm->label, sizeof(dimm->label), "CPU_SrcID#%u_MC#%u_Chan#%u_DIMM#%u",
@@ -668,7 +668,7 @@ sad_found:
 			break;
 		case 2:
 			lchan = (addr >> shift) % 2;
-			lchan = (lchan << 1) | ~lchan;
+			lchan = (lchan << 1) | !lchan;
 			break;
 		case 3:
 			lchan = ((addr >> shift) % 2) << 1;
@@ -825,13 +825,13 @@ rir_found:
 }
 
 static u8 skx_close_row[] = {
-	15, 16, 17, 18, 20, 21, 22, 28, 10, 11, 12, 13, 29, 30, 31, 32, 33
+	15, 16, 17, 18, 20, 21, 22, 28, 10, 11, 12, 13, 29, 30, 31, 32, 33, 34
 };
 static u8 skx_close_column[] = {
 	3, 4, 5, 14, 19, 23, 24, 25, 26, 27
 };
 static u8 skx_open_row[] = {
-	14, 15, 16, 20, 28, 21, 22, 23, 24, 25, 26, 27, 29, 30, 31, 32, 33
+	14, 15, 16, 20, 28, 21, 22, 23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34
 };
 static u8 skx_open_column[] = {
 	3, 4, 5, 6, 7, 8, 9, 10, 11, 12
@@ -896,12 +896,11 @@ static bool skx_decode(struct decoded_addr *res)
 
 #ifdef CONFIG_EDAC_DEBUG
 /*
- * Debug feature. Make /sys/kernel/debug/skx_edac_test/addr.
- * Write an address to this file to exercise the address decode
- * logic in this driver.
+ * Debug feature.
+ * Exercise the address decode logic by writing an address to
+ * /sys/kernel/debug/edac/skx_test/addr.
  */
 static struct dentry *skx_test;
-static u64 skx_fake_addr;
 
 static int debugfs_u64_set(void *data, u64 val)
 {
@@ -912,19 +911,19 @@ static int debugfs_u64_set(void *data, u64 val)
 
 	return 0;
 }
-
 DEFINE_SIMPLE_ATTRIBUTE(fops_u64_wo, NULL, debugfs_u64_set, "%llu\n");
-
-static struct dentry *mydebugfs_create(const char *name, umode_t mode,
-				       struct dentry *parent, u64 *value)
-{
-	return debugfs_create_file(name, mode, parent, value, &fops_u64_wo);
-}
 
 static void setup_skx_debug(void)
 {
-	skx_test = debugfs_create_dir("skx_edac_test", NULL);
-	mydebugfs_create("addr", S_IWUSR, skx_test, &skx_fake_addr);
+	skx_test = edac_debugfs_create_dir("skx_test");
+	if (!skx_test)
+		return;
+
+	if (!edac_debugfs_create_file("addr", 0200, skx_test,
+				      NULL, &fops_u64_wo)) {
+		debugfs_remove(skx_test);
+		skx_test = NULL;
+	}
 }
 
 static void teardown_skx_debug(void)
@@ -959,6 +958,7 @@ static void skx_mce_output_error(struct mem_ctl_info *mci,
 	recoverable = GET_BITFIELD(m->status, 56, 56);
 
 	if (uncorrected_error) {
+		core_err_cnt = 1;
 		if (ripv) {
 			type = "FATAL";
 			tp_event = HW_EVENT_ERR_FATAL;

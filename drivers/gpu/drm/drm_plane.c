@@ -177,6 +177,13 @@ int drm_universal_plane_init(struct drm_device *dev, struct drm_plane *plane,
 	if (WARN_ON(config->num_total_plane >= 32))
 		return -EINVAL;
 
+	/*
+	 * First driver to need more than 64 formats needs to fix this. Each
+	 * format is encoded as a bit and the current code only supports a u64.
+	 */
+	if (WARN_ON(format_count > 64))
+		return -EINVAL;
+
 	WARN_ON(drm_drv_uses_atomic_modeset(dev) &&
 		(!funcs->atomic_destroy_state ||
 		 !funcs->atomic_duplicate_state));
@@ -198,18 +205,14 @@ int drm_universal_plane_init(struct drm_device *dev, struct drm_plane *plane,
 		return -ENOMEM;
 	}
 
-	/*
-	 * First driver to need more than 64 formats needs to fix this. Each
-	 * format is encoded as a bit and the current code only supports a u64.
-	 */
-	if (WARN_ON(format_count > 64))
-		return -EINVAL;
-
 	if (format_modifiers) {
 		const uint64_t *temp_modifiers = format_modifiers;
 		while (*temp_modifiers++ != DRM_FORMAT_MOD_INVALID)
 			format_modifier_count++;
 	}
+
+	if (format_modifier_count)
+		config->allow_fb_modifiers = true;
 
 	plane->modifier_count = format_modifier_count;
 	plane->modifiers = kmalloc_array(format_modifier_count,
@@ -937,6 +940,11 @@ retry:
 		if (ret)
 			goto out;
 
+		if (!drm_lease_held(file_priv, crtc->cursor->base.id)) {
+			ret = -EACCES;
+			goto out;
+		}
+
 		ret = drm_mode_cursor_universal(crtc, req, file_priv, &ctx);
 		goto out;
 	}
@@ -1038,6 +1046,9 @@ int drm_mode_page_flip_ioctl(struct drm_device *dev,
 		return -ENOENT;
 
 	plane = crtc->primary;
+
+	if (!drm_lease_held(file_priv, plane->base.id))
+		return -EACCES;
 
 	if (crtc->funcs->page_flip_target) {
 		u32 current_vblank;
@@ -1172,6 +1183,7 @@ retry:
 out:
 	if (fb)
 		drm_framebuffer_put(fb);
+	fb = NULL;
 	if (plane->old_fb)
 		drm_framebuffer_put(plane->old_fb);
 	plane->old_fb = NULL;

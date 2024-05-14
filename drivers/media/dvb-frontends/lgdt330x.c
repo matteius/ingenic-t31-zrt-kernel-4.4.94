@@ -783,7 +783,7 @@ static int lgdt3303_read_status(struct dvb_frontend *fe,
 
 		if ((buf[0] & 0x02) == 0x00)
 			*status |= FE_HAS_SYNC;
-		if ((buf[0] & 0xfd) == 0x01)
+		if ((buf[0] & 0x01) == 0x01)
 			*status |= FE_HAS_VITERBI | FE_HAS_LOCK;
 		break;
 	default:
@@ -938,7 +938,7 @@ struct dvb_frontend *lgdt330x_attach(const struct lgdt330x_config *_config,
 
 	return lgdt330x_get_dvb_frontend(client);
 }
-EXPORT_SYMBOL(lgdt330x_attach);
+EXPORT_SYMBOL_GPL(lgdt330x_attach);
 
 static const struct dvb_frontend_ops lgdt3302_ops = {
 	.delsys = { SYS_ATSC, SYS_DVBC_ANNEX_B },

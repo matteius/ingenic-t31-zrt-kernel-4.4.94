@@ -18,6 +18,7 @@
 #include "overlayfs.h"
 
 struct ovl_lookup_data {
+	struct super_block *sb;
 	struct qstr name;
 	bool is_dir;
 	bool opaque;
@@ -202,7 +203,7 @@ static int ovl_lookup_single(struct dentry *base, struct ovl_lookup_data *d,
 	int err;
 	bool last_element = !post[0];
 
-	this = lookup_one_len_unlocked(name, base, namelen);
+	this = lookup_positive_unlocked(name, base, namelen);
 	if (IS_ERR(this)) {
 		err = PTR_ERR(this);
 		this = NULL;
@@ -210,8 +211,6 @@ static int ovl_lookup_single(struct dentry *base, struct ovl_lookup_data *d,
 			goto out;
 		goto out_err;
 	}
-	if (!this->d_inode)
-		goto put_and_out;
 
 	if (ovl_dentry_weird(this)) {
 		/* Don't support traversing automounts and other weirdness */
@@ -244,6 +243,12 @@ static int ovl_lookup_single(struct dentry *base, struct ovl_lookup_data *d,
 		if (!d->metacopy || d->last)
 			goto out;
 	} else {
+		if (ovl_lookup_trap_inode(d->sb, this)) {
+			/* Caught in a trap of overlapping layers */
+			err = -ELOOP;
+			goto out_err;
+		}
+
 		if (last_element)
 			d->is_dir = true;
 		if (d->last)
@@ -422,8 +427,10 @@ int ovl_verify_set_fh(struct dentry *dentry, const char *name,
 
 	fh = ovl_encode_real_fh(real, is_upper);
 	err = PTR_ERR(fh);
-	if (IS_ERR(fh))
+	if (IS_ERR(fh)) {
+		fh = NULL;
 		goto fail;
+	}
 
 	err = ovl_verify_fh(dentry, name, fh);
 	if (set && err == -ENODATA)
@@ -645,7 +652,7 @@ struct dentry *ovl_get_index_fh(struct ovl_fs *ofs, struct ovl_fh *fh)
 	if (err)
 		return ERR_PTR(err);
 
-	index = lookup_one_len_unlocked(name.name, ofs->indexdir, name.len);
+	index = lookup_positive_unlocked(name.name, ofs->indexdir, name.len);
 	kfree(name.name);
 	if (IS_ERR(index)) {
 		if (PTR_ERR(index) == -ENOENT)
@@ -653,9 +660,7 @@ struct dentry *ovl_get_index_fh(struct ovl_fs *ofs, struct ovl_fh *fh)
 		return index;
 	}
 
-	if (d_is_negative(index))
-		err = 0;
-	else if (ovl_is_whiteout(index))
+	if (ovl_is_whiteout(index))
 		err = -ESTALE;
 	else if (ovl_dentry_weird(index))
 		err = -EIO;
@@ -679,7 +684,7 @@ struct dentry *ovl_lookup_index(struct ovl_fs *ofs, struct dentry *upper,
 	if (err)
 		return ERR_PTR(err);
 
-	index = lookup_one_len_unlocked(name.name, ofs->indexdir, name.len);
+	index = lookup_positive_unlocked(name.name, ofs->indexdir, name.len);
 	if (IS_ERR(index)) {
 		err = PTR_ERR(index);
 		if (err == -ENOENT) {
@@ -694,9 +699,7 @@ struct dentry *ovl_lookup_index(struct ovl_fs *ofs, struct dentry *upper,
 	}
 
 	inode = d_inode(index);
-	if (d_is_negative(index)) {
-		goto out_dput;
-	} else if (ovl_is_whiteout(index) && !verify) {
+	if (ovl_is_whiteout(index) && !verify) {
 		/*
 		 * When index lookup is called with !verify for decoding an
 		 * overlay file handle, a whiteout index implies that decode
@@ -817,6 +820,7 @@ struct dentry *ovl_lookup(struct inode *dir, struct dentry *dentry,
 	int err;
 	bool metacopy = false;
 	struct ovl_lookup_data d = {
+		.sb = dentry->d_sb,
 		.name = dentry->d_name,
 		.is_dir = false,
 		.opaque = false,
@@ -1124,7 +1128,7 @@ bool ovl_lower_positive(struct dentry *dentry)
 		struct dentry *this;
 		struct dentry *lowerdir = poe->lowerstack[i].dentry;
 
-		this = lookup_one_len_unlocked(name->name, lowerdir,
+		this = lookup_positive_unlocked(name->name, lowerdir,
 					       name->len);
 		if (IS_ERR(this)) {
 			switch (PTR_ERR(this)) {
@@ -1141,10 +1145,8 @@ bool ovl_lower_positive(struct dentry *dentry)
 				break;
 			}
 		} else {
-			if (this->d_inode) {
-				positive = !ovl_is_whiteout(this);
-				done = true;
-			}
+			positive = !ovl_is_whiteout(this);
+			done = true;
 			dput(this);
 		}
 	}

@@ -30,6 +30,8 @@
 #define UDF_FLAG_LASTBLOCK_SET	16
 #define UDF_FLAG_BLOCKSIZE_SET	17
 #define UDF_FLAG_INCONSISTENT	18
+#define UDF_FLAG_RW_INCOMPAT	19	/* Set when we find RW incompatible
+					 * feature */
 
 #define UDF_PART_FLAG_UNALLOC_BITMAP	0x0001
 #define UDF_PART_FLAG_UNALLOC_TABLE	0x0002
@@ -54,6 +56,8 @@
 
 #define MF_DUPLICATE_MD		0x01
 #define MF_MIRROR_FE_LOADED	0x02
+
+#define EFSCORRUPTED EUCLEAN
 
 struct udf_meta_data {
 	__u32	s_meta_file_loc;

@@ -95,7 +95,7 @@ struct page_pool;
 #define MLX5E_LOG_ALIGNED_MPWQE_PPW	(ilog2(MLX5E_REQUIRED_WQE_MTTS))
 #define MLX5E_REQUIRED_MTTS(wqes)	(wqes * MLX5E_REQUIRED_WQE_MTTS)
 #define MLX5E_MAX_RQ_NUM_MTTS	\
-	((1 << 16) * 2) /* So that MLX5_MTT_OCTW(num_mtts) fits into u16 */
+	(ALIGN_DOWN(U16_MAX, 4) * 2) /* So that MLX5_MTT_OCTW(num_mtts) fits into u16 */
 #define MLX5E_ORDER2_MAX_PACKET_MTU (order_base_2(10 * 1024))
 #define MLX5E_PARAMS_MAXIMUM_LOG_RQ_SIZE_MPW	\
 		(ilog2(MLX5E_MAX_RQ_NUM_MTTS / MLX5E_REQUIRED_WQE_MTTS))
@@ -210,6 +210,7 @@ static const char mlx5e_priv_flags[][ETH_GSTRING_LEN] = {
 	"tx_cqe_moder",
 	"rx_cqe_compress",
 	"rx_striding_rq",
+	"rx_no_csum_complete",
 };
 
 enum mlx5e_priv_flag {
@@ -217,6 +218,7 @@ enum mlx5e_priv_flag {
 	MLX5E_PFLAG_TX_CQE_BASED_MODER = (1 << 1),
 	MLX5E_PFLAG_RX_CQE_COMPRESS = (1 << 2),
 	MLX5E_PFLAG_RX_STRIDING_RQ = (1 << 3),
+	MLX5E_PFLAG_RX_NO_CSUM_COMPLETE = (1 << 4),
 };
 
 #define MLX5E_SET_PFLAG(params, pflag, enable)			\
@@ -298,6 +300,7 @@ struct mlx5e_dcbx_dp {
 enum {
 	MLX5E_RQ_STATE_ENABLED,
 	MLX5E_RQ_STATE_AM,
+	MLX5E_RQ_STATE_NO_CSUM_COMPLETE,
 };
 
 struct mlx5e_cq {
@@ -566,6 +569,7 @@ struct mlx5e_rq {
 
 	unsigned long          state;
 	int                    ix;
+	unsigned int           hw_mtu;
 
 	struct net_dim         dim; /* Dynamic Interrupt Moderation */
 
@@ -632,6 +636,7 @@ enum {
 	MLX5E_STATE_ASYNC_EVENTS_ENABLED,
 	MLX5E_STATE_OPENED,
 	MLX5E_STATE_DESTROYING,
+	MLX5E_STATE_XDP_TX_ENABLED,
 };
 
 struct mlx5e_rqt {

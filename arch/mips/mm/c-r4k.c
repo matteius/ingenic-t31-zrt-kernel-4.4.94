@@ -38,6 +38,7 @@
 #include <asm/traps.h>
 #include <asm/dma-coherence.h>
 #include <asm/mips-cps.h>
+#include <asm/mips-cm.h>
 
 /*
  * Bits describing what cache ops an SMP callback function may perform.
@@ -476,11 +477,28 @@ static void r4k_blast_scache_setup(void)
 		r4k_blast_scache = blast_scache128;
 }
 
+static void (*r4k_blast_scache_node)(long node);
+
+static void r4k_blast_scache_node_setup(void)
+{
+	unsigned long sc_lsize = cpu_scache_line_size();
+
+	if (current_cpu_type() != CPU_LOONGSON3)
+		r4k_blast_scache_node = (void *)cache_noop;
+	else if (sc_lsize == 16)
+		r4k_blast_scache_node = blast_scache16_node;
+	else if (sc_lsize == 32)
+		r4k_blast_scache_node = blast_scache32_node;
+	else if (sc_lsize == 64)
+		r4k_blast_scache_node = blast_scache64_node;
+	else if (sc_lsize == 128)
+		r4k_blast_scache_node = blast_scache128_node;
+}
+
 static inline void local_r4k___flush_cache_all(void * args)
 {
 	switch (current_cpu_type()) {
 	case CPU_LOONGSON2:
-	case CPU_LOONGSON3:
 	case CPU_R4000SC:
 	case CPU_R4000MC:
 	case CPU_R4400SC:
@@ -495,6 +513,11 @@ static inline void local_r4k___flush_cache_all(void * args)
 		 * in one of the primary caches.
 		 */
 		r4k_blast_scache();
+		break;
+
+	case CPU_LOONGSON3:
+		/* Use get_ebase_cpunum() for both NUMA=y/n */
+		r4k_blast_scache_node(get_ebase_cpunum() >> 2);
 		break;
 
 	case CPU_BMIPS5000:
@@ -857,10 +880,14 @@ static void r4k_dma_cache_wback_inv(unsigned long addr, unsigned long size)
 
 	preempt_disable();
 	if (cpu_has_inclusive_pcaches) {
-		if (size >= scache_size)
-			r4k_blast_scache();
-		else
+		if (size >= scache_size) {
+			if (current_cpu_type() != CPU_LOONGSON3)
+				r4k_blast_scache();
+			else
+				r4k_blast_scache_node(pa_to_nid(addr));
+		} else {
 			blast_scache_range(addr, addr + size);
+		}
 		preempt_enable();
 		__sync();
 		return;
@@ -894,9 +921,12 @@ static void r4k_dma_cache_inv(unsigned long addr, unsigned long size)
 
 	preempt_disable();
 	if (cpu_has_inclusive_pcaches) {
-		if (size >= scache_size)
-			r4k_blast_scache();
-		else {
+		if (size >= scache_size) {
+			if (current_cpu_type() != CPU_LOONGSON3)
+				r4k_blast_scache();
+			else
+				r4k_blast_scache_node(pa_to_nid(addr));
+		} else {
 			/*
 			 * There is no clearly documented alignment requirement
 			 * for the cache instruction on MIPS processors and
@@ -934,7 +964,7 @@ static void r4k_dma_cache_inv(unsigned long addr, unsigned long size)
 	bc_inv(addr, size);
 	__sync();
 }
-#endif /* CONFIG_DMA_NONCOHERENT || CONFIG_DMA_MAYBE_COHERENT */
+#endif /* CONFIG_DMA_NONCOHERENT */
 
 struct flush_cache_sigtramp_args {
 	struct mm_struct *mm;
@@ -986,15 +1016,14 @@ static void local_r4k_flush_cache_sigtramp(void *args)
 
 	R4600_HIT_CACHEOP_WAR_IMPL;
 	if (!cpu_has_ic_fills_f_dc) {
-	    if (dc_lsize) {
-	        vaddr ? flush_dcache_line(addr & ~(dc_lsize - 1))
-	              : protected_writeback_dcache_line(addr & ~(dc_lsize - 1));
-	    }
-
-	    if (!cpu_icache_snoops_remote_store && scache_size) {
-	        vaddr ? flush_scache_line(addr & ~(sc_lsize - 1))
-	              : protected_writeback_scache_line(addr & ~(sc_lsize - 1));
-	    }
+		if (dc_lsize)
+			vaddr ? flush_dcache_line(addr & ~(dc_lsize - 1))
+			      : protected_writeback_dcache_line(
+							addr & ~(dc_lsize - 1));
+		if (!cpu_icache_snoops_remote_store && scache_size)
+			vaddr ? flush_scache_line(addr & ~(sc_lsize - 1))
+			      : protected_writeback_scache_line(
+							addr & ~(sc_lsize - 1));
 	}
 
 	/* xburst-specific code */
@@ -1541,6 +1570,18 @@ static void probe_pcache(void)
 			c->dcache.flags |= MIPS_CACHE_ALIASES;
 	}
 
+	/* Physically indexed caches don't suffer from virtual aliasing */
+	if (c->dcache.flags & MIPS_CACHE_PINDEX)
+		c->dcache.flags &= ~MIPS_CACHE_ALIASES;
+
+	/*
+	 * In systems with CM the icache fills from L2 or closer caches, and
+	 * thus sees remote stores without needing to write them back any
+	 * further than that.
+	 */
+	if (mips_cm_present())
+		c->icache.flags |= MIPS_IC_SNOOPS_REMOTE;
+
 	switch (current_cpu_type()) {
 	case CPU_20KC:
 		/*
@@ -1552,6 +1593,7 @@ static void probe_pcache(void)
 
 	case CPU_ALCHEMY:
 	case CPU_I6400:
+	case CPU_I6500:
 		c->icache.flags |= MIPS_CACHE_IC_F_DC;
 		break;
 
@@ -1669,7 +1711,7 @@ static int probe_scache(void)
 	return 1;
 }
 
-static void __init loongson2_sc_init(void)
+static void loongson2_sc_init(void)
 {
 	struct cpuinfo_mips *c = &current_cpu_data;
 
@@ -1788,7 +1830,11 @@ static void setup_scache(void)
 				printk("MIPS secondary cache %ldkB, %s, linesize %d bytes.\n",
 				       scache_size >> 10,
 				       way_string[c->scache.ways], c->scache.linesz);
+
+				if (current_cpu_type() == CPU_BMIPS5000)
+					c->options |= MIPS_CPU_INCLUSIVE_CACHES;
 			}
+
 #else
 			if (!(c->scache.flags & MIPS_CACHE_NOT_PRESENT))
 				panic("Dunno how to handle MIPS32 / MIPS64 second level cache");
@@ -1949,6 +1995,7 @@ void r4k_cache_init(void)
 	r4k_blast_scache_page_setup();
 	r4k_blast_scache_page_indexed_setup();
 	r4k_blast_scache_setup();
+	r4k_blast_scache_node_setup();
 #ifdef CONFIG_EVA
 	r4k_blast_dcache_user_page_setup();
 	r4k_blast_icache_user_page_setup();
@@ -2039,8 +2086,6 @@ void r4k_cache_init(void)
 		flush_icache_range = (void *)b5k_instruction_hazard;
 		local_flush_icache_range = (void *)b5k_instruction_hazard;
 
-		/* Cache aliases are handled in hardware; allow HIGHMEM */
-		current_cpu_data.dcache.flags &= ~MIPS_CACHE_ALIASES;
 
 		/* Optimization: an L2 flush implicitly flushes the L1 */
 		current_cpu_data.options |= MIPS_CPU_INCLUSIVE_CACHES;

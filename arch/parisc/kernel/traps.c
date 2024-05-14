@@ -265,7 +265,7 @@ void die_if_kernel(char *str, struct pt_regs *regs, long err)
 		panic("Fatal exception");
 
 	oops_exit();
-	do_exit(SIGSEGV);
+	make_task_dead(SIGSEGV);
 }
 
 /* gdb uses break 4,8 */
@@ -750,7 +750,7 @@ void notrace handle_interruption(int code, struct pt_regs *regs)
 	     * unless pagefault_disable() was called before.
 	     */
 
-	    if (fault_space == 0 && !faulthandler_disabled())
+	    if (faulthandler_disabled() || fault_space == 0)
 	    {
 		/* Clean up and return if in exception table. */
 		if (fixup_exception(regs))
@@ -802,7 +802,8 @@ void __init initialize_ivt(const void *iva)
 	 *    the Length/4 words starting at Address is zero.
 	 */
 
-	/* Compute Checksum for HPMC handler */
+	/* Setup IVA and compute checksum for HPMC handler */
+	ivap[6] = (u32)__pa(os_hpmc);
 	length = os_hpmc_size;
 	ivap[7] = length;
 

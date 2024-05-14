@@ -133,7 +133,6 @@ struct tmio_mmc_host {
 
 	/* Callbacks for clock / power control */
 	void (*set_pwr)(struct platform_device *host, int state);
-	void (*set_clk_div)(struct platform_device *host, int state);
 
 	/* pio related stuff */
 	struct scatterlist      *sg_ptr;
@@ -170,10 +169,9 @@ struct tmio_mmc_host {
 
 	/* Mandatory callback */
 	int (*clk_enable)(struct tmio_mmc_host *host);
+	void (*set_clock)(struct tmio_mmc_host *host, unsigned int clock);
 
 	/* Optional callbacks */
-	unsigned int (*clk_update)(struct tmio_mmc_host *host,
-				   unsigned int new_clock);
 	void (*clk_disable)(struct tmio_mmc_host *host);
 	int (*multi_io_quirk)(struct mmc_card *card,
 			      unsigned int direction, int blk_size);
@@ -277,6 +275,11 @@ static inline void sd_ctrl_write32_as_16_and_16(struct tmio_mmc_host *host,
 {
 	iowrite16(val & 0xffff, host->ctl + (addr << host->bus_shift));
 	iowrite16(val >> 16, host->ctl + ((addr + 2) << host->bus_shift));
+}
+
+static inline void sd_ctrl_write32(struct tmio_mmc_host *host, int addr, u32 val)
+{
+	iowrite32(val, host->ctl + (addr << host->bus_shift));
 }
 
 static inline void sd_ctrl_write32_rep(struct tmio_mmc_host *host, int addr,

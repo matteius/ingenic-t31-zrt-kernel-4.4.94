@@ -45,14 +45,17 @@
 #define F81534_CONFIG1_REG		(0x09 + F81534_UART_BASE_ADDRESS)
 
 #define F81534_DEF_CONF_ADDRESS_START	0x3000
-#define F81534_DEF_CONF_SIZE		8
+#define F81534_DEF_CONF_SIZE		12
 
 #define F81534_CUSTOM_ADDRESS_START	0x2f00
 #define F81534_CUSTOM_DATA_SIZE		0x10
 #define F81534_CUSTOM_NO_CUSTOM_DATA	0xff
 #define F81534_CUSTOM_VALID_TOKEN	0xf0
 #define F81534_CONF_OFFSET		1
-#define F81534_CONF_GPIO_OFFSET		4
+#define F81534_CONF_INIT_GPIO_OFFSET	4
+#define F81534_CONF_WORK_GPIO_OFFSET	8
+#define F81534_CONF_GPIO_SHUTDOWN	7
+#define F81534_CONF_GPIO_RS232		1
 
 #define F81534_MAX_DATA_BLOCK		64
 #define F81534_MAX_BUS_RETRY		20
@@ -535,9 +538,6 @@ static int f81534_submit_writer(struct usb_serial_port *port, gfp_t mem_flags)
 
 static u32 f81534_calc_baud_divisor(u32 baudrate, u32 clockrate)
 {
-	if (!baudrate)
-		return 0;
-
 	/* Round to nearest divisor */
 	return DIV_ROUND_CLOSEST(clockrate, baudrate);
 }
@@ -567,9 +567,14 @@ static int f81534_set_port_config(struct usb_serial_port *port,
 	u32 baud_list[] = {baudrate, old_baudrate, F81534_DEFAULT_BAUD_RATE};
 
 	for (i = 0; i < ARRAY_SIZE(baud_list); ++i) {
-		idx = f81534_find_clk(baud_list[i]);
+		baudrate = baud_list[i];
+		if (baudrate == 0) {
+			tty_encode_baud_rate(tty, 0, 0);
+			return 0;
+		}
+
+		idx = f81534_find_clk(baudrate);
 		if (idx >= 0) {
-			baudrate = baud_list[i];
 			tty_encode_baud_rate(tty, baudrate, baudrate);
 			break;
 		}
@@ -1359,8 +1364,19 @@ static int f81534_set_port_output_pin(struct usb_serial_port *port)
 	serial_priv = usb_get_serial_data(serial);
 	port_priv = usb_get_serial_port_data(port);
 
-	idx = F81534_CONF_GPIO_OFFSET + port_priv->phy_num;
+	idx = F81534_CONF_INIT_GPIO_OFFSET + port_priv->phy_num;
 	value = serial_priv->conf_data[idx];
+	if (value >= F81534_CONF_GPIO_SHUTDOWN) {
+		/*
+		 * Newer IC configure will make transceiver in shutdown mode on
+		 * initial power on. We need enable it before using UARTs.
+		 */
+		idx = F81534_CONF_WORK_GPIO_OFFSET + port_priv->phy_num;
+		value = serial_priv->conf_data[idx];
+		if (value >= F81534_CONF_GPIO_SHUTDOWN)
+			value = F81534_CONF_GPIO_RS232;
+	}
+
 	pins = &f81534_port_out_pins[port_priv->phy_num];
 
 	for (i = 0; i < ARRAY_SIZE(pins->pin); ++i) {

@@ -70,7 +70,7 @@ reserved:
 
 ENTRY(handle_interrupt)
 
-	INTERRUPT_PROLOGUE  irq
+	INTERRUPT_PROLOGUE
 
 	# irq control APIs local_irq_save/restore/disable/enable fiddle with
 	# global interrupt enable bits in STATUS32 (.IE for 1 prio, .E[] for 2 prio)
@@ -209,7 +209,9 @@ restore_regs:
 ;####### Return from Intr #######
 
 debug_marker_l1:
-	bbit1.nt r0, STATUS_DE_BIT, .Lintr_ret_to_delay_slot
+	; bbit1.nt r0, STATUS_DE_BIT, .Lintr_ret_to_delay_slot
+	btst	r0, STATUS_DE_BIT		; Z flag set if bit clear
+	bnz	.Lintr_ret_to_delay_slot	; branch if STATUS_DE_BIT set
 
 .Lisr_ret_fast_path:
 	; Handle special case #1: (Entry via Exception, Return via IRQ)
@@ -224,7 +226,7 @@ debug_marker_l1:
 	bset.nz	r11, r11, AUX_IRQ_ACT_BIT_U	; NZ means U
 	sr	r11, [AUX_IRQ_ACT]
 
-	INTERRUPT_EPILOGUE  irq
+	INTERRUPT_EPILOGUE
 	rtie
 
 ;####### Return from Exception / pure kernel mode #######

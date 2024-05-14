@@ -191,20 +191,10 @@ Currently, the following pairs of encryption modes are supported:
 
 - AES-256-XTS for contents and AES-256-CTS-CBC for filenames
 - AES-128-CBC for contents and AES-128-CTS-CBC for filenames
-- Speck128/256-XTS for contents and Speck128/256-CTS-CBC for filenames
 
 It is strongly recommended to use AES-256-XTS for contents encryption.
 AES-128-CBC was added only for low-powered embedded devices with
 crypto accelerators such as CAAM or CESA that do not support XTS.
-
-Similarly, Speck128/256 support was only added for older or low-end
-CPUs which cannot do AES fast enough -- especially ARM CPUs which have
-NEON instructions but not the Cryptography Extensions -- and for which
-it would not otherwise be feasible to use encryption at all.  It is
-not recommended to use Speck on CPUs that have AES instructions.
-Speck support is only available if it has been enabled in the crypto
-API via CONFIG_CRYPTO_SPECK.  Also, on ARM platforms, to get
-acceptable performance CONFIG_CRYPTO_SPECK_NEON must be enabled.
 
 New encryption modes can be added relatively easily, without changes
 to individual filesystems.  However, authenticated encryption (AE)
@@ -436,9 +426,17 @@ astute users may notice some differences in behavior:
 - Unencrypted files, or files encrypted with a different encryption
   policy (i.e. different key, modes, or flags), cannot be renamed or
   linked into an encrypted directory; see `Encryption policy
-  enforcement`_.  Attempts to do so will fail with EPERM.  However,
+  enforcement`_.  Attempts to do so will fail with EXDEV.  However,
   encrypted files can be renamed within an encrypted directory, or
   into an unencrypted directory.
+
+  Note: "moving" an unencrypted file into an encrypted directory, e.g.
+  with the `mv` program, is implemented in userspace by a copy
+  followed by a delete.  Be aware that the original unencrypted data
+  may remain recoverable from free space on the disk; prefer to keep
+  all files encrypted from the very beginning.  The `shred` program
+  may be used to overwrite the source files but isn't guaranteed to be
+  effective on all filesystems and storage devices.
 
 - Direct I/O is not supported on encrypted files.  Attempts to use
   direct I/O on such files will fall back to buffered I/O.
@@ -526,7 +524,7 @@ not be encrypted.
 Except for those special files, it is forbidden to have unencrypted
 files, or files encrypted with a different encryption policy, in an
 encrypted directory tree.  Attempts to link or rename such a file into
-an encrypted directory will fail with EPERM.  This is also enforced
+an encrypted directory will fail with EXDEV.  This is also enforced
 during ->lookup() to provide limited protection against offline
 attacks that try to disable or downgrade encryption in known locations
 where applications may later write sensitive data.  It is recommended

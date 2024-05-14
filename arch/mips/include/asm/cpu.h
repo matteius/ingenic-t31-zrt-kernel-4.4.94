@@ -207,7 +207,7 @@
 #define PRID_IMP_XBURST2_REV2	0x2100  /* XBurst®2 on T41 */
 #define PRID_CPU_ISA_MASK           0x00000FFF
 
-#define PRID_IMP_JZRISC             0x00010000
+#define PRID_IMP_JZRISC	       0x0200
 #define PRID_CPU_JZ4775S            0x2ed00000
 #define PRID_CPU_JZ4780             0x3ee00000
 #define PRID_CPU_M200               0x7ae00000
@@ -471,5 +471,9 @@ enum cpu_type_enum {
 #define MIPS_ASE_XBURSTMXU  0x80000000 /* CPU supports XBURST MXU */
 #define MIPS_ASE_XBURSTMXUV2    0x40000000 /* CPU supports XBURST MXUV2 */
 #define MIPS_ASE_MIPS16E2	0x00000400 /* MIPS16e2 */
+#define MIPS_ASE_LOONGSON_MMI	0x00000800 /* Loongson MultiMedia extensions Instructions */
+#define MIPS_ASE_LOONGSON_CAM	0x00001000 /* Loongson CAM */
+#define MIPS_ASE_LOONGSON_EXT	0x00002000 /* Loongson EXTensions */
+#define MIPS_ASE_LOONGSON_EXT2	0x00004000 /* Loongson EXTensions R2 */
 
 #endif /* _ASM_CPU_H */

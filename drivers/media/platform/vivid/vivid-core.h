@@ -111,7 +111,7 @@ enum vivid_colorspace {
 	VIVID_CS_170M,
 	VIVID_CS_709,
 	VIVID_CS_SRGB,
-	VIVID_CS_ADOBERGB,
+	VIVID_CS_OPRGB,
 	VIVID_CS_2020,
 	VIVID_CS_DCI_P3,
 	VIVID_CS_240M,
@@ -550,5 +550,7 @@ static inline bool vivid_is_hdmi_out(const struct vivid_dev *dev)
 {
 	return dev->output_type[dev->output] == HDMI;
 }
+
+bool vivid_validate_fb(const struct v4l2_framebuffer *a);
 
 #endif

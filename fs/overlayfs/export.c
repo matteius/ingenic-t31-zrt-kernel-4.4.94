@@ -230,9 +230,8 @@ static int ovl_d_to_fh(struct dentry *dentry, char *buf, int buflen)
 	/* Encode an upper or lower file handle */
 	fh = ovl_encode_real_fh(enc_lower ? ovl_dentry_lower(dentry) :
 				ovl_dentry_upper(dentry), !enc_lower);
-	err = PTR_ERR(fh);
 	if (IS_ERR(fh))
-		goto fail;
+		return PTR_ERR(fh);
 
 	err = -EOVERFLOW;
 	if (fh->len > buflen)
@@ -278,7 +277,7 @@ static int ovl_encode_fh(struct inode *inode, u32 *fid, int *max_len,
 		return FILEID_INVALID;
 
 	dentry = d_find_any_alias(inode);
-	if (WARN_ON(!dentry))
+	if (!dentry)
 		return FILEID_INVALID;
 
 	type = ovl_dentry_to_fh(dentry, fid, max_len);
@@ -486,7 +485,7 @@ static struct dentry *ovl_lookup_real_inode(struct super_block *sb,
 	if (IS_ERR_OR_NULL(this))
 		return this;
 
-	if (WARN_ON(ovl_dentry_real_at(this, layer->idx) != real)) {
+	if (ovl_dentry_real_at(this, layer->idx) != real) {
 		dput(this);
 		this = ERR_PTR(-EIO);
 	}
@@ -754,9 +753,8 @@ static struct dentry *ovl_lower_fh_to_d(struct super_block *sb,
 		goto out;
 	}
 
-	/* Otherwise, get a connected non-upper dir or disconnected non-dir */
-	if (d_is_dir(origin.dentry) &&
-	    (origin.dentry->d_flags & DCACHE_DISCONNECTED)) {
+	/* Find origin.dentry again with ovl_acceptable() layer check */
+	if (d_is_dir(origin.dentry)) {
 		dput(origin.dentry);
 		origin.dentry = NULL;
 		err = ovl_check_origin_fh(ofs, fh, true, NULL, &stack);
@@ -769,6 +767,7 @@ static struct dentry *ovl_lower_fh_to_d(struct super_block *sb,
 			goto out_err;
 	}
 
+	/* Get a connected non-upper dir or disconnected non-dir */
 	dentry = ovl_get_dentry(sb, NULL, &origin, index);
 
 out:

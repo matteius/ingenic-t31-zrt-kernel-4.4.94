@@ -122,22 +122,19 @@ static void __smc_lgr_unregister_conn(struct smc_connection *conn)
 	sock_put(&smc->sk); /* sock_hold in smc_lgr_register_conn() */
 }
 
-/* Unregister connection and trigger lgr freeing if applicable
+/* Unregister connection from lgr
  */
 static void smc_lgr_unregister_conn(struct smc_connection *conn)
 {
 	struct smc_link_group *lgr = conn->lgr;
-	int reduced = 0;
 
+	if (!lgr)
+		return;
 	write_lock_bh(&lgr->conns_lock);
 	if (conn->alert_token_local) {
-		reduced = 1;
 		__smc_lgr_unregister_conn(conn);
 	}
 	write_unlock_bh(&lgr->conns_lock);
-	if (!reduced || lgr->conns_num)
-		return;
-	smc_lgr_schedule_free_work(lgr);
 }
 
 /* Send delete link, either as client to request the initiation
@@ -291,7 +288,8 @@ out:
 	return rc;
 }
 
-static void smc_buf_unuse(struct smc_connection *conn)
+static void smc_buf_unuse(struct smc_connection *conn,
+			  struct smc_link_group *lgr)
 {
 	if (conn->sndbuf_desc)
 		conn->sndbuf_desc->used = 0;
@@ -301,8 +299,6 @@ static void smc_buf_unuse(struct smc_connection *conn)
 			conn->rmb_desc->used = 0;
 		} else {
 			/* buf registration failed, reuse not possible */
-			struct smc_link_group *lgr = conn->lgr;
-
 			write_lock_bh(&lgr->rmbs_lock);
 			list_del(&conn->rmb_desc->list);
 			write_unlock_bh(&lgr->rmbs_lock);
@@ -315,16 +311,21 @@ static void smc_buf_unuse(struct smc_connection *conn)
 /* remove a finished connection from its link group */
 void smc_conn_free(struct smc_connection *conn)
 {
-	if (!conn->lgr)
+	struct smc_link_group *lgr = conn->lgr;
+
+	if (!lgr)
 		return;
-	if (conn->lgr->is_smcd) {
+	if (lgr->is_smcd) {
 		smc_ism_unset_conn(conn);
 		tasklet_kill(&conn->rx_tsklet);
 	} else {
 		smc_cdc_tx_dismiss_slots(conn);
 	}
-	smc_lgr_unregister_conn(conn);
-	smc_buf_unuse(conn);
+	smc_buf_unuse(conn, lgr);		/* allow buffer reuse */
+	smc_lgr_unregister_conn(conn);		/* unsets conn->lgr */
+
+	if (!lgr->conns_num)
+		smc_lgr_schedule_free_work(lgr);
 }
 
 static void smc_link_clear(struct smc_link *lnk)
@@ -608,11 +609,14 @@ int smc_conn_create(struct smc_sock *smc, bool is_smcd, int srv_first_contact,
 		    !lgr->sync_err &&
 		    lgr->vlan_id == vlan_id &&
 		    (role == SMC_CLNT ||
-		     lgr->conns_num < SMC_RMBS_PER_LGR_MAX)) {
+		    (lgr->conns_num < SMC_RMBS_PER_LGR_MAX &&
+		      !bitmap_full(lgr->rtokens_used_mask, SMC_RMBS_PER_LGR_MAX)))) {
 			/* link group found */
 			local_contact = SMC_REUSE_CONTACT;
 			conn->lgr = lgr;
 			smc_lgr_register_conn(conn); /* add smc conn to lgr */
+			if (delayed_work_pending(&lgr->free_work))
+				cancel_delayed_work(&lgr->free_work);
 			write_unlock_bh(&lgr->conns_lock);
 			break;
 		}
@@ -705,7 +709,7 @@ static struct smc_buf_desc *smc_buf_get_slot(int compressed_bufsize,
  */
 static inline int smc_rmb_wnd_update_limit(int rmbe_size)
 {
-	return min_t(int, rmbe_size / 10, SOCK_MIN_SNDBUF / 2);
+	return max_t(int, rmbe_size / 10, SOCK_MIN_SNDBUF / 2);
 }
 
 static struct smc_buf_desc *smcr_new_buf_create(struct smc_link_group *lgr,
@@ -767,7 +771,7 @@ static struct smc_buf_desc *smcr_new_buf_create(struct smc_link_group *lgr,
 	return buf_desc;
 }
 
-#define SMCD_DMBE_SIZES		7 /* 0 -> 16KB, 1 -> 32KB, .. 6 -> 1MB */
+#define SMCD_DMBE_SIZES		6 /* 0 -> 16KB, 1 -> 32KB, .. 6 -> 1MB */
 
 static struct smc_buf_desc *smcd_new_buf_create(struct smc_link_group *lgr,
 						bool is_dmb, int bufsize)

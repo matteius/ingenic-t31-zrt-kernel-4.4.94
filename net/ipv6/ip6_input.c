@@ -47,18 +47,25 @@
 #include <net/inet_ecn.h>
 #include <net/dst_metadata.h>
 
+void udp_v6_early_demux(struct sk_buff *);
+void tcp_v6_early_demux(struct sk_buff *);
 static void ip6_rcv_finish_core(struct net *net, struct sock *sk,
 				struct sk_buff *skb)
 {
-	void (*edemux)(struct sk_buff *skb);
-
-	if (net->ipv4.sysctl_ip_early_demux && !skb_dst(skb) && skb->sk == NULL) {
-		const struct inet6_protocol *ipprot;
-
-		ipprot = rcu_dereference(inet6_protos[ipv6_hdr(skb)->nexthdr]);
-		if (ipprot && (edemux = READ_ONCE(ipprot->early_demux)))
-			edemux(skb);
+	if (READ_ONCE(net->ipv4.sysctl_ip_early_demux) &&
+	    !skb_dst(skb) && !skb->sk) {
+		switch (ipv6_hdr(skb)->nexthdr) {
+		case IPPROTO_TCP:
+			if (READ_ONCE(net->ipv4.sysctl_tcp_early_demux))
+				tcp_v6_early_demux(skb);
+			break;
+		case IPPROTO_UDP:
+			if (READ_ONCE(net->ipv4.sysctl_udp_early_demux))
+				udp_v6_early_demux(skb);
+			break;
+		}
 	}
+
 	if (!skb_valid_dst(skb))
 		ip6_route_input(skb);
 }
@@ -80,8 +87,10 @@ static void ip6_sublist_rcv_finish(struct list_head *head)
 {
 	struct sk_buff *skb, *next;
 
-	list_for_each_entry_safe(skb, next, head, list)
+	list_for_each_entry_safe(skb, next, head, list) {
+		skb_list_del_init(skb);
 		dst_input(skb);
+	}
 }
 
 static void ip6_list_rcv_finish(struct net *net, struct sock *sk,
@@ -95,7 +104,7 @@ static void ip6_list_rcv_finish(struct net *net, struct sock *sk,
 	list_for_each_entry_safe(skb, next, head, list) {
 		struct dst_entry *dst;
 
-		list_del(&skb->list);
+		skb_list_del_init(skb);
 		/* if ingress device is enslaved to an L3 master device pass the
 		 * skb to its handler for processing
 		 */
@@ -295,7 +304,7 @@ void ipv6_list_rcv(struct list_head *head, struct packet_type *pt,
 		struct net_device *dev = skb->dev;
 		struct net *net = dev_net(dev);
 
-		list_del(&skb->list);
+		skb_list_del_init(skb);
 		skb = ip6_rcv_core(skb, dev, net);
 		if (skb == NULL)
 			continue;

@@ -164,19 +164,14 @@ ctnl_timeout_fill_info(struct sk_buff *skb, u32 portid, u32 seq, u32 type,
 		       int event, struct ctnl_timeout *timeout)
 {
 	struct nlmsghdr *nlh;
-	struct nfgenmsg *nfmsg;
 	unsigned int flags = portid ? NLM_F_MULTI : 0;
 	const struct nf_conntrack_l4proto *l4proto = timeout->timeout.l4proto;
 
 	event = nfnl_msg_type(NFNL_SUBSYS_CTNETLINK_TIMEOUT, event);
-	nlh = nlmsg_put(skb, portid, seq, event, sizeof(*nfmsg), flags);
-	if (nlh == NULL)
+	nlh = nfnl_msg_put(skb, portid, seq, event, flags, AF_UNSPEC,
+			   NFNETLINK_V0, 0);
+	if (!nlh)
 		goto nlmsg_failure;
-
-	nfmsg = nlmsg_data(nlh);
-	nfmsg->nfgen_family = AF_UNSPEC;
-	nfmsg->version = NFNETLINK_V0;
-	nfmsg->res_id = 0;
 
 	if (nla_put_string(skb, CTA_TIMEOUT_NAME, timeout->name) ||
 	    nla_put_be16(skb, CTA_TIMEOUT_L3PROTO,
@@ -392,21 +387,17 @@ err:
 static int
 cttimeout_default_fill_info(struct net *net, struct sk_buff *skb, u32 portid,
 			    u32 seq, u32 type, int event,
-			    const struct nf_conntrack_l4proto *l4proto)
+			    const struct nf_conntrack_l4proto *l4proto,
+			    const unsigned int *timeouts)
 {
 	struct nlmsghdr *nlh;
-	struct nfgenmsg *nfmsg;
 	unsigned int flags = portid ? NLM_F_MULTI : 0;
 
 	event = nfnl_msg_type(NFNL_SUBSYS_CTNETLINK_TIMEOUT, event);
-	nlh = nlmsg_put(skb, portid, seq, event, sizeof(*nfmsg), flags);
-	if (nlh == NULL)
+	nlh = nfnl_msg_put(skb, portid, seq, event, flags, AF_UNSPEC,
+			   NFNETLINK_V0, 0);
+	if (!nlh)
 		goto nlmsg_failure;
-
-	nfmsg = nlmsg_data(nlh);
-	nfmsg->nfgen_family = AF_UNSPEC;
-	nfmsg->version = NFNETLINK_V0;
-	nfmsg->res_id = 0;
 
 	if (nla_put_be16(skb, CTA_TIMEOUT_L3PROTO, htons(l4proto->l3proto)) ||
 	    nla_put_u8(skb, CTA_TIMEOUT_L4PROTO, l4proto->l4proto))
@@ -421,7 +412,7 @@ cttimeout_default_fill_info(struct net *net, struct sk_buff *skb, u32 portid,
 		if (!nest_parms)
 			goto nla_put_failure;
 
-		ret = l4proto->ctnl_timeout.obj_to_nlattr(skb, NULL);
+		ret = l4proto->ctnl_timeout.obj_to_nlattr(skb, timeouts);
 		if (ret < 0)
 			goto nla_put_failure;
 
@@ -444,6 +435,7 @@ static int cttimeout_default_get(struct net *net, struct sock *ctnl,
 				 struct netlink_ext_ack *extack)
 {
 	const struct nf_conntrack_l4proto *l4proto;
+	unsigned int *timeouts = NULL;
 	struct sk_buff *skb2;
 	int ret, err;
 	__u16 l3num;
@@ -456,11 +448,54 @@ static int cttimeout_default_get(struct net *net, struct sock *ctnl,
 	l4num = nla_get_u8(cda[CTA_TIMEOUT_L4PROTO]);
 	l4proto = nf_ct_l4proto_find_get(l3num, l4num);
 
-	/* This protocol is not supported, skip. */
-	if (l4proto->l4proto != l4num) {
-		err = -EOPNOTSUPP;
+	err = -EOPNOTSUPP;
+	if (l4proto->l4proto != l4num)
 		goto err;
+
+	switch (l4proto->l4proto) {
+	case IPPROTO_ICMP:
+		timeouts = &net->ct.nf_ct_proto.icmp.timeout;
+		break;
+	case IPPROTO_TCP:
+		timeouts = net->ct.nf_ct_proto.tcp.timeouts;
+		break;
+	case IPPROTO_UDP: /* fallthrough */
+	case IPPROTO_UDPLITE:
+		timeouts = net->ct.nf_ct_proto.udp.timeouts;
+		break;
+	case IPPROTO_DCCP:
+#ifdef CONFIG_NF_CT_PROTO_DCCP
+		timeouts = net->ct.nf_ct_proto.dccp.dccp_timeout;
+#endif
+		break;
+	case IPPROTO_ICMPV6:
+		timeouts = &net->ct.nf_ct_proto.icmpv6.timeout;
+		break;
+	case IPPROTO_SCTP:
+#ifdef CONFIG_NF_CT_PROTO_SCTP
+		timeouts = net->ct.nf_ct_proto.sctp.timeouts;
+#endif
+		break;
+	case IPPROTO_GRE:
+#ifdef CONFIG_NF_CT_PROTO_GRE
+		if (l4proto->net_id) {
+			struct netns_proto_gre *net_gre;
+
+			net_gre = net_generic(net, *l4proto->net_id);
+			timeouts = net_gre->gre_timeouts;
+		}
+#endif
+		break;
+	case 255:
+		timeouts = &net->ct.nf_ct_proto.generic.timeout;
+		break;
+	default:
+		WARN_ONCE(1, "Missing timeouts for proto %d", l4proto->l4proto);
+		break;
 	}
+
+	if (!timeouts)
+		goto err;
 
 	skb2 = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (skb2 == NULL) {
@@ -472,7 +507,7 @@ static int cttimeout_default_get(struct net *net, struct sock *ctnl,
 					  nlh->nlmsg_seq,
 					  NFNL_MSG_TYPE(nlh->nlmsg_type),
 					  IPCTNL_MSG_TIMEOUT_DEFAULT_SET,
-					  l4proto);
+					  l4proto, timeouts);
 	if (ret <= 0) {
 		kfree_skb(skb2);
 		err = -ENOMEM;

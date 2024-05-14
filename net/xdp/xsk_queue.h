@@ -239,18 +239,21 @@ static inline void xskq_produce_flush_desc(struct xsk_queue *q)
 	/* Order producer and data */
 	smp_wmb();
 
-	q->prod_tail = q->prod_head,
+	q->prod_tail = q->prod_head;
 	WRITE_ONCE(q->ring->producer, q->prod_tail);
 }
 
 static inline bool xskq_full_desc(struct xsk_queue *q)
 {
-	return xskq_nb_avail(q, q->nentries) == q->nentries;
+	/* No barriers needed since data is not accessed */
+	return READ_ONCE(q->ring->producer) - READ_ONCE(q->ring->consumer) ==
+		q->nentries;
 }
 
 static inline bool xskq_empty_desc(struct xsk_queue *q)
 {
-	return xskq_nb_free(q, q->prod_tail, q->nentries) == q->nentries;
+	/* No barriers needed since data is not accessed */
+	return READ_ONCE(q->ring->consumer) == READ_ONCE(q->ring->producer);
 }
 
 void xskq_set_umem(struct xsk_queue *q, struct xdp_umem_props *umem_props);
