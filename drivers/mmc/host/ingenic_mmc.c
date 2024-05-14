@@ -875,9 +875,9 @@ static void ingenic_mmc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		host->cmdat_def &= ~CMDAT_INIT;
 }
 
-static void ingenic_mmc_request_timeout(unsigned long data)
+static void ingenic_mmc_request_timeout(struct timer_list *t)
 {
-	struct ingenic_mmc_host *host = (struct ingenic_mmc_host *)data;
+	struct ingenic_mmc_host *host = from_timer(host, t, request_timer);
 	unsigned int status = msc_readl(host, STAT);
 	if (host->timeout_cnt++ < (3000 / TIMEOUT_PERIOD)) {
 		dev_warn(host->dev, "timeout %dms op:%d %s sz:%d state:%d "
@@ -973,9 +973,9 @@ static void set_pin_status(struct ingenic_mmc_pin *pin, int enable)
 	gpio_set_value(pin->num, enable);
 }
 
-static void ingenic_mmc_detect(unsigned long data)
+static void ingenic_mmc_detect(struct timer_list *t)
 {
-	struct ingenic_mmc_host *host = (struct ingenic_mmc_host *)data;
+	struct ingenic_mmc_host *host = from_timer(host, t, detect_timer);
 	bool present;
 	bool present_old;
 	static int irq_disable_count;
@@ -1365,7 +1365,7 @@ static void __init ingenic_mmc_host_init(struct ingenic_mmc_host *host, struct m
 	mmc->max_seg_size = mmc->max_req_size;
 
 	host->mmc = mmc;
-	setup_timer(&host->request_timer, ingenic_mmc_request_timeout,
+	timer_setup(&host->request_timer, ingenic_mmc_request_timeout,
 				(unsigned long)host);
 
 	mmc_of_parse(mmc);
@@ -1485,7 +1485,7 @@ static int __init ingenic_mmc_gpio_init(struct ingenic_mmc_host *host)
 			/* msc cd not pull up/down */
 			jzgpio_set_func(GPIO_PORT_B, GPIO_PULL_HIZ, 1 << (card_gpio->cd.num - GPIO_PORT_B * 32));
 
-			setup_timer(&host->detect_timer, ingenic_mmc_detect,
+			timer_setup(&host->detect_timer, ingenic_mmc_detect,
 						(unsigned long)host);
 
 			ret = devm_request_irq(host->dev, gpio_to_irq(card_gpio->cd.num),

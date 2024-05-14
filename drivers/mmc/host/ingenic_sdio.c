@@ -17,6 +17,7 @@
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
+#include <linux/interrupt.h>
 
 #include <linux/of.h>
 #include <linux/of_irq.h>
