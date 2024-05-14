@@ -535,27 +535,18 @@ static int ingenic_gpio_request(struct gpio_chip *chip, unsigned offset)
 		printk("current gpio request pin: chip->name %s, gpio: 0X%08X\n", chip->of_node->name, 1 << offset);
 		dump_stack();
 		printk("%s:gpio functions has redefinition\n", __FILE__);
-		return -EBUSY;
 	}
 
 	jzgc->used_pins_bitmap |= 1 << offset;
 
-	// Request the GPIO pin
-	if (!gpio_is_valid(gpio)) {
-		printk("%s: invalid gpio %u\n", __func__, gpio);
-		return -EINVAL;
-	}
-
-	return gpio_request(gpio, "ingenic-gpio");
+	return pinctrl_gpio_request(gpio);
 }
 
 static void ingenic_gpio_free(struct gpio_chip *chip, unsigned offset)
 {
 	struct ingenic_gpio_chip *jzgc = gc_to_ingenic_gc(chip);
 	unsigned gpio = chip->base + offset;
-
-	// Free the GPIO pin
-	gpio_free(gpio);
+	pinctrl_gpio_free(gpio);
 	jzgc->used_pins_bitmap &= ~(1 << offset);
 }
 
