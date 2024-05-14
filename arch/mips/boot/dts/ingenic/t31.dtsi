@@ -193,7 +193,7 @@
 
 		pinctrl: pinctrl@0x10010000 {
 			status = "okay";
-			compatible = "ingenic,jz4740-pinctrl";
+			compatible = "ingenic,t31-pinctrl";
 			reg = <0x10010000 0x1000>;
 			ingenic,num-chips = <6>;
 			ingenic,regs-offset = <0x100>;
