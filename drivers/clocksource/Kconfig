@@ -635,11 +635,13 @@ config RISCV_TIMER
 
 config CLKSRC_INGENIC_SYS_OST
 	bool
-	select CLKSRC_OF
+	select TIMER_PROBE
+	select TIMER_OF
 
 config CLKSRC_INGENIC_CORE_OST
 	bool
-	select CLKSRC_OF
+	select TIMER_PROBE
+	select TIMER_OF
 	help
 	  core sys ost for ingenic xburst2 based SOCs. each cpu has
 	  an ost and all cpu shares a global clocksource.

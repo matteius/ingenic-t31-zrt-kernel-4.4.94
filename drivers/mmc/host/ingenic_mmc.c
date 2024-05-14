@@ -33,6 +33,8 @@
 #include <linux/of_device.h>
 #include <linux/clk-provider.h>
 #include <linux/delay.h>
+#include <linux/interrupt.h>
+#include <linux/timer.h>
 #include "ingenic_mmc.h"
 
 /**
