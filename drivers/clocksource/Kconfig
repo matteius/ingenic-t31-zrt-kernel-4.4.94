@@ -633,4 +633,15 @@ config RISCV_TIMER
 	  is accessed via both the SBI and the rdcycle instruction.  This is
 	  required for all RISC-V systems.
 
+config CLKSRC_INGENIC_SYS_OST
+	bool
+	select CLKSRC_OF
+
+config CLKSRC_INGENIC_CORE_OST
+	bool
+	select CLKSRC_OF
+	help
+	  core sys ost for ingenic xburst2 based SOCs. each cpu has
+	  an ost and all cpu shares a global clocksource.
+
 endmenu
