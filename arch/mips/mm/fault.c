@@ -21,6 +21,7 @@
 #include <linux/kprobes.h>
 #include <linux/perf_event.h>
 #include <linux/uaccess.h>
+#include <linux/stacktrace.h>
 
 #include <asm/branch.h>
 #include <asm/mmu_context.h>
@@ -209,6 +210,8 @@ bad_area_nosemaphore:
 		if (show_unhandled_signals &&
 		    unhandled_signal(tsk, SIGSEGV) &&
 		    __ratelimit(&ratelimit_state)) {
+			printk(KERN_INFO "Dumping stack trace:\n");
+    			dump_stack();
 			pr_info("do_page_fault(): sending SIGSEGV to %s for invalid %s %0*lx\n",
 				tsk->comm,
 				write ? "write access to" : "read access from",

@@ -184,7 +184,7 @@ static struct ingenic_gate_clock t31_gate_clks[] __initdata = {
 	GATE(CLK_GATE_APB0,	    "apb0",		"div_ahb0",	    CPM_CLKGR1, 14, CLK_IGNORE_UNUSED,	CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_OST,	    "gate_ost",		    "ext",		    CPM_CLKGR1, 11, CLK_IGNORE_UNUSED, 	CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_AHB0,	    "ahb0",		"div_ahb0",	    CPM_CLKGR1, 10, CLK_IGNORE_UNUSED,	CLK_GATE_SET_TO_DISABLE),
-	GATE(CLK_GATE_AHB1,	    "gate_ahb1",		"div_ahb2",	    CPM_CLKGR1, 6,  0, 			CLK_GATE_SET_TO_DISABLE),
+	GATE(CLK_GATE_AHB1,	    "ahb1",		"div_ahb2",	    CPM_CLKGR1, 6,  0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_AES,	    "gate_aes",		    "div_ahb2",	    CPM_CLKGR1, 5,  0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_GMAC,	    "gate_gmac",		"div_macphy",	CPM_CLKGR1, 4,  0, 			CLK_GATE_SET_TO_DISABLE),
 	GATE(CLK_GATE_IPU,      "gate_ipu",         "div_ahb0",     CPM_CLKGR1, 2,  0,          CLK_GATE_SET_TO_DISABLE),

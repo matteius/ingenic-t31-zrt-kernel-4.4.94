@@ -3,7 +3,7 @@
 &pinctrl {
 	uart0_pin: uart0-pin {
 		uart0_pb: uart0-pb {
-			ingenic,pinmux = <&gpb 19 22>;
+			ingenic,pinmux = <&gpb 19 20>;
 			ingenic,pinmux-funcsel = <PINCTL_FUNCTION0>;
 		};
 		uart0_pc: uart0-pc {
@@ -184,10 +184,10 @@
 			ingenic,pinmux = <&gpc 19 19>;
 			ingenic,pinmux-funcsel = <PINCTL_FUNCTION0>;
 		};
-		pwm3_pc: pwm3_pc {
-			ingenic,pinmux = <&gpc 20 20>;
-			ingenic,pinmux-funcsel = <PINCTL_FUNCTION0>;
-		};
+//		pwm3_pc: pwm3_pc {
+//			ingenic,pinmux = <&gpc 20 20>;
+//			ingenic,pinmux-funcsel = <PINCTL_FUNCTION0>;
+//		};
 	};
 };
 
