@@ -267,7 +267,7 @@
 		};
 
 		uart0: serial@0x10030000 {
-			compatible = "ingenic,8250-uart";
+			compatible = "ingenic,x1000-uart";
 			reg = <0x10030000 0x1000>;
 			reg-shift = <2>;
 			interrupt-parent = <&core_intc>;
@@ -277,7 +277,7 @@
 			status = "disabled";
 		};
 		uart1: serial@0x10031000 {
-			compatible = "ingenic,8250-uart";
+			compatible = "ingenic,x1000-uart";
 			reg = <0x10031000 0x1000>;
 			reg-shift = <2>;
 			interrupt-parent = <&core_intc>;
@@ -287,7 +287,7 @@
 			status = "disabled";
 		};
 		uart2: serial@0x10032000 {
-			compatible = "ingenic,8250-uart";
+			compatible = "ingenic,x1000-uart";
 			reg = <0x10032000 0x1000>;
 			reg-shift = <2>;
 			interrupt-parent = <&core_intc>;
@@ -499,12 +499,35 @@
 			status = "okay";
 		};
 
-		isp: isp@0x13300000 {
+		isp_device: isp-device@10023000 {
 			compatible = "ingenic,t31-isp";
-			reg = <0x13300000 0x100000>;
+			reg = <0x10023000 0x10000>;
+			interrupt-parent = <&core_intc>;
+			status = "okay";
+		};
+
+		isp_m0: isp-m0@13300000 {
+			compatible = "ingenic,t31-isp";
+			reg = <0x13300000 0x10000>;
+			status = "okay";
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_ISP>;
-			status = "disabled";
+		};
+
+
+		isp_w02: isp-w02@133e0000 {
+			compatible = "ingenic,t31-isp";
+			reg = <0x133e0000 0x10000>;
+			interrupt-parent = <&core_intc>;
+			status = "okay";
+			interrupts = <IRQ_VIC>;
+		};
+
+		isp_w01: isp-w01@133e0000 {
+			compatible = "ingenic,t31-isp";
+			reg = <0x133e0000 0x10000>;
+			interrupt-parent = <&core_intc>;
+			status = "okay";
 		};
 	};
 

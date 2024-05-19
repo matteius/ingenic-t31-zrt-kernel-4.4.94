@@ -26,8 +26,11 @@
 #include <linux/serial_8250.h>
 #include <linux/serial_core.h>
 #include <linux/serial_reg.h>
+#include <linux/early_printk.h>
 
 #include "8250.h"
+
+
 
 /** ingenic_uart_config: SOC specific config data. */
 struct ingenic_uart_config {
@@ -72,10 +75,10 @@ static void __init ingenic_early_console_putc(struct uart_port *port, int c)
 }
 
 static void __init ingenic_early_console_write(struct console *console,
-					      const char *s, unsigned int count)
+											   const char *s, unsigned int count)
 {
 	uart_console_write(&early_device->port, s, count,
-			   ingenic_early_console_putc);
+					   ingenic_early_console_putc);
 }
 
 static void __init ingenic_early_console_setup_clock(struct earlycon_device *dev)
@@ -96,7 +99,7 @@ static void __init ingenic_early_console_setup_clock(struct earlycon_device *dev
 }
 
 static int __init ingenic_early_console_setup(struct earlycon_device *dev,
-					      const char *opt)
+											  const char *opt)
 {
 	struct uart_port *port = &dev->port;
 	unsigned int baud, divisor;
@@ -106,7 +109,7 @@ static int __init ingenic_early_console_setup(struct earlycon_device *dev,
 
 	ingenic_early_console_setup_clock(dev);
 
-	baud = dev->baud ?: 115200;
+	baud = 115200;
 	divisor = DIV_ROUND_CLOSEST(port->uartclk, 16 * baud);
 
 	early_out(port, UART_IER, 0);
@@ -115,7 +118,7 @@ static int __init ingenic_early_console_setup(struct earlycon_device *dev,
 	early_out(port, UART_DLM, 0);
 	early_out(port, UART_LCR, UART_LCR_WLEN8);
 	early_out(port, UART_FCR, UART_FCR_UME | UART_FCR_CLEAR_XMIT |
-			UART_FCR_CLEAR_RCVR | UART_FCR_ENABLE_FIFO);
+							  UART_FCR_CLEAR_RCVR | UART_FCR_ENABLE_FIFO);
 	early_out(port, UART_MCR, UART_MCR_RTS | UART_MCR_DTR);
 
 	early_out(port, UART_LCR, UART_LCR_DLAB | UART_LCR_WLEN8);
@@ -129,47 +132,77 @@ static int __init ingenic_early_console_setup(struct earlycon_device *dev,
 	return 0;
 }
 
+void print_available_clocks(struct device_node *np)
+{
+	struct device_node *clk_np;
+	int index = 0;
+
+	pr_info("Available clocks for %s:\n", np->full_name);
+
+	while (true) {
+		clk_np = of_parse_phandle(np, "clocks", index);
+		if (!clk_np)
+			break;
+
+		const char *clk_name = of_get_property(clk_np, "clock-output-names", NULL);
+		if (!clk_name)
+			clk_name = "(unknown)";
+
+		pr_info("  Clock index %d: %s\n", index, clk_name);
+
+		of_node_put(clk_np);
+		index++;
+	}
+}
+
+
+
+
 EARLYCON_DECLARE(jz4740_uart, ingenic_early_console_setup);
 OF_EARLYCON_DECLARE(jz4740_uart, "ingenic,jz4740-uart",
-		    ingenic_early_console_setup);
+ingenic_early_console_setup);
 
 EARLYCON_DECLARE(jz4775_uart, ingenic_early_console_setup);
 OF_EARLYCON_DECLARE(jz4775_uart, "ingenic,jz4775-uart",
-		    ingenic_early_console_setup);
+ingenic_early_console_setup);
 
 EARLYCON_DECLARE(jz4780_uart, ingenic_early_console_setup);
 OF_EARLYCON_DECLARE(jz4780_uart, "ingenic,jz4780-uart",
-		    ingenic_early_console_setup);
+ingenic_early_console_setup);
+
+EARLYCON_DECLARE(x1000_uart, ingenic_early_console_setup);
+OF_EARLYCON_DECLARE(x1000_uart, "ingenic,x1000-uart\"",
+ingenic_early_console_setup);
 
 static void ingenic_uart_serial_out(struct uart_port *p, int offset, int value)
 {
 	int ier;
 
 	switch (offset) {
-	case UART_FCR:
-		/* UART module enable */
-		value |= UART_FCR_UME;
-		break;
+		case UART_FCR:
+			/* UART module enable */
+			value |= UART_FCR_UME;
+			break;
 
-	case UART_IER:
-		/* Enable receive timeout interrupt with the
-		 * receive line status interrupt */
-		value |= (value & 0x4) << 2;
-		break;
+		case UART_IER:
+			/* Enable receive timeout interrupt with the
+			 * receive line status interrupt */
+			value |= (value & 0x4) << 2;
+			break;
 
-	case UART_MCR:
-		/* If we have enabled modem status IRQs we should enable modem
-		 * mode. */
-		ier = p->serial_in(p, UART_IER);
+		case UART_MCR:
+			/* If we have enabled modem status IRQs we should enable modem
+			 * mode. */
+			ier = p->serial_in(p, UART_IER);
 
-		if (ier & UART_IER_MSI)
-			value |= UART_MCR_MDCE | UART_MCR_FCM;
-		else
-			value &= ~(UART_MCR_MDCE | UART_MCR_FCM);
-		break;
+			if (ier & UART_IER_MSI)
+				value |= UART_MCR_MDCE | UART_MCR_FCM;
+			else
+				value &= ~(UART_MCR_MDCE | UART_MCR_FCM);
+			break;
 
-	default:
-		break;
+		default:
+			break;
 	}
 
 	writeb(value, p->membase + (offset << p->regshift));
@@ -183,16 +216,16 @@ static unsigned int ingenic_uart_serial_in(struct uart_port *p, int offset)
 
 	/* Hide non-16550 compliant bits from higher levels */
 	switch (offset) {
-	case UART_FCR:
-		value &= ~UART_FCR_UME;
-		break;
+		case UART_FCR:
+			value &= ~UART_FCR_UME;
+			break;
 
-	case UART_MCR:
-		value &= ~(UART_MCR_MDCE | UART_MCR_FCM);
-		break;
+		case UART_MCR:
+			value &= ~(UART_MCR_MDCE | UART_MCR_FCM);
+			break;
 
-	default:
-		break;
+		default:
+			break;
 	}
 	return value;
 }
@@ -206,6 +239,8 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 	const struct ingenic_uart_config *cdata;
 	const struct of_device_id *match;
 	int err, line;
+	char clk_name[20];
+	unsigned long uartclk;
 
 	match = of_match_device(of_match, &pdev->dev);
 	if (!match) {
@@ -223,6 +258,18 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 	if (!data)
 		return -ENOMEM;
 
+	pdev->id = of_alias_get_id(pdev->dev.of_node, "uart");
+
+	sprintf(clk_name, "gate_uart%d", pdev->id);
+	data->clk_module = devm_clk_get(&pdev->dev, clk_name);
+	if (IS_ERR_OR_NULL(data->clk_module)) {
+		dev_warn(&pdev->dev, "Failed to get uart clk. Using default clk rate (24MHz)\n");
+		uartclk = 24000000;
+		data->clk_module = NULL;
+	} else {
+		uartclk = clk_get_rate(data->clk_module);
+	}
+
 	spin_lock_init(&uart.port.lock);
 	uart.port.type = PORT_16550A;
 	uart.port.flags = UPF_SKIP_TEST | UPF_IOREMAP | UPF_FIXED_TYPE;
@@ -236,62 +283,33 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 	uart.port.fifosize = cdata->fifosize;
 	uart.tx_loadsz = cdata->tx_loadsz;
 	uart.capabilities = UART_CAP_FIFO | UART_CAP_RTOIE;
+	uart.port.uartclk = 24000000;
 
 	/* Check for a fixed line number */
 	line = of_alias_get_id(pdev->dev.of_node, "serial");
 	if (line >= 0)
 		uart.port.line = line;
 
-	uart.port.membase = devm_ioremap(&pdev->dev, regs->start,
-					 resource_size(regs));
+	uart.port.membase = devm_ioremap(&pdev->dev, regs->start, resource_size(regs));
 	if (!uart.port.membase)
 		return -ENOMEM;
 
-	data->clk_module = devm_clk_get(&pdev->dev, "module");
-	if (IS_ERR(data->clk_module)) {
-		err = PTR_ERR(data->clk_module);
-		if (err != -EPROBE_DEFER)
-			dev_err(&pdev->dev,
-				"unable to get module clock: %d\n", err);
-		return err;
-	}
-
-	data->clk_baud = devm_clk_get(&pdev->dev, "baud");
-	if (IS_ERR(data->clk_baud)) {
-		err = PTR_ERR(data->clk_baud);
-		if (err != -EPROBE_DEFER)
-			dev_err(&pdev->dev,
-				"unable to get baud clock: %d\n", err);
-		return err;
-	}
-
-	err = clk_prepare_enable(data->clk_module);
-	if (err) {
-		dev_err(&pdev->dev, "could not enable module clock: %d\n", err);
-		goto out;
-	}
-
-	err = clk_prepare_enable(data->clk_baud);
-	if (err) {
-		dev_err(&pdev->dev, "could not enable baud clock: %d\n", err);
-		goto out_disable_moduleclk;
-	}
-	uart.port.uartclk = clk_get_rate(data->clk_baud);
+	if (data->clk_module)
+		clk_prepare_enable(data->clk_module);
 
 	data->line = serial8250_register_8250_port(&uart);
 	if (data->line < 0) {
 		err = data->line;
-		goto out_disable_baudclk;
+		goto out;
 	}
 
 	platform_set_drvdata(pdev, data);
 	return 0;
 
-out_disable_baudclk:
-	clk_disable_unprepare(data->clk_baud);
-out_disable_moduleclk:
-	clk_disable_unprepare(data->clk_module);
-out:
+	out:
+	if (data->clk_module)
+		clk_disable_unprepare(data->clk_module);
+
 	return err;
 }
 
@@ -300,42 +318,52 @@ static int ingenic_uart_remove(struct platform_device *pdev)
 	struct ingenic_uart_data *data = platform_get_drvdata(pdev);
 
 	serial8250_unregister_port(data->line);
-	clk_disable_unprepare(data->clk_module);
-	clk_disable_unprepare(data->clk_baud);
+
+	if (data->clk_module)
+		clk_disable_unprepare(data->clk_module);
+
 	return 0;
 }
 
 static const struct ingenic_uart_config jz4740_uart_config = {
-	.tx_loadsz = 8,
-	.fifosize = 16,
+		.tx_loadsz = 8,
+		.fifosize = 16,
 };
 
 static const struct ingenic_uart_config jz4760_uart_config = {
-	.tx_loadsz = 16,
-	.fifosize = 32,
+		.tx_loadsz = 16,
+		.fifosize = 32,
 };
 
 static const struct ingenic_uart_config jz4780_uart_config = {
-	.tx_loadsz = 32,
-	.fifosize = 64,
+		.tx_loadsz = 32,
+		.fifosize = 64,
+};
+
+static const struct ingenic_uart_config x1000_uart_config = {
+		.tx_loadsz = 32,
+		.fifosize = 64,
 };
 
 static const struct of_device_id of_match[] = {
-	{ .compatible = "ingenic,jz4740-uart", .data = &jz4740_uart_config },
-	{ .compatible = "ingenic,jz4760-uart", .data = &jz4760_uart_config },
-	{ .compatible = "ingenic,jz4775-uart", .data = &jz4760_uart_config },
-	{ .compatible = "ingenic,jz4780-uart", .data = &jz4780_uart_config },
-	{ /* sentinel */ }
+		{ .compatible = "ingenic,jz4740-uart", .data = &jz4740_uart_config },
+		{ .compatible = "ingenic,jz4750-uart", .data = &jz4760_uart_config },
+		{ .compatible = "ingenic,jz4760-uart", .data = &jz4760_uart_config },
+		{ .compatible = "ingenic,jz4770-uart", .data = &jz4760_uart_config },
+		{ .compatible = "ingenic,jz4775-uart", .data = &jz4760_uart_config },
+		{ .compatible = "ingenic,jz4780-uart", .data = &jz4780_uart_config },
+		{ .compatible = "ingenic,x1000-uart", .data = &x1000_uart_config },
+		{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, of_match);
 
 static struct platform_driver ingenic_uart_platform_driver = {
-	.driver = {
-		.name		= "ingenic-uart",
-		.of_match_table	= of_match,
-	},
-	.probe			= ingenic_uart_probe,
-	.remove			= ingenic_uart_remove,
+		.driver = {
+				.name		= "ingenic-uart",
+				.of_match_table	= of_match,
+		},
+		.probe			= ingenic_uart_probe,
+		.remove			= ingenic_uart_remove,
 };
 
 module_platform_driver(ingenic_uart_platform_driver);
