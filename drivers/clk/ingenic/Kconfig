@@ -32,3 +32,10 @@ config CLK_T31
 	select COMMON_CLK_INGENIC
 	help
 	  build the ingenic t31 soc clock driver.
+
+config CLK_A1
+	bool
+	depends on SOC_A1
+	select COMMON_CLK_INGENIC
+	help
+	  build the ingenic a1 soc clock driver.

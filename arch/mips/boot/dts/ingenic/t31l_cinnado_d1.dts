@@ -11,8 +11,9 @@
 };
 
 &uart0 {
-	status = "disabled";
-};
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart0_pb>;};
 
 &uart1 {
 	status = "okay";
