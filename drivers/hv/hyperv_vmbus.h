@@ -26,9 +26,20 @@
 #define _HYPERV_VMBUS_H
 
 #include <linux/list.h>
+#include <linux/bitops.h>
 #include <asm/sync_bitops.h>
 #include <linux/atomic.h>
 #include <linux/hyperv.h>
+
+/*
+ * Timeout for services such as KVP and fcopy.
+ */
+#define HV_UTIL_TIMEOUT 30
+
+/*
+ * Timeout for guest-host handshake for services.
+ */
+#define HV_UTIL_NEGO_TIMEOUT 60
 
 /*
  * The below CPUID leaves are present if VersionAndFeatures.HypervisorPresent
@@ -576,7 +587,7 @@ struct hv_ring_buffer_debug_info {
 
 extern int hv_init(void);
 
-extern void hv_cleanup(void);
+extern void hv_cleanup(bool crash);
 
 extern int hv_post_message(union hv_connection_id connection_id,
 			 enum hv_message_type message_type,
@@ -759,11 +770,7 @@ static inline void hv_poll_channel(struct vmbus_channel *channel,
 	if (!channel)
 		return;
 
-	if (channel->target_cpu != smp_processor_id())
-		smp_call_function_single(channel->target_cpu,
-					 cb, channel, true);
-	else
-		cb(channel);
+	smp_call_function_single(channel->target_cpu, cb, channel, true);
 }
 
 enum hvutil_device_state {

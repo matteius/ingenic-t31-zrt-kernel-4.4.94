@@ -54,7 +54,7 @@ enum {
 	/* one minute for the sake of bringup. Generally, commands must always
 	 * complete and we may need to increase this timeout value
 	 */
-	MLX5_CMD_TIMEOUT_MSEC	= 7200 * 1000,
+	MLX5_CMD_TIMEOUT_MSEC	= 60 * 1000,
 	MLX5_CMD_WQ_MAX_NAME	= 32,
 };
 
@@ -303,7 +303,7 @@ struct mlx5_eq {
 	u32			cons_index;
 	struct mlx5_buf		buf;
 	int			size;
-	u8			irqn;
+	unsigned int		irqn;
 	u8			eqn;
 	int			nent;
 	u64			mask;
@@ -566,8 +566,10 @@ struct mlx5_cmd_work_ent {
 	void		       *uout;
 	int			uout_size;
 	mlx5_cmd_cbk_t		callback;
+	struct delayed_work	cb_timeout_work;
 	void		       *context;
 	int			idx;
+	struct completion	handling;
 	struct completion	done;
 	struct mlx5_cmd        *cmd;
 	struct work_struct	work;
@@ -762,7 +764,8 @@ int mlx5_create_map_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq, u8 vecidx,
 int mlx5_destroy_unmap_eq(struct mlx5_core_dev *dev, struct mlx5_eq *eq);
 int mlx5_start_eqs(struct mlx5_core_dev *dev);
 int mlx5_stop_eqs(struct mlx5_core_dev *dev);
-int mlx5_vector2eqn(struct mlx5_core_dev *dev, int vector, int *eqn, int *irqn);
+int mlx5_vector2eqn(struct mlx5_core_dev *dev, int vector, int *eqn,
+		    unsigned int *irqn);
 int mlx5_core_attach_mcg(struct mlx5_core_dev *dev, union ib_gid *mgid, u32 qpn);
 int mlx5_core_detach_mcg(struct mlx5_core_dev *dev, union ib_gid *mgid, u32 qpn);
 
@@ -791,9 +794,9 @@ int mlx5_set_port_admin_status(struct mlx5_core_dev *dev,
 int mlx5_query_port_admin_status(struct mlx5_core_dev *dev,
 				 enum mlx5_port_status *status);
 
-int mlx5_set_port_mtu(struct mlx5_core_dev *dev, int mtu, u8 port);
-void mlx5_query_port_max_mtu(struct mlx5_core_dev *dev, int *max_mtu, u8 port);
-void mlx5_query_port_oper_mtu(struct mlx5_core_dev *dev, int *oper_mtu,
+int mlx5_set_port_mtu(struct mlx5_core_dev *dev, u16 mtu, u8 port);
+void mlx5_query_port_max_mtu(struct mlx5_core_dev *dev, u16 *max_mtu, u8 port);
+void mlx5_query_port_oper_mtu(struct mlx5_core_dev *dev, u16 *oper_mtu,
 			      u8 port);
 
 int mlx5_query_port_vl_hw_cap(struct mlx5_core_dev *dev,

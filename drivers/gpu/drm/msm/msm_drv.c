@@ -286,7 +286,7 @@ static int msm_init_vram(struct drm_device *dev)
 		ret = of_address_to_resource(node, 0, &r);
 		if (ret)
 			return ret;
-		size = r.end - r.start;
+		size = r.end - r.start + 1;
 		DRM_INFO("using VRAM carveout: %lx@%pa\n", size, &r.start);
 	} else
 #endif
@@ -986,6 +986,7 @@ static struct drm_driver msm_driver = {
 	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
 	.gem_prime_export   = drm_gem_prime_export,
 	.gem_prime_import   = drm_gem_prime_import,
+	.gem_prime_res_obj  = msm_gem_prime_res_obj,
 	.gem_prime_pin      = msm_gem_prime_pin,
 	.gem_prime_unpin    = msm_gem_prime_unpin,
 	.gem_prime_get_sg_table = msm_gem_prime_get_sg_table,

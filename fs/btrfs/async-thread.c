@@ -70,6 +70,20 @@ void btrfs_##name(struct work_struct *arg)				\
 	normal_work_helper(work);					\
 }
 
+bool btrfs_workqueue_normal_congested(struct btrfs_workqueue *wq)
+{
+	/*
+	 * We could compare wq->normal->pending with num_online_cpus()
+	 * to support "thresh == NO_THRESHOLD" case, but it requires
+	 * moving up atomic_inc/dec in thresh_queue/exec_hook. Let's
+	 * postpone it until someone needs the support of that case.
+	 */
+	if (wq->normal->thresh == NO_THRESHOLD)
+		return false;
+
+	return atomic_read(&wq->normal->pending) > wq->normal->thresh * 2;
+}
+
 BTRFS_WORK_HELPER(worker_helper);
 BTRFS_WORK_HELPER(delalloc_helper);
 BTRFS_WORK_HELPER(flush_delalloc_helper);
@@ -247,6 +261,13 @@ static void run_ordered_work(struct __btrfs_workqueue *wq)
 				  ordered_list);
 		if (!test_bit(WORK_DONE_BIT, &work->flags))
 			break;
+		/*
+		 * Orders all subsequent loads after reading WORK_DONE_BIT,
+		 * paired with the smp_mb__before_atomic in btrfs_work_helper
+		 * this guarantees that the ordered function will see all
+		 * updates from ordinary work function.
+		 */
+		smp_rmb();
 
 		/*
 		 * we are going to call the ordered done function, but
@@ -296,6 +317,13 @@ static void normal_work_helper(struct btrfs_work *work)
 	thresh_exec_hook(wq);
 	work->func(work);
 	if (need_order) {
+		/*
+		 * Ensures all memory accesses done in the work function are
+		 * ordered before setting the WORK_DONE_BIT. Ensuring the thread
+		 * which is going to executed the ordered work sees them.
+		 * Pairs with the smp_rmb in run_ordered_work.
+		 */
+		smp_mb__before_atomic();
 		set_bit(WORK_DONE_BIT, &work->flags);
 		run_ordered_work(wq);
 	}
@@ -328,8 +356,8 @@ static inline void __btrfs_queue_work(struct __btrfs_workqueue *wq,
 		list_add_tail(&work->ordered_list, &wq->ordered_list);
 		spin_unlock_irqrestore(&wq->list_lock, flags);
 	}
-	queue_work(wq->normal_wq, &work->normal_work);
 	trace_btrfs_work_queued(work);
+	queue_work(wq->normal_wq, &work->normal_work);
 }
 
 void btrfs_queue_work(struct btrfs_workqueue *wq,
@@ -374,4 +402,12 @@ void btrfs_workqueue_set_max(struct btrfs_workqueue *wq, int limit_active)
 void btrfs_set_work_high_priority(struct btrfs_work *work)
 {
 	set_bit(WORK_HIGH_PRIO_BIT, &work->flags);
+}
+
+void btrfs_flush_workqueue(struct btrfs_workqueue *wq)
+{
+	if (wq->high)
+		flush_workqueue(wq->high->normal_wq);
+
+	flush_workqueue(wq->normal->normal_wq);
 }

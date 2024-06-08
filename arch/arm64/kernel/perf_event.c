@@ -574,9 +574,6 @@ static void armv8pmu_reset(void *info)
 
 	/* Initialize & Reset PMNC: C and P bits. */
 	armv8pmu_pmcr_write(ARMV8_PMCR_P | ARMV8_PMCR_C);
-
-	/* Disable access from userspace. */
-	asm volatile("msr pmuserenr_el0, %0" :: "r" (0));
 }
 
 static int armv8_pmuv3_map_event(struct perf_event *event)
@@ -673,6 +670,7 @@ static struct platform_driver armv8_pmu_driver = {
 	.driver		= {
 		.name	= "armv8-pmu",
 		.of_match_table = armv8_pmu_of_device_ids,
+		.suppress_bind_attrs = true,
 	},
 	.probe		= armv8_pmu_device_probe,
 };

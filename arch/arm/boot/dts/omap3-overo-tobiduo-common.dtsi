@@ -15,9 +15,6 @@
 #include "omap-gpmc-smsc9221.dtsi"
 
 &gpmc {
-	ranges = <4 0 0x2b000000 0x1000000>,	/* CS4 */
-		 <5 0 0x2c000000 0x1000000>;	/* CS5 */
-
 	smsc1: ethernet@gpmc {
 		reg = <5 0 0xff>;
 		interrupt-parent = <&gpio6>;
@@ -28,7 +25,7 @@
 		compatible = "smsc,lan9221","smsc,lan9115";
 		bank-width = <2>;
 
-		gpmc,mux-add-data;
+		gpmc,mux-add-data = <0>;
 		gpmc,cs-on-ns = <0>;
 		gpmc,cs-rd-off-ns = <42>;
 		gpmc,cs-wr-off-ns = <36>;

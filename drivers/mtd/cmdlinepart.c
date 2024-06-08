@@ -56,7 +56,6 @@
 #include <linux/mtd/partitions.h>
 #include <linux/module.h>
 #include <linux/err.h>
-#include <linux/ctype.h>
 
 /* debug macro */
 #if 0
@@ -169,15 +168,8 @@ static struct mtd_partition * newpart(char *s,
 	/* test if more partitions are following */
 	if (*s == ',') {
 		if (size == SIZE_REMAINING) {
-            /* Advance to the next character that is neither whitespace, numeric, nor size suffix */
-            char *next_char = s + 1;
-            while (*next_char && (isspace(*next_char) || isdigit(*next_char) || isalpha(*next_char))) {
-                next_char++;
-            }
-            if (*next_char != '@') {
-                pr_err("no partitions allowed after a fill-up partition\n");
-                return ERR_PTR(-EINVAL);
-            }
+			pr_err("no partitions allowed after a fill-up partition\n");
+			return ERR_PTR(-EINVAL);
 		}
 		/* more partitions follow, parse them */
 		parts = newpart(s + 1, &s, num_parts, this_part + 1,
@@ -236,12 +228,41 @@ static int mtdpart_setup_real(char *s)
 		struct cmdline_mtd_partition *this_mtd;
 		struct mtd_partition *parts;
 		int mtd_id_len, num_parts;
-		char *p, *mtd_id;
+		char *p, *mtd_id, *semicol, *open_parenth;
+
+		/*
+		 * Replace the first ';' by a NULL char so strrchr can work
+		 * properly.
+		 */
+		semicol = strchr(s, ';');
+		if (semicol)
+			*semicol = '\0';
+
+		/*
+		 * make sure that part-names with ":" will not be handled as
+		 * part of the mtd-id with an ":"
+		 */
+		open_parenth = strchr(s, '(');
+		if (open_parenth)
+			*open_parenth = '\0';
 
 		mtd_id = s;
 
-		/* fetch <mtd-id> */
-		p = strchr(s, ':');
+		/*
+		 * fetch <mtd-id>. We use strrchr to ignore all ':' that could
+		 * be present in the MTD name, only the last one is interpreted
+		 * as an <mtd-id>/<part-definition> separator.
+		 */
+		p = strrchr(s, ':');
+
+		/* Restore the '(' now. */
+		if (open_parenth)
+			*open_parenth = '(';
+
+		/* Restore the ';' now. */
+		if (semicol)
+			*semicol = ';';
+
 		if (!p) {
 			pr_err("no mtd-id\n");
 			return -EINVAL;

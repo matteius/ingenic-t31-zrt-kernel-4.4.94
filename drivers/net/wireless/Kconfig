@@ -242,7 +242,6 @@ config ADM8211
 	  Thanks to Infineon-ADMtek for their support of this driver.
 
 source "drivers/net/wireless/realtek/rtl818x/Kconfig"
-source "drivers/net/wireless/realtek/rtl8723ds/Kconfig"
 
 config MAC80211_HWSIM
 	tristate "Simulated radio testing tool for mac80211"
@@ -286,6 +285,5 @@ source "drivers/net/wireless/zd1211rw/Kconfig"
 source "drivers/net/wireless/mwifiex/Kconfig"
 source "drivers/net/wireless/cw1200/Kconfig"
 source "drivers/net/wireless/rsi/Kconfig"
-source "drivers/net/wireless/bcmdhd_1_363_59_144/Kconfig"
 
 endif # WLAN

@@ -42,6 +42,14 @@ static void hda_codec_unsol_event(struct hdac_device *dev, unsigned int ev)
 {
 	struct hda_codec *codec = container_of(dev, struct hda_codec, core);
 
+	/* ignore unsol events during shutdown */
+	if (codec->bus->shutdown)
+		return;
+
+	/* ignore unsol events during system suspend/resume */
+	if (codec->core.dev.power.power_state.event != PM_EVENT_ON)
+		return;
+
 	if (codec->patch_ops.unsol_event)
 		codec->patch_ops.unsol_event(codec, ev);
 }
@@ -109,7 +117,8 @@ static int hda_codec_driver_probe(struct device *dev)
 	err = snd_hda_codec_build_controls(codec);
 	if (err < 0)
 		goto error_module;
-	if (codec->card->registered) {
+	/* only register after the bus probe finished; otherwise it's racy */
+	if (!codec->bus->bus_probing && codec->card->registered) {
 		err = snd_card_register(codec->card);
 		if (err < 0)
 			goto error_module;
@@ -174,14 +183,40 @@ static inline bool codec_probed(struct hda_codec *codec)
 	return device_attach(hda_codec_dev(codec)) > 0 && codec->preset;
 }
 
+/* try to auto-load codec module */
+static void request_codec_module(struct hda_codec *codec)
+{
+#ifdef MODULE
+	char modalias[32];
+	const char *mod = NULL;
+
+	switch (codec->probe_id) {
+	case HDA_CODEC_ID_GENERIC_HDMI:
+#if IS_MODULE(CONFIG_SND_HDA_CODEC_HDMI)
+		mod = "snd-hda-codec-hdmi";
+#endif
+		break;
+	case HDA_CODEC_ID_GENERIC:
+#if IS_MODULE(CONFIG_SND_HDA_GENERIC)
+		mod = "snd-hda-codec-generic";
+#endif
+		break;
+	default:
+		snd_hdac_codec_modalias(&codec->core, modalias, sizeof(modalias));
+		mod = modalias;
+		break;
+	}
+
+	if (mod)
+		request_module(mod);
+#endif /* MODULE */
+}
+
 /* try to auto-load and bind the codec module */
 static void codec_bind_module(struct hda_codec *codec)
 {
 #ifdef MODULE
-	char modalias[32];
-
-	snd_hdac_codec_modalias(&codec->core, modalias, sizeof(modalias));
-	request_module(modalias);
+	request_codec_module(codec);
 	if (codec_probed(codec))
 		return;
 #endif
@@ -218,17 +253,13 @@ static int codec_bind_generic(struct hda_codec *codec)
 
 	if (is_likely_hdmi_codec(codec)) {
 		codec->probe_id = HDA_CODEC_ID_GENERIC_HDMI;
-#if IS_MODULE(CONFIG_SND_HDA_CODEC_HDMI)
-		request_module("snd-hda-codec-hdmi");
-#endif
+		request_codec_module(codec);
 		if (codec_probed(codec))
 			return 0;
 	}
 
 	codec->probe_id = HDA_CODEC_ID_GENERIC;
-#if IS_MODULE(CONFIG_SND_HDA_GENERIC)
-	request_module("snd-hda-codec-generic");
-#endif
+	request_codec_module(codec);
 	if (codec_probed(codec))
 		return 0;
 	return -ENODEV;

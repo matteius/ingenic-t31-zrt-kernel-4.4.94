@@ -28,6 +28,8 @@
 const struct nf_br_ops __rcu *nf_br_ops __read_mostly;
 EXPORT_SYMBOL_GPL(nf_br_ops);
 
+static struct lock_class_key bridge_netdev_addr_lock_key;
+
 /* net device transmit always called with BH disabled */
 netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 {
@@ -87,6 +89,11 @@ out:
 	return NETDEV_TX_OK;
 }
 
+static void br_set_lockdep_class(struct net_device *dev)
+{
+	lockdep_set_class(&dev->addr_list_lock, &bridge_netdev_addr_lock_key);
+}
+
 static int br_dev_init(struct net_device *dev)
 {
 	struct net_bridge *br = netdev_priv(dev);
@@ -99,6 +106,7 @@ static int br_dev_init(struct net_device *dev)
 	err = br_vlan_init(br);
 	if (err)
 		free_percpu(br->stats);
+	br_set_lockdep_class(dev);
 
 	return err;
 }
@@ -158,6 +166,7 @@ static struct rtnl_link_stats64 *br_get_stats64(struct net_device *dev,
 		sum.rx_packets += tmp.rx_packets;
 	}
 
+	netdev_stats_to_stats64(stats, &dev->stats);
 	stats->tx_bytes   = sum.tx_bytes;
 	stats->tx_packets = sum.tx_packets;
 	stats->rx_bytes   = sum.rx_bytes;
@@ -190,6 +199,12 @@ static int br_set_mac_address(struct net_device *dev, void *p)
 
 	if (!is_valid_ether_addr(addr->sa_data))
 		return -EADDRNOTAVAIL;
+
+	/* dev_set_mac_addr() can be called by a master device on bridge's
+	 * NETDEV_UNREGISTER, but since it's being destroyed do nothing
+	 */
+	if (dev->reg_state != NETREG_REGISTERED)
+		return -EBUSY;
 
 	spin_lock_bh(&br->lock);
 	if (!ether_addr_equal(dev->dev_addr, addr->sa_data)) {

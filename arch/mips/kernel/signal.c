@@ -402,8 +402,8 @@ int protected_restore_fp_context(void __user *sc)
 	}
 
 fp_done:
-	if (used & USED_EXTCONTEXT)
-		err |= restore_extcontext(sc_to_extcontext(sc));
+	if (!err && (used & USED_EXTCONTEXT))
+		err = restore_extcontext(sc_to_extcontext(sc));
 
 	return err ?: sig;
 }
