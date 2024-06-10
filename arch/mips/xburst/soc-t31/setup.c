@@ -84,27 +84,3 @@ void __init arch_init_irq(void)
 	irqchip_init();
 }
 
-unsigned long ispmem_base = 0;
-EXPORT_SYMBOL(ispmem_base);
-
-unsigned long ispmem_size = 0;
-EXPORT_SYMBOL(ispmem_size);
-
-static int __init ispmem_parse(char *str)
-{
-	char *retptr;
-
-	ispmem_size = memparse(str, &retptr);
-	if(ispmem_size < 0) {
-		ispmem_size = 0;
-	}
-
-	if (*retptr == '@')
-		ispmem_base = memparse(retptr + 1, NULL);
-
-	if(ispmem_base < 0) {
-		printk("## no ispmem! ##\n");
-	}
-	return 1;
-}
-__setup("ispmem=", ispmem_parse);

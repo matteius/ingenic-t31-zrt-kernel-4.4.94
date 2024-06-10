@@ -502,11 +502,33 @@
 		};
 
 		isp: isp@0x13300000 {
-			compatible = "ingenic,t31-isp";
+			compatible = "ingenic,tx-isp";
 			reg = <0x13300000 0x100000>;
 			interrupt-parent = <&core_intc>;
 			interrupts = <IRQ_ISP>;
-			status = "disabled";
+			status = "okay";
+		};
+
+		isp_m0: isp-m0@13300000 {
+			compatible = "ingenic,tx-isp";
+			reg = <0x13300000 0x10000>;
+			status = "okay";
+			interrupt-parent = <&core_intc>;
+			interrupts = <IRQ_ISP>;
+		};
+
+		isp_w02: isp-w02@133e0000 {
+			compatible = "ingenic,tx-isp";
+			reg = <0x133e0000 0x10000>;
+			interrupt-parent = <&core_intc>;
+			status = "okay";
+		};
+
+		isp_w01: isp-w01@133e0000 {
+			compatible = "ingenic,tx-isp";
+			reg = <0x133e0000 0x10000>;
+			interrupt-parent = <&core_intc>;
+			status = "okay";
 		};
 	};
 

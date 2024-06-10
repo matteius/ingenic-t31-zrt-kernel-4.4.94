@@ -17,6 +17,8 @@
  * This file is released under the GPLv2
  */
 
+#define CONFIG_DEV_DRV_DATA_EXPORT
+
 #include <linux/device.h>
 #include <linux/delay.h>
 #include <linux/module.h>
@@ -274,6 +276,25 @@ EXPORT_SYMBOL_GPL(device_bind_driver);
 
 static atomic_t probe_count = ATOMIC_INIT(0);
 static DECLARE_WAIT_QUEUE_HEAD(probe_waitqueue);
+
+
+
+void *dev_get_drvdata(const struct device *dev)
+{
+    if (dev)
+        return dev->driver_data;
+    return NULL;
+}
+EXPORT_SYMBOL(dev_get_drvdata);
+
+void dev_set_drvdata(struct device *dev, void *data)
+{
+    if (dev)
+        dev->driver_data = data;
+}
+EXPORT_SYMBOL(dev_set_drvdata);
+
+
 
 static int really_probe(struct device *dev, struct device_driver *drv)
 {
@@ -754,3 +775,4 @@ void driver_detach(struct device_driver *drv)
 		put_device(dev);
 	}
 }
+

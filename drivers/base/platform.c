@@ -360,7 +360,7 @@ int platform_device_add(struct platform_device *pdev)
 		}
 	}
 
-	pr_debug("Registering platform device '%s'. Parent at %s\n",
+	pr_info("Registering platform device '%s'. Parent at %s\n",
 		 dev_name(&pdev->dev), dev_name(pdev->dev.parent));
 
 	ret = device_add(&pdev->dev);

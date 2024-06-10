@@ -897,6 +897,8 @@ static inline void dev_set_msi_domain(struct device *dev, struct irq_domain *d)
 #endif
 }
 
+#ifndef CONFIG_DEV_DRV_DATA_EXPORT
+#define CONFIG_DEV_DRV_DATA_EXPORT
 static inline void *dev_get_drvdata(const struct device *dev)
 {
 	return dev->driver_data;
@@ -906,6 +908,7 @@ static inline void dev_set_drvdata(struct device *dev, void *data)
 {
 	dev->driver_data = data;
 }
+#endif /* DEV_GET_DRV_DATA_DEFINED */
 
 static inline struct pm_subsys_data *dev_to_psd(struct device *dev)
 {

@@ -18,7 +18,7 @@
 #include <asm/compiler.h>
 #include <asm/hazards.h>
 
-#if defined(CONFIG_CPU_MIPSR2) || defined (CONFIG_CPU_MIPSR6)
+#if 0 && (defined(CONFIG_CPU_MIPSR2) || defined (CONFIG_CPU_MIPSR6))
 
 static inline void arch_local_irq_disable(void)
 {

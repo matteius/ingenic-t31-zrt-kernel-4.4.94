@@ -19,37 +19,58 @@
 #include "sysfs.h"
 
 static int sysfs_do_create_link_sd(struct kernfs_node *parent,
-				   struct kobject *target_kobj,
-				   const char *name, int warn)
+                                   struct kobject *target_kobj,
+                                   const char *name, int warn)
 {
-	struct kernfs_node *kn, *target = NULL;
+    struct kernfs_node *kn, *target = NULL;
 
-	BUG_ON(!name || !parent);
+    printk(KERN_ERR "sysfs_do_create_link_sd: name=%p, parent=%p, target_kobj=%p\n",
+           name, parent, target_kobj);
 
-	/*
-	 * We don't own @target_kobj and it may be removed at any time.
-	 * Synchronize using sysfs_symlink_target_lock.  See
-	 * sysfs_remove_dir() for details.
-	 */
-	spin_lock(&sysfs_symlink_target_lock);
-	if (target_kobj->sd) {
-		target = target_kobj->sd;
-		kernfs_get(target);
-	}
-	spin_unlock(&sysfs_symlink_target_lock);
+    if (!name || !parent || !target_kobj) {
+        printk(KERN_ERR "sysfs_do_create_link_sd: Invalid argument(s) - name=%p, parent=%p, target_kobj=%p\n",
+               name, parent, target_kobj);
+        return 0; // Short-circuit the function
+    }
 
-	if (!target)
-		return -ENOENT;
+    if ((unsigned long)target_kobj & 0x3 || target_kobj < (struct kobject *)0x1000) {
+        printk(KERN_ERR "sysfs_do_create_link_sd: target_kobj is unaligned or invalid (value=%p)\n", target_kobj);
+        return -EINVAL;
+    }
 
-	kn = kernfs_create_link(parent, name, target);
-	kernfs_put(target);
+    printk(KERN_ERR "sysfs_do_create_link_sd: Acquiring lock\n");
+    spin_lock(&sysfs_symlink_target_lock);
 
-	if (!IS_ERR(kn))
-		return 0;
+    if (target_kobj->sd) {
+        target = target_kobj->sd;
+        printk(KERN_ERR "sysfs_do_create_link_sd: target_kobj->sd=%p\n", target);
+        kernfs_get(target);
+    } else {
+        printk(KERN_ERR "sysfs_do_create_link_sd: target_kobj->sd is NULL\n");
+    }
+    spin_unlock(&sysfs_symlink_target_lock);
 
-	if (warn && PTR_ERR(kn) == -EEXIST)
-		sysfs_warn_dup(parent, name);
-	return PTR_ERR(kn);
+    if (!target) {
+        printk(KERN_ERR "sysfs_do_create_link_sd: target is NULL after lock\n");
+        return -ENOENT;
+    }
+
+    printk(KERN_ERR "sysfs_do_create_link_sd: Creating link\n");
+    kn = kernfs_create_link(parent, name, target);
+    kernfs_put(target);
+
+    if (!IS_ERR(kn)) {
+        printk(KERN_ERR "sysfs_do_create_link_sd: Link created successfully\n");
+        return 0;
+    } else {
+        printk(KERN_ERR "sysfs_do_create_link_sd: Error creating link, err=%ld\n", PTR_ERR(kn));
+    }
+
+    if (warn && PTR_ERR(kn) == -EEXIST) {
+        printk(KERN_ERR "sysfs_do_create_link_sd: Link already exists, parent=%p, name=%s\n", parent, name);
+        sysfs_warn_dup(parent, name);
+    }
+    return PTR_ERR(kn);
 }
 
 /**

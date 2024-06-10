@@ -230,25 +230,33 @@ EXPORT_SYMBOL_GPL(of_device_get_modalias);
 /**
  * of_device_uevent - Display OF related uevent information
  */
+/**
+ * of_device_uevent - Display OF related uevent information
+ */
 void of_device_uevent(struct device *dev, struct kobj_uevent_env *env)
 {
 	const char *compat;
 	struct alias_prop *app;
 	int seen = 0, cplen, sl;
 
-	if ((!dev) || (!dev->of_node))
+	if (!dev || !dev->of_node) {
+		printk(KERN_ERR "of_device_uevent: Invalid device or of_node - dev=%p, of_node=%p\n", dev, dev ? dev->of_node : NULL);
 		return;
+	}
+
+	printk(KERN_ERR "of_device_uevent: dev=%p, of_node=%p, name=%s, full_name=%s, type=%s\n",
+		   dev, dev->of_node, dev->of_node->name, dev->of_node->full_name,
+		   dev->of_node->type ? dev->of_node->type : "<NULL>");
 
 	add_uevent_var(env, "OF_NAME=%s", dev->of_node->name);
 	add_uevent_var(env, "OF_FULLNAME=%s", dev->of_node->full_name);
 	if (dev->of_node->type && strcmp("<NULL>", dev->of_node->type) != 0)
 		add_uevent_var(env, "OF_TYPE=%s", dev->of_node->type);
 
-	/* Since the compatible field can contain pretty much anything
-	 * it's not really legal to split it out with commas. We split it
-	 * up using a number of environment variables instead. */
 	compat = of_get_property(dev->of_node, "compatible", &cplen);
+	printk(KERN_ERR "of_device_uevent: compat=%p, cplen=%d\n", compat, cplen);
 	while (compat && *compat && cplen > 0) {
+		printk(KERN_ERR "of_device_uevent: Adding OF_COMPATIBLE_%d=%s\n", seen, compat);
 		add_uevent_var(env, "OF_COMPATIBLE_%d=%s", seen, compat);
 		sl = strlen(compat) + 1;
 		compat += sl;
@@ -261,8 +269,8 @@ void of_device_uevent(struct device *dev, struct kobj_uevent_env *env)
 	mutex_lock(&of_mutex);
 	list_for_each_entry(app, &aliases_lookup, link) {
 		if (dev->of_node == app->np) {
-			add_uevent_var(env, "OF_ALIAS_%d=%s", seen,
-				       app->alias);
+			printk(KERN_ERR "of_device_uevent: Adding OF_ALIAS_%d=%s\n", seen, app->alias);
+			add_uevent_var(env, "OF_ALIAS_%d=%s", seen, app->alias);
 			seen++;
 		}
 	}
