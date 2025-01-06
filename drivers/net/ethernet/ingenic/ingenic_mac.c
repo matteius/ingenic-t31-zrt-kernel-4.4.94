@@ -424,11 +424,7 @@ map_skb:
 			((0 << DescSize2Shift) & DescSize2Mask);
 		rx_desc->buffer1 = cpu_to_le32(buffer_info->dma);
 
-		rx_desc->extstatus = 0;
-		rx_desc->reserved1 = 0;
-		rx_desc->timestamplow = 0;
-		rx_desc->timestamphigh = 0;
-
+		rx_desc->status = 0;
 
 		/* clr invalid first, then start transfer */
 		buffer_info->invalid = 0;
